@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Plus,
   Trash2,
+  RotateCcw,
   Save,
   Pencil,
 } from 'lucide-react';
@@ -59,6 +60,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
       q3: !!m.q3,
       semestre1: !!m.semestre1,
       semestre2: !!m.semestre2,
+      eliminada: !!m.eliminada,
     });
 
     setSecciones(
@@ -158,13 +160,27 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     });
   };
 
-  // Quitar una materia de todas las secciones que usan una maya dada
-  const handleRemoveMateriaMaya = (mayaId: number, subjectSagaId: number) => {
+  // Soft-delete: alternar 'eliminada' en todas las secciones que usan una maya dada
+  const handleToggleMateriaMaya = (mayaId: number, subjectSagaId: number) => {
     setSecciones((prev) =>
       prev.map((s) =>
         s.maya_id === mayaId
-          ? { ...s, materias: (s.materias || []).filter((m) => m.subject_saga_id !== subjectSagaId) }
+          ? {
+              ...s,
+              materias: (s.materias || []).map((m) =>
+                m.subject_saga_id === subjectSagaId ? { ...m, eliminada: !m.eliminada } : m
+              ),
+            }
           : s
+      )
+    );
+  };
+
+  // Soft-delete en el pensum general
+  const handleToggleMateriaGeneral = (subjectSagaId: number) => {
+    setMaterias((prev) =>
+      prev.map((m) =>
+        m.subject_saga_id === subjectSagaId ? { ...m, eliminada: !m.eliminada } : m
       )
     );
   };
@@ -551,7 +567,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                   <MateriasReadonlyTable
                     rows={rows}
                     tipo={tipoProyeccion}
-                    onRemove={(m) => handleRemoveMateriaMaya(mayaId, m.subject_saga_id)}
+                    onRemove={(m) => handleToggleMateriaMaya(mayaId, m.subject_saga_id)}
                     onUpdate={(m, patch) => handleUpdateMateriaMaya(mayaId, m.subject_saga_id, patch)}
                   />
                 );
@@ -575,8 +591,18 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 bg-slate-900/50">
                     {materias.map((m, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="py-3 px-4 font-semibold text-white">{m.nombre}</td>
+                      <tr
+                        key={idx}
+                        className={`transition-colors ${m.eliminada ? 'opacity-40 bg-slate-950/40' : 'hover:bg-slate-800/40'}`}
+                      >
+                        <td className="py-3 px-4 font-semibold text-white">
+                          <span className={m.eliminada ? 'line-through text-slate-500' : ''}>{m.nombre}</span>
+                          {m.eliminada && (
+                            <span className="ml-2 text-[9px] uppercase font-bold bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
+                              Ignorada
+                            </span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-center">
                           <input
                             type="number"
@@ -636,11 +662,15 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                         <td className="py-3 px-4 text-center">
                           <button
                             type="button"
-                            onClick={() => setMaterias(materias.filter((_, i) => i !== idx))}
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                            title="Quitar materia"
+                            onClick={() => handleToggleMateriaGeneral(m.subject_saga_id)}
+                            className={`p-1.5 rounded-lg transition-colors ${
+                              m.eliminada
+                                ? 'text-emerald-500/70 hover:text-emerald-300 hover:bg-emerald-500/10'
+                                : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'
+                            }`}
+                            title={m.eliminada ? 'Restaurar materia' : 'Ignorar materia'}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            {m.eliminada ? <RotateCcw className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
                         </td>
                       </tr>

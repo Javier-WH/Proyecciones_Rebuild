@@ -29,6 +29,7 @@ interface CreateProyeccionBody {
       q3: boolean;
       semestre1: boolean;
       semestre2: boolean;
+      eliminada?: boolean;
     }>;
   }>;
   materias?: Array<{
@@ -41,6 +42,7 @@ interface CreateProyeccionBody {
     q3: boolean;
     semestre1: boolean;
     semestre2: boolean;
+    eliminada?: boolean;
   }>;
 }
 
@@ -115,8 +117,8 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
         if (sec.materias && sec.materias.length > 0) {
           for (const mat of sec.materias) {
             await query(
-              `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 proyeccionId,
                 secResult.insertId,
@@ -129,6 +131,7 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
                 mat.q3 ? 1 : 0,
                 mat.semestre1 ? 1 : 0,
                 mat.semestre2 ? 1 : 0,
+                mat.eliminada ? 1 : 0,
               ]
             );
           }
@@ -140,8 +143,8 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
     if (body.materias && body.materias.length > 0) {
       for (const mat of body.materias) {
         await query(
-          `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2)
-           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             proyeccionId,
             mat.subject_saga_id,
@@ -153,6 +156,7 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
             mat.q3 ? 1 : 0,
             mat.semestre1 ? 1 : 0,
             mat.semestre2 ? 1 : 0,
+            mat.eliminada ? 1 : 0,
           ]
         );
       }
@@ -295,8 +299,8 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
         if (sec.materias && sec.materias.length > 0) {
           for (const mat of sec.materias) {
             await conn.query(
-              `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 id,
                 secResult.insertId,
@@ -309,6 +313,7 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
                 mat.q3 ? 1 : 0,
                 mat.semestre1 ? 1 : 0,
                 mat.semestre2 ? 1 : 0,
+                mat.eliminada ? 1 : 0,
               ]
             );
           }
@@ -320,8 +325,8 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
     if (Array.isArray(body.materias)) {
       for (const mat of body.materias) {
         await conn.query(
-          `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2)
-           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             mat.subject_saga_id,
@@ -333,6 +338,7 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
             mat.q3 ? 1 : 0,
             mat.semestre1 ? 1 : 0,
             mat.semestre2 ? 1 : 0,
+            mat.eliminada ? 1 : 0,
           ]
         );
       }

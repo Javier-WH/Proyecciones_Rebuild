@@ -354,7 +354,7 @@ export const ProyeccionesPage: React.FC = () => {
               <div>
                 <h4 className="font-bold text-white mb-2 text-sm flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-purple-400" />
-                  <span>Materias del Pensum ({selectedProyeccionDetail.materias?.filter((m: any) => m.seccion_id == null).length || 0})</span>
+                  <span>Materias del Pensum ({selectedProyeccionDetail.materias?.filter((m: any) => m.seccion_id == null && !m.eliminada).length || 0})</span>
                 </h4>
                 <div className="border border-slate-800 rounded-xl overflow-hidden">
                   <table className="w-full text-left text-xs">
@@ -366,7 +366,7 @@ export const ProyeccionesPage: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-800">
                       {selectedProyeccionDetail.materias
-                        ?.filter((m: any) => m.seccion_id == null)
+                        ?.filter((m: any) => m.seccion_id == null && !m.eliminada)
                         .map((m: any) => (
                           <tr key={m.id}>
                             <td className="py-2 px-3 text-white font-medium">{m.nombre}</td>
@@ -382,7 +382,7 @@ export const ProyeccionesPage: React.FC = () => {
                   ?.filter((s: any) => s.maya_id)
                   .map((s: any) => {
                     const matsSeccion = (selectedProyeccionDetail.materias || []).filter(
-                      (m: any) => m.seccion_id === s.id
+                      (m: any) => m.seccion_id === s.id && !m.eliminada
                     );
                     return (
                       <div key={s.id} className="mt-3 bg-purple-500/5 border border-purple-500/20 rounded-xl p-3">

@@ -155,6 +155,7 @@ export async function initializeDatabase() {
     { tabla: 'proyeccion_secciones', nombre: 'maya_id', definicion: 'INT NULL AFTER estudiantes_estimados' },
     { tabla: 'proyeccion_secciones', nombre: 'maya_descripcion', definicion: 'VARCHAR(255) NULL AFTER maya_id' },
     { tabla: 'proyeccion_materias', nombre: 'seccion_id', definicion: 'INT NULL AFTER proyeccion_id' },
+    { tabla: 'proyeccion_materias', nombre: 'eliminada', definicion: 'TINYINT(1) DEFAULT 0 AFTER semestre2' },
   ];
   for (const col of columnasExtra) {
     const [existe] = await db.query<any[]>(
@@ -185,6 +186,7 @@ export async function initializeDatabase() {
       q3 TINYINT(1) DEFAULT 0,
       semestre1 TINYINT(1) DEFAULT 0,
       semestre2 TINYINT(1) DEFAULT 0,
+      eliminada TINYINT(1) DEFAULT 0,
       FOREIGN KEY (proyeccion_id) REFERENCES proyecciones(id) ON DELETE CASCADE,
       INDEX idx_proyeccion (proyeccion_id),
       INDEX idx_seccion (seccion_id)

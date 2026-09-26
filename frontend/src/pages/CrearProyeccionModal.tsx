@@ -14,6 +14,7 @@ import {
   ToggleRight,
   Plus,
   Trash2,
+  RotateCcw,
   Sparkles
 } from 'lucide-react';
 
@@ -42,6 +43,7 @@ interface SubjectUC {
   trimestresActivos: number[];
   semestre1Activo: boolean;
   semestre2Activo: boolean;
+  eliminada?: boolean;
 }
 
 interface TurnoEstimacion {
@@ -61,6 +63,7 @@ export interface MateriaPayload {
   q3: boolean;
   semestre1: boolean;
   semestre2: boolean;
+  eliminada?: boolean;
 }
 
 export interface SeccionForm {
@@ -85,6 +88,7 @@ export function mapSubjectToMateriaPayload(m: SubjectUC): MateriaPayload {
     q3: m.quarters.q3 === 1,
     semestre1: m.semestre1Activo,
     semestre2: m.semestre2Activo,
+    eliminada: !!m.eliminada,
   };
 }
 
@@ -115,8 +119,18 @@ export const MateriasReadonlyTable: React.FC<{
       </thead>
       <tbody className="divide-y divide-slate-800/60 bg-slate-900/50">
         {rows.map((m) => (
-          <tr key={m.subject_saga_id} className="hover:bg-slate-800/40 transition-colors">
-            <td className="py-3 px-4 font-semibold text-white">{m.nombre}</td>
+          <tr
+            key={m.subject_saga_id}
+            className={`transition-colors ${m.eliminada ? 'opacity-40 bg-slate-950/40' : 'hover:bg-slate-800/40'}`}
+          >
+            <td className="py-3 px-4 font-semibold text-white">
+              <span className={m.eliminada ? 'line-through text-slate-500' : ''}>{m.nombre}</span>
+              {m.eliminada && (
+                <span className="ml-2 text-[9px] uppercase font-bold bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
+                  Ignorada
+                </span>
+              )}
+            </td>
             <td className="py-3 px-4 text-center">{m.horas_totales} hrs</td>
             <td className="py-3 px-4 text-center font-semibold text-blue-400">
               {onUpdate ? (
@@ -199,10 +213,14 @@ export const MateriasReadonlyTable: React.FC<{
                 <button
                   type="button"
                   onClick={() => onRemove(m)}
-                  className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                  title="Quitar materia"
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    m.eliminada
+                      ? 'text-emerald-500/70 hover:text-emerald-300 hover:bg-emerald-500/10'
+                      : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'
+                  }`}
+                  title={m.eliminada ? 'Restaurar materia' : 'Ignorar materia'}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  {m.eliminada ? <RotateCcw className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
                 </button>
               </td>
             )}
@@ -496,14 +514,26 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     });
   };
 
-  // Quitar una materia de todas las secciones que usan una maya dada
-  const handleRemoveMateriaMaya = (mayaId: number, subjectSagaId: number) => {
+  // Soft-delete: alternar 'eliminada' en todas las secciones que usan una maya dada
+  const handleToggleMateriaMaya = (mayaId: number, subjectSagaId: number) => {
     setSecciones((prev) =>
       prev.map((s) =>
         s.maya_id === mayaId
-          ? { ...s, materias: (s.materias || []).filter((m) => m.subject_saga_id !== subjectSagaId) }
+          ? {
+              ...s,
+              materias: (s.materias || []).map((m) =>
+                m.subject_saga_id === subjectSagaId ? { ...m, eliminada: !m.eliminada } : m
+              ),
+            }
           : s
       )
+    );
+  };
+
+  // Soft-delete en el pensum general (estado SubjectUC)
+  const handleToggleMateriaGeneral = (subjectId: number) => {
+    setMaterias((prev) =>
+      prev.map((m) => (m.id === subjectId ? { ...m, eliminada: !m.eliminada } : m))
     );
   };
 
@@ -1013,6 +1043,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                       <MateriasReadonlyTable
                         rows={materias.map(mapSubjectToMateriaPayload)}
                         tipo={tipoProyeccion}
+                        onRemove={(m) => handleToggleMateriaGeneral(m.subject_saga_id)}
                         onUpdate={(m, patch) => handleUpdateMateriaGeneral(m.subject_saga_id, patch)}
                       />
                     )
@@ -1028,7 +1059,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                         <MateriasReadonlyTable
                           rows={rows}
                           tipo={tipoProyeccion}
-                          onRemove={(m) => handleRemoveMateriaMaya(mayaId, m.subject_saga_id)}
+                          onRemove={(m) => handleToggleMateriaMaya(mayaId, m.subject_saga_id)}
                           onUpdate={(m, patch) => handleUpdateMateriaMaya(mayaId, m.subject_saga_id, patch)}
                         />
                       );
