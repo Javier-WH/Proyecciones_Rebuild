@@ -582,7 +582,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                   <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
                     <tr>
                       <th className="py-3 px-4">Materia / Unidad Curricular</th>
-                      <th className="py-3 px-4 text-center">Horas Sem.</th>
+                      <th className="py-3 px-4 text-center">Horas Semanales</th>
                       <th className="py-3 px-4 text-center">
                         {tipoProyeccion === 'TRIMESTRAL' ? 'Trimestres Activos' : 'Semestres Activos'}
                       </th>
