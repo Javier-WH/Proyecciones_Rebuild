@@ -298,6 +298,12 @@ export const PeriodosPage: React.FC = () => {
                   <option value="PLANIFICACION">En Planificación</option>
                   <option value="CERRADO">Cerrado / Concluido</option>
                 </select>
+                {estado === 'ACTIVO' && (
+                  <p className="text-[10px] text-amber-400/90 mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>Solo puede haber un periodo ACTIVO. Al guardar, el periodo activo actual pasará a Cerrado.</span>
+                  </p>
+                )}
               </div>
 
               <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">

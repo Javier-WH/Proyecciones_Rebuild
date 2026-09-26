@@ -40,6 +40,7 @@ interface ProyeccionItem {
 
 export const ProyeccionesPage: React.FC = () => {
   const [proyecciones, setProyecciones] = useState<ProyeccionItem[]>([]);
+  const [periodoActivo, setPeriodoActivo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterText, setFilterText] = useState('');
@@ -65,6 +66,13 @@ export const ProyeccionesPage: React.FC = () => {
 
   useEffect(() => {
     fetchProyecciones();
+    // Obtener el periodo académico activo para mostrarlo en la cabecera
+    apiFetch<Array<{ codigo: string; estado: string }>>('/periodos').then((res) => {
+      if (res.success && res.data) {
+        const activo = res.data.find((p) => p.estado === 'ACTIVO');
+        if (activo) setPeriodoActivo(activo.codigo);
+      }
+    });
   }, []);
 
   const handleToggleActive = async (id: number) => {
@@ -133,6 +141,12 @@ export const ProyeccionesPage: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1">
             Gestión de la oferta académica por PNF, trayecto y pensum sincronizado con SAGA.
           </p>
+          {periodoActivo && (
+            <p className="text-[11px] text-emerald-400 mt-1.5 font-semibold flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Mostrando proyecciones del periodo activo: {periodoActivo}</span>
+            </p>
+          )}
         </div>
 
         <button

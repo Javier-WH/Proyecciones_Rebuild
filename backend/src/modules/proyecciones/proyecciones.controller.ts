@@ -180,17 +180,32 @@ export async function listProyeccionesHandler(request: FastifyRequest, reply: Fa
   const user = request.userPayload!;
 
   try {
+    // Solo mostrar proyecciones del periodo académico actualmente ACTIVO
+    const periodoActivo = await query<any[]>(
+      "SELECT codigo FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
+    );
+
     let sql = `
       SELECT p.*, u.nombre as creador_nombre, u.apellido as creador_apellido 
       FROM proyecciones p
       LEFT JOIN users u ON p.creado_por = u.id
     `;
     const params: any[] = [];
+    const conditions: string[] = [];
+
+    if (periodoActivo.length > 0) {
+      conditions.push('p.periodo_academico = ?');
+      params.push(periodoActivo[0].codigo);
+    }
 
     // Si el usuario es regular (coordinador PNF), filtrar solo su PNF
     if (user.role === 'REGULAR' && user.pnf_saga_id) {
-      sql += ' WHERE p.pnf_saga_id = ?';
+      conditions.push('p.pnf_saga_id = ?');
       params.push(user.pnf_saga_id);
+    }
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
     }
 
     sql += ' ORDER BY p.id DESC';

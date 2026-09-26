@@ -54,6 +54,11 @@ export async function createPeriodoHandler(request: FastifyRequest, reply: Fasti
 
     const estado = body.estado || 'ACTIVO';
 
+    // Solo puede existir un periodo ACTIVO a la vez: cerrar el anterior
+    if (estado === 'ACTIVO') {
+      await query("UPDATE periodos_academicos SET estado = 'CERRADO' WHERE estado = 'ACTIVO'");
+    }
+
     const insertResult: any = await query(
       `INSERT INTO periodos_academicos (codigo, nombre, fecha_inicio, fecha_fin, estado)
        VALUES (?, ?, ?, ?, ?)`,
@@ -91,6 +96,11 @@ export async function updatePeriodoHandler(request: FastifyRequest, reply: Fasti
     const codigoClean = body.codigo ? body.codigo.trim().toUpperCase() : current.codigo;
     const nombreClean = body.nombre ? body.nombre.trim() : current.nombre;
     const estadoClean = body.estado || current.estado;
+
+    // Solo puede existir un periodo ACTIVO a la vez: cerrar los demás
+    if (estadoClean === 'ACTIVO') {
+      await query("UPDATE periodos_academicos SET estado = 'CERRADO' WHERE estado = 'ACTIVO' AND id != ?", [id]);
+    }
 
     await query(
       `UPDATE periodos_academicos 
