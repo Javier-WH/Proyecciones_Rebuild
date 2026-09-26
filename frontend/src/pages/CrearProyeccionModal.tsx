@@ -109,7 +109,6 @@ export const MateriasReadonlyTable: React.FC<{
       <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
         <tr>
           <th className="py-3 px-4">Materia / Unidad Curricular</th>
-          <th className="py-3 px-4 text-center">Horas Totales</th>
           <th className="py-3 px-4 text-center">Horas Semanales</th>
           <th className="py-3 px-4 text-center">
             {tipo === 'TRIMESTRAL' ? 'Trimestres Activos' : 'Semestres Activos'}
@@ -131,7 +130,6 @@ export const MateriasReadonlyTable: React.FC<{
                 </span>
               )}
             </td>
-            <td className="py-3 px-4 text-center">{m.horas_totales} hrs</td>
             <td className="py-3 px-4 text-center font-semibold text-blue-400">
               {onUpdate ? (
                 <input
