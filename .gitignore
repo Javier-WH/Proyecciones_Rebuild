@@ -1,0 +1,39 @@
+# Dependencias
+node_modules/
+package-lock.json
+backend/package-lock.json
+frontend/package-lock.json
+
+# Builds / salida de compilación
+dist/
+build/
+backend/dist/
+frontend/dist/
+
+# Variables de entorno y secretos
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+backend/.env
+frontend/.env
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Herramientas locales / editores
+.gemini/
+.vscode/
+.idea/
+*.swp
