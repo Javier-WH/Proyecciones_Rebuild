@@ -11,7 +11,6 @@ import {
   Plus,
   Trash2,
   RotateCcw,
-  Check,
   Save,
   Pencil,
 } from 'lucide-react';
@@ -273,7 +272,12 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
               <Pencil className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white tracking-tight">Editar Proyección</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2.5">
+                <span>Editar Proyección</span>
+                <span className="text-[10px] font-semibold font-mono bg-slate-800/80 border border-slate-700 text-slate-400 px-2 py-0.5 rounded-md">
+                  Periodo {periodoAcademico}
+                </span>
+              </h3>
               <p className="text-xs text-slate-400">
                 {proyeccion.codigo} — {proyeccion.pnf_nombre} / {proyeccion.trayecto_nombre}
               </p>
@@ -303,30 +307,17 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
               <span>1. Datos Generales</span>
             </h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-slate-300 mb-2">
-                  Nombre de la Proyección
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">
-                  Periodo Académico
-                </label>
-                <div className="w-full bg-slate-950/60 border border-emerald-500/30 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="text-emerald-300 font-bold font-mono">{periodoAcademico}</span>
-                  <span className="text-slate-500 text-xs">(periodo activo — no editable)</span>
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-2">
+                Nombre de la Proyección
+              </label>
+              <input
+                type="text"
+                required
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
             </div>
 
             <div>

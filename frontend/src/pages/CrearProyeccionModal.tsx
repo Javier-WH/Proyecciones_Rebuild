@@ -668,7 +668,14 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white tracking-tight">Nueva Proyección Académica</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2.5">
+                <span>Nueva Proyección Académica</span>
+                {periodoActivo && (
+                  <span className="text-[10px] font-semibold font-mono bg-slate-800/80 border border-slate-700 text-slate-400 px-2 py-0.5 rounded-md">
+                    Periodo {periodoActivo.codigo}
+                  </span>
+                )}
+              </h3>
               <p className="text-xs text-slate-400">Consulta en tiempo real con API SAGA</p>
             </div>
           </div>
@@ -767,27 +774,16 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
               </div>
             )}
 
-            {/* 2. Nombre, Periodo y Switch Modalidad */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">
-                  Periodo Académico
-                </label>
-                {periodoActivo ? (
-                  <div className="w-full bg-slate-950/60 border border-emerald-500/30 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2">
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="text-emerald-300 font-bold font-mono">{periodoActivo.codigo}</span>
-                    <span className="text-slate-400 truncate text-xs">— {periodoActivo.nombre}</span>
-                  </div>
-                ) : (
-                  <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2.5 text-xs text-red-300 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                    <span>No hay periodo académico ACTIVO. Active uno en la vista de Periodos.</span>
-                  </div>
-                )}
+            {!periodoActivo && (
+              <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2.5 text-xs text-red-300 flex items-center gap-2 mt-4">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>No hay periodo académico ACTIVO. Active uno en la vista de Periodos.</span>
               </div>
+            )}
 
-              <div className="md:col-span-2 flex flex-col justify-end">
+            {/* 2. Switch Modalidad */}
+            <div className="grid grid-cols-1 gap-4 pt-2">
+              <div className="flex flex-col justify-end">
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
                   Modalidad de Régimen Académico
                 </label>
