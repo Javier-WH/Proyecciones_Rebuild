@@ -14,7 +14,9 @@ export async function apiFetch<T = any>(
   const token = localStorage.getItem('token');
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    // Fastify rechaza bodies JSON vacíos (FST_ERR_CTP_EMPTY_JSON_BODY):
+    // solo enviar Content-Type cuando realmente hay body.
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string>),
   };
 
