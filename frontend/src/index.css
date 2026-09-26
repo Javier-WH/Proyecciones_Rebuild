@@ -16,3 +16,37 @@
 .auth-gradient {
   background: radial-gradient(circle at 10% 20%, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 90%);
 }
+
+/* Slider de confirmación (deslizar hasta el final para habilitar acción destructiva) */
+input[type='range'].slide-confirm {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type='range'].slide-confirm::-webkit-slider-runnable-track {
+  background: transparent;
+}
+input[type='range'].slide-confirm::-moz-range-track {
+  background: transparent;
+}
+input[type='range'].slide-confirm::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  margin-top: 0;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  border: 2px solid rgba(252, 165, 165, 0.7);
+  cursor: grab;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+input[type='range'].slide-confirm::-moz-range-thumb {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  border: 2px solid rgba(252, 165, 165, 0.7);
+  cursor: grab;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}

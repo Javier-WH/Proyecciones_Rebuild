@@ -45,6 +45,9 @@ export const ProyeccionesPage: React.FC = () => {
   const [filterText, setFilterText] = useState('');
   const [selectedProyeccionDetail, setSelectedProyeccionDetail] = useState<any | null>(null);
   const [editingProyeccion, setEditingProyeccion] = useState<any | null>(null);
+  const [deletingProyeccion, setDeletingProyeccion] = useState<ProyeccionItem | null>(null);
+  const [slideConfirm, setSlideConfirm] = useState(0);
+  const [deletingLoading, setDeletingLoading] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -71,16 +74,25 @@ export const ProyeccionesPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Está seguro de que desea eliminar esta proyección académica? Se eliminarán también sus secciones y materias asociadas.')) {
-      return;
-    }
+  const handleDelete = (proy: ProyeccionItem) => {
+    setDeletingProyeccion(proy);
+    setSlideConfirm(0);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingProyeccion || slideConfirm < 100) return;
+    const id = deletingProyeccion.id;
+    setDeletingLoading(true);
     const res = await apiFetch(`/proyecciones/${id}`, { method: 'DELETE' });
+    setDeletingLoading(false);
     if (res.success) {
       fetchProyecciones();
       if (selectedProyeccionDetail?.id === id) {
         setSelectedProyeccionDetail(null);
       }
+      setDeletingProyeccion(null);
+    } else {
+      setErrorMsg(res.message || 'Error eliminando la proyección.');
     }
   };
 
@@ -153,6 +165,14 @@ export const ProyeccionesPage: React.FC = () => {
           <span>Actualizar</span>
         </button>
       </div>
+
+      {/* Error Banner */}
+      {errorMsg && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-3 text-red-300 text-sm">
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
 
       {/* Proyecciones Grid / List */}
       {loading ? (
@@ -245,7 +265,7 @@ export const ProyeccionesPage: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => handleDelete(proy.id)}
+                  onClick={() => handleDelete(proy)}
                   className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                   title="Eliminar proyección"
                 >
@@ -398,6 +418,98 @@ export const ProyeccionesPage: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchProyecciones}
       />
+
+      {/* Modal de Confirmación de Eliminación (deslizar para habilitar) */}
+      {deletingProyeccion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-red-500/30 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-800 bg-slate-950 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Eliminar Proyección</h3>
+                <p className="text-xs text-slate-400">Esta acción no se puede deshacer</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Está a punto de eliminar{' '}
+                <span className="font-bold text-white">{deletingProyeccion.nombre}</span>{' '}
+                <span className="text-slate-400 font-mono">({deletingProyeccion.codigo})</span>.
+                Se eliminarán también todas sus secciones y materias asociadas.
+              </p>
+
+              {/* Barra de deslizamiento de confirmación */}
+              <div>
+                <div className="relative h-12 rounded-xl bg-slate-950 border border-slate-700 overflow-hidden">
+                  {/* Relleno de progreso */}
+                  <div
+                    className={`absolute inset-y-0 left-0 transition-all duration-150 ${
+                      slideConfirm >= 100 ? 'bg-red-600/50' : 'bg-red-500/20'
+                    }`}
+                    style={{ width: `${slideConfirm}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={slideConfirm}
+                    onChange={(e) => setSlideConfirm(Number(e.target.value))}
+                    className="slide-confirm absolute inset-0 w-full h-full cursor-pointer"
+                    aria-label="Deslizar hasta el final para habilitar la eliminación"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span
+                      className={`text-[11px] font-bold uppercase tracking-wider ${
+                        slideConfirm >= 100 ? 'text-white' : 'text-slate-500'
+                      }`}
+                    >
+                      {slideConfirm >= 100 ? '✓ Eliminación habilitada' : 'Desliza hasta el final →'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between mt-1.5 text-[10px] text-slate-500">
+                  <span>0%</span>
+                  <span className={slideConfirm >= 100 ? 'text-red-400 font-bold' : ''}>{slideConfirm}%</span>
+                  <span>100%</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletingProyeccion(null)}
+                  disabled={deletingLoading}
+                  className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={slideConfirm < 100 || deletingLoading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-semibold shadow-lg shadow-red-600/30 flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {deletingLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Eliminando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Eliminar Definitivamente</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Edición */}
       <EditarProyeccionModal
