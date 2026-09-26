@@ -158,16 +158,15 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     });
   };
 
-  // Quitar una materia específica de una sección
-  const handleRemoveMateriaSeccion = (secIdx: number, matIdx: number) => {
-    setSecciones((prev) => {
-      const arr = [...prev];
-      arr[secIdx] = {
-        ...arr[secIdx],
-        materias: (arr[secIdx].materias || []).filter((_, i) => i !== matIdx),
-      };
-      return arr;
-    });
+  // Quitar una materia de todas las secciones que usan una maya dada
+  const handleRemoveMateriaMaya = (mayaId: number, subjectSagaId: number) => {
+    setSecciones((prev) =>
+      prev.map((s) =>
+        s.maya_id === mayaId
+          ? { ...s, materias: (s.materias || []).filter((m) => m.subject_saga_id !== subjectSagaId) }
+          : s
+      )
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -459,37 +458,16 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                         </select>
                       </div>
 
-                      {/* Materias propias de la sección */}
+                      {/* Materias propias de la sección: se gestionan en los tabs de la sección 3 */}
                       {sec.maya_id && (
-                        <div>
-                          <label className="block text-[10px] text-purple-300 font-semibold mb-1">
-                            Materias de esta sección ({sec.materias?.length || 0})
-                          </label>
+                        <div className="text-[10px] text-purple-300/80 flex items-center gap-1">
                           {sec.loadingMaterias ? (
-                            <div className="text-[10px] text-slate-500 py-1">Cargando materias del pensum...</div>
-                          ) : (sec.materias || []).length === 0 ? (
-                            <div className="text-[10px] text-slate-500 py-1">
-                              No se encontraron materias en este pensum.
-                            </div>
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Cargando materias del pensum...</span>
+                            </>
                           ) : (
-                            <div className="flex flex-wrap gap-1">
-                              {(sec.materias || []).map((mat, mIdx) => (
-                                <span
-                                  key={`${mat.subject_saga_id}-${mIdx}`}
-                                  className="inline-flex items-center gap-1 bg-purple-500/10 border border-purple-500/30 text-purple-200 text-[10px] px-1.5 py-0.5 rounded-md"
-                                >
-                                  {mat.nombre}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveMateriaSeccion(idx, mIdx)}
-                                    className="text-purple-400/60 hover:text-red-400 transition-colors"
-                                    title="Quitar materia"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
+                            <span>{sec.materias?.length || 0} materias — gestionar en la pestaña del pensum (sección 3)</span>
                           )}
                         </div>
                       )}
@@ -547,13 +525,18 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
 
             {activeMateriasTab !== 'general' ? (
               (() => {
-                const rows = materiasDeMayaTab(Number(activeMateriasTab));
+                const mayaId = Number(activeMateriasTab);
+                const rows = materiasDeMayaTab(mayaId);
                 return rows.length === 0 ? (
                   <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-center text-slate-400 text-xs">
                     No hay materias cargadas para este pensum.
                   </div>
                 ) : (
-                  <MateriasReadonlyTable rows={rows} tipo={tipoProyeccion} />
+                  <MateriasReadonlyTable
+                    rows={rows}
+                    tipo={tipoProyeccion}
+                    onRemove={(m) => handleRemoveMateriaMaya(mayaId, m.subject_saga_id)}
+                  />
                 );
               })()
             ) : materias.length === 0 ? (
