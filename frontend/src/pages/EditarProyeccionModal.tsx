@@ -169,6 +169,22 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     );
   };
 
+  // Editar una materia en todas las secciones que usan una maya dada
+  const handleUpdateMateriaMaya = (mayaId: number, subjectSagaId: number, patch: Partial<MateriaPayload>) => {
+    setSecciones((prev) =>
+      prev.map((s) =>
+        s.maya_id === mayaId
+          ? {
+              ...s,
+              materias: (s.materias || []).map((m) =>
+                m.subject_saga_id === subjectSagaId ? { ...m, ...patch } : m
+              ),
+            }
+          : s
+      )
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -536,6 +552,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                     rows={rows}
                     tipo={tipoProyeccion}
                     onRemove={(m) => handleRemoveMateriaMaya(mayaId, m.subject_saga_id)}
+                    onUpdate={(m, patch) => handleUpdateMateriaMaya(mayaId, m.subject_saga_id, patch)}
                   />
                 );
               })()

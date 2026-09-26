@@ -98,7 +98,8 @@ export const MateriasReadonlyTable: React.FC<{
   rows: MateriaPayload[];
   tipo: 'TRIMESTRAL' | 'SEMESTRAL';
   onRemove?: (m: MateriaPayload) => void;
-}> = ({ rows, tipo, onRemove }) => (
+  onUpdate?: (m: MateriaPayload, patch: Partial<MateriaPayload>) => void;
+}> = ({ rows, tipo, onRemove, onUpdate }) => (
   <div className="border border-slate-800 rounded-2xl overflow-hidden">
     <table className="w-full text-left text-xs text-slate-300">
       <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
@@ -117,37 +118,79 @@ export const MateriasReadonlyTable: React.FC<{
           <tr key={m.subject_saga_id} className="hover:bg-slate-800/40 transition-colors">
             <td className="py-3 px-4 font-semibold text-white">{m.nombre}</td>
             <td className="py-3 px-4 text-center">{m.horas_totales} hrs</td>
-            <td className="py-3 px-4 text-center font-semibold text-blue-400">{m.horas_semanales} hrs/sem</td>
+            <td className="py-3 px-4 text-center font-semibold text-blue-400">
+              {onUpdate ? (
+                <input
+                  type="number"
+                  min="0"
+                  value={m.horas_semanales}
+                  onChange={(e) => onUpdate(m, { horas_semanales: Number(e.target.value) })}
+                  className="w-16 bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1 text-white text-xs text-center focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+              ) : (
+                `${m.horas_semanales} hrs/sem`
+              )}
+            </td>
             <td className="py-3 px-4 text-center">
               {tipo === 'TRIMESTRAL' ? (
                 <div className="flex items-center justify-center gap-1">
-                  {(['q1', 'q2', 'q3'] as const).map((q, i) => (
-                    <span
-                      key={q}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        m[q]
-                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                          : 'bg-slate-800 text-slate-600'
-                      }`}
-                    >
-                      T{i + 1}
-                    </span>
-                  ))}
+                  {(['q1', 'q2', 'q3'] as const).map((q, i) =>
+                    onUpdate ? (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => onUpdate(m, { [q]: !m[q] })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                          m[q]
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                            : 'bg-slate-800 text-slate-600 hover:text-slate-400'
+                        }`}
+                      >
+                        T{i + 1}
+                      </button>
+                    ) : (
+                      <span
+                        key={q}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          m[q]
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                            : 'bg-slate-800 text-slate-600'
+                        }`}
+                      >
+                        T{i + 1}
+                      </span>
+                    )
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-1">
-                  {(['semestre1', 'semestre2'] as const).map((s, i) => (
-                    <span
-                      key={s}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        m[s]
-                          ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                          : 'bg-slate-800 text-slate-600'
-                      }`}
-                    >
-                      Semestre {i === 0 ? 'I' : 'II'}
-                    </span>
-                  ))}
+                  {(['semestre1', 'semestre2'] as const).map((s, i) =>
+                    onUpdate ? (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => onUpdate(m, { [s]: !m[s] })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                          m[s]
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                            : 'bg-slate-800 text-slate-600 hover:text-slate-400'
+                        }`}
+                      >
+                        Semestre {i === 0 ? 'I' : 'II'}
+                      </button>
+                    ) : (
+                      <span
+                        key={s}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          m[s]
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                            : 'bg-slate-800 text-slate-600'
+                        }`}
+                      >
+                        Semestre {i === 0 ? 'I' : 'II'}
+                      </span>
+                    )
+                  )}
                 </div>
               )}
             </td>
@@ -459,6 +502,42 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       prev.map((s) =>
         s.maya_id === mayaId
           ? { ...s, materias: (s.materias || []).filter((m) => m.subject_saga_id !== subjectSagaId) }
+          : s
+      )
+    );
+  };
+
+  // Editar una materia del pensum general (estado SubjectUC)
+  const handleUpdateMateriaGeneral = (subjectId: number, patch: Partial<MateriaPayload>) => {
+    setMaterias((prev) =>
+      prev.map((m) => {
+        if (m.id !== subjectId) return m;
+        return {
+          ...m,
+          horasSemanales: patch.horas_semanales ?? m.horasSemanales,
+          quarters: {
+            q1: patch.q1 !== undefined ? (patch.q1 ? 1 : 0) : m.quarters.q1,
+            q2: patch.q2 !== undefined ? (patch.q2 ? 1 : 0) : m.quarters.q2,
+            q3: patch.q3 !== undefined ? (patch.q3 ? 1 : 0) : m.quarters.q3,
+          },
+          semestre1Activo: patch.semestre1 ?? m.semestre1Activo,
+          semestre2Activo: patch.semestre2 ?? m.semestre2Activo,
+        };
+      })
+    );
+  };
+
+  // Editar una materia en todas las secciones que usan una maya dada
+  const handleUpdateMateriaMaya = (mayaId: number, subjectSagaId: number, patch: Partial<MateriaPayload>) => {
+    setSecciones((prev) =>
+      prev.map((s) =>
+        s.maya_id === mayaId
+          ? {
+              ...s,
+              materias: (s.materias || []).map((m) =>
+                m.subject_saga_id === subjectSagaId ? { ...m, ...patch } : m
+              ),
+            }
           : s
       )
     );
@@ -934,6 +1013,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                       <MateriasReadonlyTable
                         rows={materias.map(mapSubjectToMateriaPayload)}
                         tipo={tipoProyeccion}
+                        onUpdate={(m, patch) => handleUpdateMateriaGeneral(m.subject_saga_id, patch)}
                       />
                     )
                   ) : (
@@ -949,6 +1029,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                           rows={rows}
                           tipo={tipoProyeccion}
                           onRemove={(m) => handleRemoveMateriaMaya(mayaId, m.subject_saga_id)}
+                          onUpdate={(m, patch) => handleUpdateMateriaMaya(mayaId, m.subject_saga_id, patch)}
                         />
                       );
                     })()
