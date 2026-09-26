@@ -11,6 +11,7 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  Check,
   Save,
   Pencil,
 } from 'lucide-react';
@@ -32,7 +33,6 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
   const [secciones, setSecciones] = useState<SeccionForm[]>([]);
   const [materias, setMaterias] = useState<MateriaPayload[]>([]);
 
-  const [periodosList, setPeriodosList] = useState<Array<{ id: number; codigo: string; nombre: string }>>([]);
   const [turnosList, setTurnosList] = useState<Array<{ id: number; turno: string }>>([]);
   const [mayasList, setMayasList] = useState<Array<{ id: number; descripcion: string; tipopensum_id: number }>>([]);
 
@@ -83,12 +83,10 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     );
 
     const fetchCatalogos = async () => {
-      const [resPeriodos, resTurnos, resMayas] = await Promise.all([
-        apiFetch<Array<{ id: number; codigo: string; nombre: string }>>('/periodos/activos'),
+      const [resTurnos, resMayas] = await Promise.all([
         apiFetch<Array<{ id: number; turno: string }>>('/saga/turnos'),
         apiFetch<Array<{ id: number; descripcion: string; tipopensum_id: number }>>(`/saga/mayas/${proyeccion.pnf_saga_id}`),
       ]);
-      if (resPeriodos.success && resPeriodos.data) setPeriodosList(resPeriodos.data);
       if (resTurnos.success && resTurnos.data) setTurnosList(resTurnos.data);
       if (resMayas.success && resMayas.data) setMayasList(resMayas.data);
     };
@@ -323,21 +321,11 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
                   Periodo Académico
                 </label>
-                <select
-                  required
-                  value={periodoAcademico}
-                  onChange={(e) => setPeriodoAcademico(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  {periodosList.length === 0 || !periodosList.some((p) => p.codigo === periodoAcademico) ? (
-                    <option value={periodoAcademico}>{periodoAcademico} (Actual)</option>
-                  ) : null}
-                  {periodosList.map((p) => (
-                    <option key={p.id} value={p.codigo}>
-                      {p.codigo} — {p.nombre}
-                    </option>
-                  ))}
-                </select>
+                <div className="w-full bg-slate-950/60 border border-emerald-500/30 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-emerald-300 font-bold font-mono">{periodoAcademico}</span>
+                  <span className="text-slate-500 text-xs">(periodo activo — no editable)</span>
+                </div>
               </div>
             </div>
 

@@ -290,7 +290,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   const [pnfList, setPnfList] = useState<PNF[]>([]);
   const [trayectosList, setTrayectosList] = useState<Trayecto[]>([]);
   const [mayasList, setMayasList] = useState<Maya[]>([]);
-  const [periodosList, setPeriodosList] = useState<Array<{ id: number; codigo: string; nombre: string }>>([]);
+  const [periodoActivo, setPeriodoActivo] = useState<{ id: number; codigo: string; nombre: string } | null>(null);
   const [turnosList, setTurnosList] = useState<Array<{ id: number; turno: string }>>([]);
 
   // Selected Form States
@@ -326,7 +326,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       const [resPnf, resTrayectos, resPeriodos, resTurnos] = await Promise.all([
         apiFetch<PNF[]>('/saga/programas'),
         apiFetch<Trayecto[]>('/saga/trayectos'),
-        apiFetch<any[]>('/periodos/activos'),
+        apiFetch<Array<{ id: number; codigo: string; nombre: string; estado: string }>>('/periodos'),
         apiFetch<Array<{ id: number; turno: string }>>('/saga/turnos'),
       ]);
 
@@ -334,10 +334,15 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       if (resTrayectos.success && resTrayectos.data) setTrayectosList(resTrayectos.data);
       if (resTurnos.success && resTurnos.data) setTurnosList(resTurnos.data);
 
+      // El periodo de la proyección siempre es el periodo ACTIVO (no editable)
       if (resPeriodos.success && resPeriodos.data) {
-        setPeriodosList(resPeriodos.data);
-        if (resPeriodos.data.length > 0) {
-          setPeriodoAcademico(resPeriodos.data[0].codigo);
+        const activo = resPeriodos.data.find((p) => p.estado === 'ACTIVO');
+        if (activo) {
+          setPeriodoActivo(activo);
+          setPeriodoAcademico(activo.codigo);
+        } else {
+          setPeriodoActivo(null);
+          setPeriodoAcademico('');
         }
       }
 
@@ -768,22 +773,18 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
                   Periodo Académico
                 </label>
-                <select
-                  required
-                  value={periodoAcademico}
-                  onChange={(e) => setPeriodoAcademico(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  {periodosList.length === 0 ? (
-                    <option value="2026-1">2026-1 (Predeterminado)</option>
-                  ) : (
-                    periodosList.map((p) => (
-                      <option key={p.id} value={p.codigo}>
-                        {p.codigo} — {p.nombre}
-                      </option>
-                    ))
-                  )}
-                </select>
+                {periodoActivo ? (
+                  <div className="w-full bg-slate-950/60 border border-emerald-500/30 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="text-emerald-300 font-bold font-mono">{periodoActivo.codigo}</span>
+                    <span className="text-slate-400 truncate text-xs">— {periodoActivo.nombre}</span>
+                  </div>
+                ) : (
+                  <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2.5 text-xs text-red-300 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>No hay periodo académico ACTIVO. Active uno en la vista de Periodos.</span>
+                  </div>
+                )}
               </div>
 
               <div className="md:col-span-2 flex flex-col justify-end">
