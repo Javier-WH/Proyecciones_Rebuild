@@ -289,74 +289,155 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
       [nombre, periodoAcademico, tipoProyeccion, id]
     );
 
-    // Reemplazar secciones si fueron enviadas (cada una puede traer su propia maya y materias)
-    if (Array.isArray(body.secciones) || Array.isArray(body.materias)) {
-      await conn.query('DELETE FROM proyeccion_materias WHERE proyeccion_id = ?', [id]);
-    }
+    // Diff quirúrgico: actualizar/insertar en vez de borrar y recrear, para no
+    // perder las asignaciones de profesores (proyeccion_asignaciones tiene
+    // ON DELETE CASCADE sobre materia_id y seccion_id). Identidad lógica:
+    //   sección  -> (nombre, turno_saga_id), con fallback por posición
+    //   materia  -> (subject_saga_id, seccion_id)
+    const upsertMaterias = async (seccionDbId: number | null, mats: any[]) => {
+      const [existingMats] = await conn.query<any[]>(
+        'SELECT id, subject_saga_id FROM proyeccion_materias WHERE proyeccion_id = ? AND seccion_id <=> ?',
+        [id, seccionDbId]
+      );
+      const bySubject = new Map<number, any>();
+      for (const m of existingMats) {
+        if (!bySubject.has(m.subject_saga_id)) bySubject.set(m.subject_saga_id, m);
+      }
+      const keepIds = new Set<number>();
 
-    if (Array.isArray(body.secciones)) {
-      await conn.query('DELETE FROM proyeccion_secciones WHERE proyeccion_id = ?', [id]);
-      for (const sec of body.secciones) {
-        const [secResult] = await conn.query<any>(
-          `INSERT INTO proyeccion_secciones (proyeccion_id, nombre, turno_saga_id, turno_nombre, estudiantes_estimados, maya_id, maya_descripcion)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            sec.nombre,
-            sec.turno_saga_id || 1,
-            sec.turno_nombre || 'Mañana',
-            sec.estudiantes_estimados || 30,
-            sec.maya_id || null,
-            sec.maya_descripcion || null,
-          ]
-        );
-
-        if (sec.materias && sec.materias.length > 0) {
-          for (const mat of sec.materias) {
-            await conn.query(
-              `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                id,
-                secResult.insertId,
-                mat.subject_saga_id,
-                mat.nombre,
-                mat.horas_totales || 0,
-                mat.horas_semanales || 0,
-                mat.q1 ? 1 : 0,
-                mat.q2 ? 1 : 0,
-                mat.q3 ? 1 : 0,
-                mat.semestre1 ? 1 : 0,
-                mat.semestre2 ? 1 : 0,
-                mat.eliminada ? 1 : 0,
-              ]
-            );
-          }
+      for (const mat of mats) {
+        const ex = bySubject.get(mat.subject_saga_id);
+        if (ex && !keepIds.has(ex.id)) {
+          keepIds.add(ex.id);
+          await conn.query(
+            `UPDATE proyeccion_materias SET nombre = ?, horas_totales = ?, horas_semanales = ?,
+             q1 = ?, q2 = ?, q3 = ?, semestre1 = ?, semestre2 = ?, eliminada = ? WHERE id = ?`,
+            [
+              mat.nombre,
+              mat.horas_totales || 0,
+              mat.horas_semanales || 0,
+              mat.q1 ? 1 : 0,
+              mat.q2 ? 1 : 0,
+              mat.q3 ? 1 : 0,
+              mat.semestre1 ? 1 : 0,
+              mat.semestre2 ? 1 : 0,
+              mat.eliminada ? 1 : 0,
+              ex.id,
+            ]
+          );
+        } else {
+          await conn.query(
+            `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              seccionDbId,
+              mat.subject_saga_id,
+              mat.nombre,
+              mat.horas_totales || 0,
+              mat.horas_semanales || 0,
+              mat.q1 ? 1 : 0,
+              mat.q2 ? 1 : 0,
+              mat.q3 ? 1 : 0,
+              mat.semestre1 ? 1 : 0,
+              mat.semestre2 ? 1 : 0,
+              mat.eliminada ? 1 : 0,
+            ]
+          );
         }
       }
-    }
 
-    // Reemplazar materias generales si fueron enviadas
-    if (Array.isArray(body.materias)) {
-      for (const mat of body.materias) {
+      // Solo se eliminan (y desasignan) las materias que realmente se quitaron
+      const deleteIds = existingMats.filter((m) => !keepIds.has(m.id)).map((m) => m.id);
+      if (deleteIds.length > 0) {
         await conn.query(
-          `INSERT INTO proyeccion_materias (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales, q1, q2, q3, semestre1, semestre2, eliminada)
-           VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            mat.subject_saga_id,
-            mat.nombre,
-            mat.horas_totales || 0,
-            mat.horas_semanales || 0,
-            mat.q1 ? 1 : 0,
-            mat.q2 ? 1 : 0,
-            mat.q3 ? 1 : 0,
-            mat.semestre1 ? 1 : 0,
-            mat.semestre2 ? 1 : 0,
-            mat.eliminada ? 1 : 0,
-          ]
+          `DELETE FROM proyeccion_materias WHERE id IN (${deleteIds.map(() => '?').join(',')})`,
+          deleteIds
         );
       }
+    };
+
+    if (Array.isArray(body.secciones)) {
+      const [existingSecs] = await conn.query<any[]>(
+        'SELECT id, nombre, turno_saga_id FROM proyeccion_secciones WHERE proyeccion_id = ?',
+        [id]
+      );
+      const secByKey = new Map<string, any>(existingSecs.map((s) => [`${s.nombre}|${s.turno_saga_id}`, s]));
+      const usedSecIds = new Set<number>();
+      const secDbIds: (number | undefined)[] = new Array(body.secciones.length);
+
+      // 1) Match por clave (nombre + turno)
+      body.secciones.forEach((sec, i) => {
+        const ex = secByKey.get(`${sec.nombre}|${sec.turno_saga_id || 1}`);
+        if (ex && !usedSecIds.has(ex.id)) {
+          secDbIds[i] = ex.id;
+          usedSecIds.add(ex.id);
+        }
+      });
+
+      // 2) Fallback por posición para secciones renombradas (preserva asignaciones)
+      const leftoverSecs = existingSecs.filter((s) => !usedSecIds.has(s.id));
+      let li = 0;
+      body.secciones.forEach((_sec, i) => {
+        if (secDbIds[i] === undefined && li < leftoverSecs.length) {
+          secDbIds[i] = leftoverSecs[li].id;
+          usedSecIds.add(leftoverSecs[li].id);
+          li++;
+        }
+      });
+
+      // 3) Actualizar o insertar secciones y hacer diff de sus materias
+      for (const [i, sec] of body.secciones.entries()) {
+        let seccionDbId = secDbIds[i];
+        if (seccionDbId !== undefined) {
+          await conn.query(
+            `UPDATE proyeccion_secciones SET nombre = ?, turno_saga_id = ?, turno_nombre = ?, estudiantes_estimados = ?, maya_id = ?, maya_descripcion = ? WHERE id = ?`,
+            [
+              sec.nombre,
+              sec.turno_saga_id || 1,
+              sec.turno_nombre || 'Mañana',
+              sec.estudiantes_estimados || 30,
+              sec.maya_id || null,
+              sec.maya_descripcion || null,
+              seccionDbId,
+            ]
+          );
+        } else {
+          const [secResult] = await conn.query<any>(
+            `INSERT INTO proyeccion_secciones (proyeccion_id, nombre, turno_saga_id, turno_nombre, estudiantes_estimados, maya_id, maya_descripcion)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              sec.nombre,
+              sec.turno_saga_id || 1,
+              sec.turno_nombre || 'Mañana',
+              sec.estudiantes_estimados || 30,
+              sec.maya_id || null,
+              sec.maya_descripcion || null,
+            ]
+          );
+          seccionDbId = secResult.insertId;
+        }
+
+        // Si la sección trae materias (pensum propio), diff; si no, no se tocan
+        if (Array.isArray(sec.materias)) {
+          await upsertMaterias(seccionDbId!, sec.materias);
+        }
+      }
+
+      // 4) Eliminar solo las secciones que se quitaron (sus materias exclusivas
+      //    y asignaciones se limpian por cascada/limpieza explícita)
+      const deleteSecIds = existingSecs.filter((s) => !usedSecIds.has(s.id)).map((s) => s.id);
+      if (deleteSecIds.length > 0) {
+        const ph = deleteSecIds.map(() => '?').join(',');
+        await conn.query(`DELETE FROM proyeccion_materias WHERE seccion_id IN (${ph})`, deleteSecIds);
+        await conn.query(`DELETE FROM proyeccion_secciones WHERE id IN (${ph})`, deleteSecIds);
+      }
+    }
+
+    // Diff de materias generales (seccion_id NULL) si fueron enviadas
+    if (Array.isArray(body.materias)) {
+      await upsertMaterias(null, body.materias);
     }
 
     await conn.commit();
