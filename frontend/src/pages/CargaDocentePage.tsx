@@ -211,7 +211,7 @@ export const CargaDocentePage: React.FC = () => {
   const dedicacionCell = (nombre: string | null | undefined, span: number) => (
     <td rowSpan={span} className="py-3 px-4 align-middle border-l border-slate-800/60">
       {nombre ? (
-        <span className="bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] px-2 py-1 rounded-full font-semibold">
+        <span className="inline-flex items-center whitespace-nowrap bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] px-2.5 py-1 rounded-full font-semibold">
           {nombre}
         </span>
       ) : (
@@ -412,7 +412,7 @@ export const CargaDocentePage: React.FC = () => {
         </div>
       ) : (
         <div className="border border-slate-800 rounded-3xl overflow-hidden bg-slate-900/80 shadow-xl overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300 min-w-[1000px]">
+          <table className="w-full text-left text-xs text-slate-300 min-w-[1280px]">
             <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
               <tr>
                 <th className="py-3.5 px-4 min-w-[210px]">Profesor</th>
