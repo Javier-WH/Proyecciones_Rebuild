@@ -4,6 +4,7 @@ import { apiFetch } from '../api/client.js';
 import { ProyeccionesPage } from './ProyeccionesPage.js';
 import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
+import { CargaDocentePage } from './CargaDocentePage.js';
 import {
   GraduationCap,
   LogOut,
@@ -18,12 +19,13 @@ import {
   XCircle,
   Clock,
   Plus,
-  LayoutDashboard
+  LayoutDashboard,
+  ClipboardList
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores' | 'carga'>('dashboard');
   const [sagaConnected, setSagaConnected] = useState<boolean | null>(null);
   const [loadingSaga, setLoadingSaga] = useState(true);
 
@@ -112,6 +114,15 @@ export const DashboardPage: React.FC = () => {
                 <Users className="w-3.5 h-3.5" />
                 <span>Profesores</span>
               </button>
+              <button
+                onClick={() => setActiveTab('carga')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'carga' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>Carga Docente</span>
+              </button>
             </div>
 
             {/* Right Profile & Actions */}
@@ -157,6 +168,8 @@ export const DashboardPage: React.FC = () => {
           <PeriodosPage />
         ) : activeTab === 'profesores' ? (
           <ProfesoresPage />
+        ) : activeTab === 'carga' ? (
+          <CargaDocentePage />
         ) : activeTab === 'proyecciones' ? (
           <ProyeccionesPage />
         ) : (

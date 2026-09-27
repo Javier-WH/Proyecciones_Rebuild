@@ -283,6 +283,28 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // 9c. Tabla de Asignaciones: qué profesor dicta cada materia en cada sección/lapso
+  // La ausencia de fila = materia sin asignar. trimestre: 1..3 (trimestral) o 1..2 (semestral)
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS proyeccion_asignaciones (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      proyeccion_id INT NOT NULL,
+      materia_id INT NOT NULL,
+      seccion_id INT NOT NULL,
+      trimestre TINYINT NOT NULL DEFAULT 1,
+      profesor_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_asignacion (materia_id, seccion_id, trimestre),
+      FOREIGN KEY (proyeccion_id) REFERENCES proyecciones(id) ON DELETE CASCADE,
+      FOREIGN KEY (materia_id) REFERENCES proyeccion_materias(id) ON DELETE CASCADE,
+      FOREIGN KEY (seccion_id) REFERENCES proyeccion_secciones(id) ON DELETE CASCADE,
+      FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE CASCADE,
+      INDEX idx_proyeccion (proyeccion_id),
+      INDEX idx_profesor (profesor_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
   const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);
   if (existingUsers.length === 0) {

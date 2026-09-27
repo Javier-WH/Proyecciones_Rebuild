@@ -114,10 +114,11 @@ async function ensureTipoContrato(sagaId: number, cache: Map<number, number>): P
 
 export async function listProfesoresHandler(request: FastifyRequest, reply: FastifyReply) {
   const user = request.userPayload!;
-  const { incluir_inactivos, pnf_saga_id, search } = request.query as {
+  const { incluir_inactivos, pnf_saga_id, search, para_asignacion } = request.query as {
     incluir_inactivos?: string;
     pnf_saga_id?: string;
     search?: string;
+    para_asignacion?: string;
   };
 
   try {
@@ -133,8 +134,10 @@ export async function listProfesoresHandler(request: FastifyRequest, reply: Fast
       conditions.push('p.activo = 1');
     }
 
-    // Coordinadores (REGULAR) solo ven profesores de su PNF asignado
-    if (user.role === 'REGULAR' && user.pnf_saga_id) {
+    // Coordinadores (REGULAR) solo ven profesores de su PNF asignado,
+    // salvo cuando el listado se usa para asignar materias (docencia multi-PNF)
+    const esParaAsignacion = para_asignacion === '1' || para_asignacion === 'true';
+    if (user.role === 'REGULAR' && user.pnf_saga_id && !esParaAsignacion) {
       conditions.push('p.pnf_saga_id = ?');
       params.push(user.pnf_saga_id);
     } else if (pnf_saga_id) {
