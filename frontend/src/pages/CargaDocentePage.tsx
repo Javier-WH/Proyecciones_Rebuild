@@ -195,7 +195,7 @@ export const CargaDocentePage: React.FC = () => {
       <div className="flex items-center gap-2.5">
         <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} />
         <div className="min-w-0">
-          <div className="font-bold text-white text-sm leading-tight">
+          <div className="font-bold text-white text-sm leading-tight uppercase">
             {p.apellidos} {p.nombres}
           </div>
           <div className="text-[10px] text-slate-500 font-mono">
@@ -285,7 +285,7 @@ export const CargaDocentePage: React.FC = () => {
               {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
-                  className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                  className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer uppercase"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>
