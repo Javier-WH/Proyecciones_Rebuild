@@ -28,6 +28,8 @@ interface AgregarMateriaModalProps {
   onChanged: () => void;
   profesor: Profesor | null;
   rows: MateriaAsignableRow[];
+  // Lapso activo en el filtro de la vista (solo informativo, las rows ya vienen filtradas)
+  lapsoActivo?: number | null;
 }
 
 export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
@@ -36,6 +38,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   onChanged,
   profesor,
   rows,
+  lapsoActivo,
 }) => {
   const [search, setSearch] = useState('');
   const [soloSinAsignar, setSoloSinAsignar] = useState(true);
@@ -91,7 +94,14 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white">Agregar Materias</h3>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              Agregar Materias
+              {lapsoActivo != null && (
+                <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  Lapso {lapsoActivo}
+                </span>
+              )}
+            </h3>
             <button onClick={onClose} className="text-slate-400 hover:text-white">
               <X className="w-5 h-5" />
             </button>

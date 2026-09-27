@@ -122,8 +122,6 @@ export const CargaDocentePage: React.FC = () => {
     [rows]
   );
 
-  const hayFiltroDeFila = filterLapso !== 'todos' || filterPnf !== 'todos' || filterProyeccion !== 'todas';
-
   // Filas que pasan los filtros de lapso/PNF/proyección (filtros de "materia")
   const rowsPorFiltro = useMemo(
     () =>
@@ -154,16 +152,13 @@ export const CargaDocentePage: React.FC = () => {
     const lista: ProfesorGrupo[] = [];
     if (!soloSinAsignar) {
       for (const p of profesores) {
+        // Con texto: incluir si coincide el profesor O alguna de sus materias
         const susRows = rowsPorFiltro.filter(
           (r) => r.profesor_id === p.id && (coincideTextoProfesor(p) || coincideTextoMateria(r))
         );
-        // Mostrar el profesor aunque no tenga materias, salvo que haya filtros
-        // de fila activos o el texto no coincida ni con él ni con sus materias
-        const incluir =
-          susRows.length > 0 ||
-          (!hayFiltroDeFila && coincideTextoProfesor(p)) ||
-          (texto !== '' && coincideTextoProfesor(p) && !hayFiltroDeFila);
-        if (!incluir) continue;
+        // El profesor siempre aparece si coincide con el texto de búsqueda;
+        // con texto solo se oculta si ni él ni sus materias coinciden
+        if (susRows.length === 0 && !coincideTextoProfesor(p)) continue;
         lista.push({
           profesor: p,
           totalHoras: susRows.reduce((acc, r) => acc + (r.horas_semanales || 0), 0),
@@ -175,7 +170,7 @@ export const CargaDocentePage: React.FC = () => {
 
     const sinAsignarRows = rowsPorFiltro.filter((r) => r.profesor_id === null && coincideTextoMateria(r));
     return { grupos: lista, sinAsignar: sinAsignarRows };
-  }, [profesores, rowsPorFiltro, filterText, soloSinAsignar, hayFiltroDeFila]);
+  }, [profesores, rowsPorFiltro, filterText, soloSinAsignar]);
 
   const sobrecargaColor = (total: number, contrato: number | null | undefined) => {
     if (!contrato) return 'text-slate-300';
@@ -509,7 +504,8 @@ export const CargaDocentePage: React.FC = () => {
       <AgregarMateriaModal
         isOpen={modalMaterias.open}
         profesor={modalMaterias.profesor}
-        rows={rows}
+        rows={rowsPorFiltro}
+        lapsoActivo={filterLapso !== 'todos' ? Number(filterLapso) : null}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}
       />
