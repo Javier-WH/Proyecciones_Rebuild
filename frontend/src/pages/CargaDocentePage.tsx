@@ -15,7 +15,8 @@ import {
   Users,
   UserX,
   Plus,
-  X
+  X,
+  Check
 } from 'lucide-react';
 
 interface CargaRow extends AsignacionRow, MateriaAsignableRow {
@@ -51,6 +52,7 @@ export const CargaDocentePage: React.FC = () => {
   const [filterProyeccion, setFilterProyeccion] = useState<string>('todas');
   const [filterText, setFilterText] = useState('');
   const [soloSinAsignar, setSoloSinAsignar] = useState(false);
+  const [soloPnf, setSoloPnf] = useState(true);
 
   const [modalAsignar, setModalAsignar] = useState<{ open: boolean; row: CargaRow | null }>({
     open: false,
@@ -134,6 +136,13 @@ export const CargaDocentePage: React.FC = () => {
     [rows, filterLapso, filterPnf, filterProyeccion]
   );
 
+  // PNF de referencia para el toggle "Solo PNF": el seleccionado en el filtro,
+  // o el PNF propio del usuario si el filtro está en "Todos los PNF"
+  const pnfReferencia = useMemo(
+    () => (filterPnf !== 'todos' ? Number(filterPnf) : user?.pnf_saga_id ?? null),
+    [filterPnf, user]
+  );
+
   // Grupos: TODOS los profesores activos + pseudo-grupo "SIN ASIGNAR"
   const { grupos, sinAsignar } = useMemo(() => {
     const texto = filterText.toLowerCase();
@@ -152,6 +161,8 @@ export const CargaDocentePage: React.FC = () => {
     const lista: ProfesorGrupo[] = [];
     if (!soloSinAsignar) {
       for (const p of profesores) {
+        // Toggle "Solo PNF": solo profesores del PNF de referencia
+        if (soloPnf && pnfReferencia != null && Number(p.pnf_saga_id) !== pnfReferencia) continue;
         // Con texto: incluir si coincide el profesor O alguna de sus materias
         const susRows = rowsPorFiltro.filter(
           (r) => r.profesor_id === p.id && (coincideTextoProfesor(p) || coincideTextoMateria(r))
@@ -170,7 +181,7 @@ export const CargaDocentePage: React.FC = () => {
 
     const sinAsignarRows = rowsPorFiltro.filter((r) => r.profesor_id === null && coincideTextoMateria(r));
     return { grupos: lista, sinAsignar: sinAsignarRows };
-  }, [profesores, rowsPorFiltro, filterText, soloSinAsignar]);
+  }, [profesores, rowsPorFiltro, filterText, soloSinAsignar, soloPnf, pnfReferencia]);
 
   const sobrecargaColor = (total: number, contrato: number | null | undefined) => {
     if (!contrato) return 'text-slate-300';
@@ -370,6 +381,38 @@ export const CargaDocentePage: React.FC = () => {
             </option>
           ))}
         </select>
+
+        {/* Toggle Solo PNF / Todos */}
+        <div
+          className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1"
+          title={
+            soloPnf && pnfReferencia == null
+              ? 'Sin PNF de referencia: se muestran todos los profesores'
+              : 'Solo PNF: profesores del PNF seleccionado (o el suyo); Todos: todos los profesores'
+          }
+        >
+          <button
+            onClick={() => setSoloPnf(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              soloPnf
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Solo PNF</span>
+          </button>
+          <button
+            onClick={() => setSoloPnf(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              !soloPnf
+                ? 'bg-slate-700 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span>Todos</span>
+          </button>
+        </div>
 
         <button
           onClick={() => setSoloSinAsignar(!soloSinAsignar)}
