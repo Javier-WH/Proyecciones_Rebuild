@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { apiFetch } from '../api/client.js';
 import { ProyeccionesPage } from './ProyeccionesPage.js';
 import { PeriodosPage } from './PeriodosPage.js';
+import { ProfesoresPage } from './ProfesoresPage.js';
 import {
   GraduationCap,
   LogOut,
@@ -22,7 +23,7 @@ import {
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores'>('dashboard');
   const [sagaConnected, setSagaConnected] = useState<boolean | null>(null);
   const [loadingSaga, setLoadingSaga] = useState(true);
 
@@ -102,6 +103,15 @@ export const DashboardPage: React.FC = () => {
                 <Calendar className="w-3.5 h-3.5" />
                 <span>Proyecciones</span>
               </button>
+              <button
+                onClick={() => setActiveTab('profesores')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'profesores' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Profesores</span>
+              </button>
             </div>
 
             {/* Right Profile & Actions */}
@@ -145,6 +155,8 @@ export const DashboardPage: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {activeTab === 'periodos' ? (
           <PeriodosPage />
+        ) : activeTab === 'profesores' ? (
+          <ProfesoresPage />
         ) : activeTab === 'proyecciones' ? (
           <ProyeccionesPage />
         ) : (
@@ -190,7 +202,10 @@ export const DashboardPage: React.FC = () => {
               </div>
 
               {/* Profesores */}
-              <div className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-5 transition-all group">
+              <div
+                onClick={() => setActiveTab('profesores')}
+                className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-5 transition-all group cursor-pointer"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Users className="w-6 h-6" />
@@ -199,7 +214,10 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-white mb-1">Profesores</h3>
                 <p className="text-xs text-slate-400 mb-4">Registro, carga horaria, restricciones y asignación de materias.</p>
-                <button className="w-full py-2.5 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                <button
+                  onClick={() => setActiveTab('profesores')}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
                   <span>Ver Docentes</span>
                 </button>
               </div>

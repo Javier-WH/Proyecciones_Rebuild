@@ -92,14 +92,28 @@ export const sagaService = {
   getTeachers: () =>
     fetchFromSaga<
       Array<{
+        id?: number;
         NombreProfesor: string;
         ApellidoProfesor: string;
         CedulaProfesor: string;
+        Nacionalidad?: string | null;
         sexo: string;
         email1: string | null;
         email2: string | null;
+        programa_id?: number | null;
+        dedicacion_id?: number | null;
+        tlfMovil?: string | null;
+        estatus?: string | null;
       }>
     >('/teachers'),
+
+  // Dedicaciones / tipos de contrato docente.
+  // NOTA: la API Laravel actual no expone este endpoint; si no existe (404) se
+  // retorna null y el módulo de profesores deriva los tipos desde dedicacion_id.
+  getDedicaciones: async () => {
+    const data = await fetchFromSaga<any[]>('/dedicaciones');
+    return data ?? (await fetchFromSaga<any[]>('/dedicacions'));
+  },
   
   getMayas: async (pnfSagaId: number | string) => {
     const list = await fetchFromSaga<Array<{ id: number; descripcion: string; tipopensum_id: number }>>(`/maya/${pnfSagaId}`);

@@ -128,47 +128,6 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // 7-migration: Añadir columnas nuevas a proyecciones si no existen (idempotente).
-  // Nota: 'ADD COLUMN IF NOT EXISTS' solo existe en MariaDB; en MySQL se verifica
-  // primero en information_schema para que la migración funcione en ambos motores.
-  const columnasProyecciones: Array<{ nombre: string; definicion: string }> = [
-    { nombre: 'periodo_id', definicion: "INT NULL AFTER nombre" },
-    { nombre: 'pnf_nombre', definicion: "VARCHAR(255) NOT NULL DEFAULT '' AFTER pnf_saga_id" },
-    { nombre: 'trayecto_nombre', definicion: "VARCHAR(100) NOT NULL DEFAULT '' AFTER trayecto_saga_id" },
-    { nombre: 'maya_descripcion', definicion: "VARCHAR(255) NOT NULL DEFAULT '' AFTER maya_id" },
-    { nombre: 'tipo_proyeccion', definicion: "ENUM('TRIMESTRAL','SEMESTRAL') DEFAULT 'TRIMESTRAL' AFTER periodo_academico" },
-  ];
-  for (const col of columnasProyecciones) {
-    const [existe] = await db.query<any[]>(
-      `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'proyecciones' AND COLUMN_NAME = ?`,
-      [env.DB_NAME, col.nombre]
-    );
-    if (existe[0].total === 0) {
-      await db.query(`ALTER TABLE proyecciones ADD COLUMN ${col.nombre} ${col.definicion}`);
-      console.log(`✅ Columna '${col.nombre}' agregada a la tabla proyecciones`);
-    }
-  }
-
-  // Migraciones de tablas relacionadas (misma técnica portable MySQL/MariaDB)
-  const columnasExtra: Array<{ tabla: string; nombre: string; definicion: string }> = [
-    { tabla: 'proyeccion_secciones', nombre: 'maya_id', definicion: 'INT NULL AFTER estudiantes_estimados' },
-    { tabla: 'proyeccion_secciones', nombre: 'maya_descripcion', definicion: 'VARCHAR(255) NULL AFTER maya_id' },
-    { tabla: 'proyeccion_materias', nombre: 'seccion_id', definicion: 'INT NULL AFTER proyeccion_id' },
-    { tabla: 'proyeccion_materias', nombre: 'eliminada', definicion: 'TINYINT(1) DEFAULT 0 AFTER semestre2' },
-  ];
-  for (const col of columnasExtra) {
-    const [existe] = await db.query<any[]>(
-      `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-      [env.DB_NAME, col.tabla, col.nombre]
-    );
-    if (existe[0].total === 0) {
-      await db.query(`ALTER TABLE ${col.tabla} ADD COLUMN ${col.nombre} ${col.definicion}`);
-      console.log(`✅ Columna '${col.nombre}' agregada a la tabla ${col.tabla}`);
-    }
-  }
-
   // 7b. Tabla de Materias asociadas a una Proyección
   // seccion_id NULL = materia general (aplica a todas las secciones);
   // con valor = materia exclusiva de esa sección (pensum/malla diferente)
@@ -211,6 +170,47 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // Migraciones idempotentes (se ejecutan DESPUÉS de crear las tablas base).
+  // Nota: 'ADD COLUMN IF NOT EXISTS' solo existe en MariaDB; en MySQL se verifica
+  // primero en information_schema para que la migración funcione en ambos motores.
+  const columnasProyecciones: Array<{ nombre: string; definicion: string }> = [
+    { nombre: 'periodo_id', definicion: "INT NULL AFTER nombre" },
+    { nombre: 'pnf_nombre', definicion: "VARCHAR(255) NOT NULL DEFAULT '' AFTER pnf_saga_id" },
+    { nombre: 'trayecto_nombre', definicion: "VARCHAR(100) NOT NULL DEFAULT '' AFTER trayecto_saga_id" },
+    { nombre: 'maya_descripcion', definicion: "VARCHAR(255) NOT NULL DEFAULT '' AFTER maya_id" },
+    { nombre: 'tipo_proyeccion', definicion: "ENUM('TRIMESTRAL','SEMESTRAL') DEFAULT 'TRIMESTRAL' AFTER periodo_academico" },
+  ];
+  for (const col of columnasProyecciones) {
+    const [existe] = await db.query<any[]>(
+      `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'proyecciones' AND COLUMN_NAME = ?`,
+      [env.DB_NAME, col.nombre]
+    );
+    if (existe[0].total === 0) {
+      await db.query(`ALTER TABLE proyecciones ADD COLUMN ${col.nombre} ${col.definicion}`);
+      console.log(`✅ Columna '${col.nombre}' agregada a la tabla proyecciones`);
+    }
+  }
+
+  // Migraciones de tablas relacionadas (misma técnica portable MySQL/MariaDB)
+  const columnasExtra: Array<{ tabla: string; nombre: string; definicion: string }> = [
+    { tabla: 'proyeccion_secciones', nombre: 'maya_id', definicion: 'INT NULL AFTER estudiantes_estimados' },
+    { tabla: 'proyeccion_secciones', nombre: 'maya_descripcion', definicion: 'VARCHAR(255) NULL AFTER maya_id' },
+    { tabla: 'proyeccion_materias', nombre: 'seccion_id', definicion: 'INT NULL AFTER proyeccion_id' },
+    { tabla: 'proyeccion_materias', nombre: 'eliminada', definicion: 'TINYINT(1) DEFAULT 0 AFTER semestre2' },
+  ];
+  for (const col of columnasExtra) {
+    const [existe] = await db.query<any[]>(
+      `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [env.DB_NAME, col.tabla, col.nombre]
+    );
+    if (existe[0].total === 0) {
+      await db.query(`ALTER TABLE ${col.tabla} ADD COLUMN ${col.nombre} ${col.definicion}`);
+      console.log(`✅ Columna '${col.nombre}' agregada a la tabla ${col.tabla}`);
+    }
+  }
+
   // 8. Crear tabla de Aulas de Clase
   await db.query(`
     CREATE TABLE IF NOT EXISTS aulas (
@@ -225,7 +225,65 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // 9. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
+  // 9a. Tabla de Tipos de Contrato (dedicación docente)
+  // saga_id corresponde a dedicacion_id de SAGA; NULL = tipo creado localmente.
+  // horas_semanales: carga horaria semanal que el contrato le otorga al profesor.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS tipos_contrato (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      saga_id INT NULL UNIQUE,
+      nombre VARCHAR(100) NOT NULL,
+      descripcion VARCHAR(255) NULL,
+      horas_semanales INT NOT NULL DEFAULT 40,
+      activo TINYINT(1) DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_saga_id (saga_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // Sembrar tipos de contrato base si la tabla está vacía (editables desde la app)
+  const [existingTipos] = await db.query<any[]>('SELECT id FROM tipos_contrato LIMIT 1');
+  if (existingTipos.length === 0) {
+    await db.query(
+      `INSERT INTO tipos_contrato (nombre, descripcion, horas_semanales) VALUES
+       ('Tiempo Completo', 'Dedicación exclusiva de tiempo completo', 40),
+       ('Medio Tiempo', 'Dedicación de medio tiempo', 20),
+       ('Tiempo Convencional', 'Dedicación por horas convencionales', 16)`
+    );
+    console.log('✅ Tipos de contrato base creados (Tiempo Completo, Medio Tiempo, Tiempo Convencional)');
+  }
+
+  // 9b. Tabla de Profesores (sincronizada con SAGA por cedula / saga_id)
+  // origen = 'SAGA' proviene de la API externa; 'LOCAL' fue inscrito solo en la app.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS profesores (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      saga_id INT NULL,
+      cedula VARCHAR(30) NOT NULL UNIQUE,
+      nombres VARCHAR(150) NOT NULL,
+      apellidos VARCHAR(150) NOT NULL,
+      nacionalidad VARCHAR(5) NOT NULL DEFAULT 'V',
+      sexo VARCHAR(20) NULL,
+      email VARCHAR(150) NULL,
+      telefono VARCHAR(50) NULL,
+      pnf_saga_id INT NULL,
+      pnf_nombre VARCHAR(255) NOT NULL DEFAULT '',
+      tipo_contrato_id INT NULL,
+      foto_url VARCHAR(255) NULL,
+      origen ENUM('SAGA', 'LOCAL') NOT NULL DEFAULT 'LOCAL',
+      ultima_sincronizacion TIMESTAMP NULL,
+      activo TINYINT(1) DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tipo_contrato_id) REFERENCES tipos_contrato(id) ON DELETE SET NULL,
+      INDEX idx_cedula (cedula),
+      INDEX idx_saga_id (saga_id),
+      INDEX idx_pnf (pnf_saga_id),
+      INDEX idx_activo (activo)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
   const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);
   if (existingUsers.length === 0) {
     const hashedPassword = await hashPassword('admin123');
