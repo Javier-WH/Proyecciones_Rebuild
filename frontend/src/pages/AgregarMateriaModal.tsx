@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
@@ -27,9 +27,10 @@ interface AgregarMateriaModalProps {
   onClose: () => void;
   onChanged: () => void;
   profesor: Profesor | null;
+  // Todas las filas asignables; el lapso se filtra dentro del modal
   rows: MateriaAsignableRow[];
-  // Lapso activo en el filtro de la vista (solo informativo, las rows ya vienen filtradas)
-  lapsoActivo?: number | null;
+  // Lapso seleccionado en la tabla (se preselecciona aquí)
+  lapsoInicial?: number | null;
 }
 
 export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
@@ -38,18 +39,33 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   onChanged,
   profesor,
   rows,
-  lapsoActivo,
+  lapsoInicial,
 }) => {
   const [search, setSearch] = useState('');
+  const [lapso, setLapso] = useState<string>('todos');
   const [soloSinAsignar, setSoloSinAsignar] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Al abrir: preseleccionar el lapso de la tabla y limpiar la búsqueda
+  useEffect(() => {
+    if (isOpen) {
+      setSearch('');
+      setLapso(lapsoInicial != null ? String(lapsoInicial) : 'todos');
+      setSoloSinAsignar(true);
+      setErrorMsg(null);
+    }
+  }, [isOpen, lapsoInicial]);
+
   if (!isOpen || !profesor) return null;
+
+  // Lapsos disponibles según las materias existentes (1-3 trimestral, 1-2 semestral)
+  const lapsosDisponibles = [...new Set(rows.map((r) => r.trimestre))].sort((a, b) => a - b);
 
   const texto = search.toLowerCase();
   const filtradas = rows
     .filter((r) => {
+      if (lapso !== 'todos' && r.trimestre !== Number(lapso)) return false;
       if (soloSinAsignar && r.profesor_id !== null && r.profesor_id !== profesor.id) return false;
       if (texto) {
         return (
@@ -94,14 +110,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              Agregar Materias
-              {lapsoActivo != null && (
-                <span className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                  Lapso {lapsoActivo}
-                </span>
-              )}
-            </h3>
+            <h3 className="text-base font-bold text-white">Agregar Materias</h3>
             <button onClick={onClose} className="text-slate-400 hover:text-white">
               <X className="w-5 h-5" />
             </button>
@@ -129,6 +138,18 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
         </div>
 
         <div className="p-4 border-b border-slate-800 shrink-0 flex items-center gap-2">
+          <select
+            value={lapso}
+            onChange={(e) => setLapso(e.target.value)}
+            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
+          >
+            <option value="todos">Todos los lapsos</option>
+            {lapsosDisponibles.map((l) => (
+              <option key={l} value={l}>
+                Lapso {l}
+              </option>
+            ))}
+          </select>
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
             <input

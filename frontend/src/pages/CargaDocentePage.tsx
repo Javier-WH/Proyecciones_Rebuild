@@ -504,8 +504,8 @@ export const CargaDocentePage: React.FC = () => {
       <AgregarMateriaModal
         isOpen={modalMaterias.open}
         profesor={modalMaterias.profesor}
-        rows={rowsPorFiltro}
-        lapsoActivo={filterLapso !== 'todos' ? Number(filterLapso) : null}
+        rows={rows}
+        lapsoInicial={filterLapso !== 'todos' ? Number(filterLapso) : null}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}
       />
