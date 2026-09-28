@@ -63,12 +63,14 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [lapso, setLapso] = useState<string>('todos');
+  const [pnfFiltro, setPnfFiltro] = useState<string>('todos');
   const [soloSinAsignar, setSoloSinAsignar] = useState(true);
   const [agruparLapsos, setAgruparLapsos] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Al abrir: preseleccionar el lapso de la tabla y limpiar la búsqueda
+  // Al abrir: preseleccionar el lapso de la tabla, limpiar la búsqueda y
+  // preseleccionar el PNF asociado del profesor si tiene uno
   useEffect(() => {
     if (isOpen) {
       setSearch('');
@@ -76,10 +78,26 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       setSoloSinAsignar(true);
       setAgruparLapsos(true);
       setErrorMsg(null);
+      const pnfProf =
+        profesor?.pnf_saga_id != null && profesor.pnf_nombre ? profesor.pnf_nombre.trim() : null;
+      setPnfFiltro(pnfProf || 'todos');
     }
-  }, [isOpen, lapsoInicial]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, lapsoInicial, profesor]);
 
   if (!isOpen || !profesor) return null;
+
+  // PNFs presentes en las materias (+ el PNF del profesor aunque no tenga materias)
+  const pnfMap = new Map<string, string>();
+  for (const r of rows) {
+    const n = (r.pnf_nombre || '').trim();
+    if (n) pnfMap.set(n.toLowerCase(), n);
+  }
+  const pnfProfNombre = profesor.pnf_nombre?.trim();
+  if (profesor.pnf_saga_id != null && pnfProfNombre && !pnfMap.has(pnfProfNombre.toLowerCase())) {
+    pnfMap.set(pnfProfNombre.toLowerCase(), pnfProfNombre);
+  }
+  const pnfOpciones = [...pnfMap.values()].sort((a, b) => a.localeCompare(b));
 
   // Lapsos disponibles por régimen: primero TRIMESTRAL (1-3), luego SEMESTRAL (1-2),
   // solo de los regímenes presentes en las materias
@@ -94,6 +112,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   const filtradas = rows
     .filter((r) => {
       if (lapso !== 'todos' && lapsoKey(r.tipo_proyeccion, r.trimestre) !== lapso) return false;
+      if (pnfFiltro !== 'todos' && (r.pnf_nombre || '').trim() !== pnfFiltro) return false;
       if (soloSinAsignar && r.profesor_id !== null && r.profesor_id !== profesor.id) return false;
       if (texto) {
         return (
@@ -179,7 +198,20 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
               </option>
             ))}
           </select>
-          <div className="relative flex-1">
+          <select
+            value={pnfFiltro}
+            onChange={(e) => setPnfFiltro(e.target.value)}
+            className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0 max-w-[200px] truncate"
+            title="Filtrar por PNF"
+          >
+            <option value="todos">Todos los PNF</option>
+            {pnfOpciones.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <div className="relative flex-1 min-w-[180px]">
             <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
             <input
               type="text"
