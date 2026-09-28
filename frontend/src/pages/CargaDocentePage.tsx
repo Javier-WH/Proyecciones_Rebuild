@@ -208,6 +208,20 @@ export const CargaDocentePage: React.FC = () => {
     return { grupos: lista, sinAsignar: sinAsignarRows };
   }, [profesores, rowsPorFiltro, filterText, soloSinAsignar, soloPnf, pnfReferencia]);
 
+  // Columnas de lapsos de la tabla agrupada: solo regímenes presentes en las
+  // filas visibles (profesores mostrados + sin asignar). Sin datos visibles,
+  // por defecto se muestran las columnas trimestrales.
+  const lapsoColsVista = useMemo(() => {
+    const visibles = [...grupos.flatMap((g) => g.rows), ...sinAsignar];
+    const tipos: Array<'TRIMESTRAL' | 'SEMESTRAL'> = ['TRIMESTRAL', 'SEMESTRAL'];
+    const cols = tipos.flatMap((tipo) =>
+      [...new Set(visibles.filter((r) => r.tipo_proyeccion === tipo).map((r) => r.trimestre))]
+        .sort((a, b) => a - b)
+        .map((n) => ({ n, tipo }))
+    );
+    return cols.length > 0 ? cols : [1, 2, 3].map((n) => ({ n, tipo: 'TRIMESTRAL' as const }));
+  }, [grupos, sinAsignar]);
+
   const sobrecargaColor = (total: number, contrato: number | null | undefined) => {
     if (!contrato) return 'text-slate-300';
     if (total > contrato) return 'text-red-400';
@@ -357,7 +371,7 @@ export const CargaDocentePage: React.FC = () => {
 
     // Total del profesor por lapso+régimen (misma regla de suma de horas, por lapso)
     const totalPorLapso = new Map<string, number>();
-    for (const l of lapsoCols) {
+    for (const l of lapsoColsVista) {
       const k = lapsoKey(l.tipo, l.n);
       totalPorLapso.set(
         k,
@@ -380,7 +394,7 @@ export const CargaDocentePage: React.FC = () => {
             <td className="py-3 px-3 text-slate-400">{m.base.trayecto_nombre}</td>
             <td className="py-3 px-3 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
             <td className="py-3 px-3 text-slate-400">{m.base.turno_nombre}</td>
-            {lapsoCols.map((l) => {
+            {lapsoColsVista.map((l) => {
               const k = lapsoKey(l.tipo, l.n);
               return (
                 <Fragment key={k}>
@@ -427,7 +441,7 @@ export const CargaDocentePage: React.FC = () => {
         {(puedeAsignar || n === 0) && (
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
-            <td colSpan={6 + lapsoCols.length * 2} className="py-2 px-4">
+            <td colSpan={6 + lapsoColsVista.length * 2} className="py-2 px-4">
               {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
@@ -489,7 +503,7 @@ export const CargaDocentePage: React.FC = () => {
             <td className="py-3 px-3 text-slate-400">{m.base.trayecto_nombre}</td>
             <td className="py-3 px-3 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
             <td className="py-3 px-3 text-slate-400">{m.base.turno_nombre}</td>
-            {lapsoCols.map((l) => {
+            {lapsoColsVista.map((l) => {
               const k = lapsoKey(l.tipo, l.n);
               return (
                 <Fragment key={k}>
@@ -680,7 +694,7 @@ export const CargaDocentePage: React.FC = () => {
         <div className="border border-slate-800 rounded-3xl overflow-hidden bg-slate-900/80 shadow-xl overflow-x-auto">
           <table
             className="w-full text-left text-xs text-slate-300"
-            style={{ minWidth: pivoted ? `${820 + lapsoCols.length * 80}px` : '1280px' }}
+            style={{ minWidth: pivoted ? `${820 + lapsoColsVista.length * 80}px` : '1280px' }}
           >
             <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
               {pivoted ? (
@@ -692,7 +706,7 @@ export const CargaDocentePage: React.FC = () => {
                     <th rowSpan={2} className="py-3.5 px-3">Trayecto</th>
                     <th rowSpan={2} className="py-3.5 px-3">Sección</th>
                     <th rowSpan={2} className="py-3.5 px-3">Turno</th>
-                    {lapsoCols.map((l) => (
+                    {lapsoColsVista.map((l) => (
                       <th
                         key={lapsoKey(l.tipo, l.n)}
                         colSpan={2}
@@ -705,7 +719,7 @@ export const CargaDocentePage: React.FC = () => {
                     {puedeAsignar && <th rowSpan={2} className="py-3.5 px-3 text-center w-[90px]">Acciones</th>}
                   </tr>
                   <tr>
-                    {lapsoCols.map((l) => (
+                    {lapsoColsVista.map((l) => (
                       <Fragment key={lapsoKey(l.tipo, l.n)}>
                         <th className="py-2 px-1.5 text-center border-l border-slate-800/60" title="Horas por U/C">Hrs</th>
                         <th className="py-2 px-1.5 text-center" title="Total de horas del profesor en el lapso">Tot</th>
