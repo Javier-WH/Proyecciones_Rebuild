@@ -5,6 +5,7 @@ import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
 import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
+import { ReporteCargaModal } from './ReporteCargaModal.js';
 import {
   ClipboardList,
   Loader2,
@@ -16,7 +17,8 @@ import {
   UserX,
   Plus,
   X,
-  Check
+  Check,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface CargaRow extends AsignacionRow, MateriaAsignableRow {
@@ -62,6 +64,7 @@ export const CargaDocentePage: React.FC = () => {
     open: false,
     profesor: null,
   });
+  const [modalReporte, setModalReporte] = useState(false);
 
   const fetchCarga = async () => {
     setLoading(true);
@@ -560,16 +563,25 @@ export const CargaDocentePage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            fetchCarga();
-            fetchProfesores();
-          }}
-          className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-4 h-4 text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
-          <span>Actualizar</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setModalReporte(true)}
+            className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Reporte</span>
+          </button>
+          <button
+            onClick={() => {
+              fetchCarga();
+              fetchProfesores();
+            }}
+            className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 text-emerald-400 ${loading ? 'animate-spin' : ''}`} />
+            <span>Actualizar</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
@@ -831,6 +843,14 @@ export const CargaDocentePage: React.FC = () => {
         lapsoInicial={filterLapso !== 'todos' ? filterLapso : null}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}
+      />
+
+      <ReporteCargaModal
+        isOpen={modalReporte}
+        rows={rows}
+        profesores={profesores}
+        periodo={periodo}
+        onClose={() => setModalReporte(false)}
       />
     </div>
   );
