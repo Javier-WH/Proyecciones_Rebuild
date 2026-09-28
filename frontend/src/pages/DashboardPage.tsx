@@ -47,15 +47,15 @@ export const DashboardPage: React.FC = () => {
   const getRoleBadge = (role?: string) => {
     switch (role) {
       case 'SUPER_USUARIO':
-        return <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs px-2.5 py-1 rounded-full font-semibold">Super Usuario</span>;
+        return <span className="inline-block whitespace-nowrap bg-purple-500/10 text-purple-300/80 border border-purple-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Super Usuario</span>;
       case 'ADMINISTRADOR':
-        return <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs px-2.5 py-1 rounded-full font-semibold">Administrador</span>;
+        return <span className="inline-block whitespace-nowrap bg-blue-500/10 text-blue-300/80 border border-blue-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Administrador</span>;
       case 'REGULAR':
-        return <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs px-2.5 py-1 rounded-full font-semibold">Coordinador PNF</span>;
+        return <span className="inline-block whitespace-nowrap bg-emerald-500/10 text-emerald-300/80 border border-emerald-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Coordinador PNF</span>;
       case 'PROFESOR':
-        return <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs px-2.5 py-1 rounded-full font-semibold">Docente</span>;
+        return <span className="inline-block whitespace-nowrap bg-amber-500/10 text-amber-300/80 border border-amber-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Docente</span>;
       default:
-        return <span className="bg-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-full">{role}</span>;
+        return <span className="inline-block whitespace-nowrap bg-slate-700/60 text-slate-300/80 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">{role}</span>;
     }
   };
 
