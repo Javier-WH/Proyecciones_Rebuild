@@ -223,16 +223,18 @@ export const CargaDocentePage: React.FC = () => {
   const totalCell = (total: number, horas: number | null | undefined, span: number) => (
     <td rowSpan={span} className="py-3 px-4 text-center align-middle border-l border-slate-800/60">
       <span className={`text-base font-extrabold ${sobrecargaColor(total, horas)}`}>{total}</span>
-      {horas != null && <div className="text-[9px] text-slate-500">de {horas} hrs</div>}
     </td>
   );
 
-  const dedicacionCell = (nombre: string | null | undefined, span: number) => (
+  const dedicacionCell = (nombre: string | null | undefined, horas: number | null | undefined, span: number) => (
     <td rowSpan={span} className="py-3 px-4 align-middle border-l border-slate-800/60">
       {nombre ? (
-        <span className="inline-flex items-center whitespace-nowrap bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] px-2.5 py-1 rounded-full font-semibold">
-          {nombre}
-        </span>
+        <>
+          <span className="inline-flex items-center whitespace-nowrap bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] px-2.5 py-1 rounded-full font-semibold">
+            {nombre}
+          </span>
+          {horas != null && <div className="text-[9px] text-slate-500 mt-1">{horas} hrs/sem</div>}
+        </>
       ) : (
         <span className="text-slate-600 italic text-[10px]">—</span>
       )}
@@ -261,7 +263,7 @@ export const CargaDocentePage: React.FC = () => {
             </td>
             <td className="py-3 px-4 text-center font-bold text-blue-300">{r.horas_semanales}</td>
             {idx === 0 && totalCell(grupo.totalHoras, p.tipo_contrato_horas, span)}
-            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, span)}
+            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, span)}
             {puedeAsignar && (
               <td className="py-3 px-4">
                 <div className="flex items-center justify-center gap-1">
@@ -305,7 +307,7 @@ export const CargaDocentePage: React.FC = () => {
               )}
             </td>
             {n === 0 && totalCell(0, p.tipo_contrato_horas, 1)}
-            {n === 0 && dedicacionCell(p.tipo_contrato_nombre, 1)}
+            {n === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, 1)}
             {puedeAsignar && <td />}
           </tr>
         )}
@@ -362,7 +364,7 @@ export const CargaDocentePage: React.FC = () => {
                 {idx === 0 && totalCell(totalPorLapso.get(l) || 0, p.tipo_contrato_horas, dataSpan)}
               </Fragment>
             ))}
-            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, dataSpan)}
+            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, dataSpan)}
             {puedeAsignar && (
               <td className="py-3 px-4">
                 <div className="flex items-center justify-center gap-1">
