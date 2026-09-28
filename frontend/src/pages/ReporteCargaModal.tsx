@@ -9,6 +9,7 @@ export type ReporteRow = MateriaAsignableRow & {
   pnf_saga_id?: number | null;
   prof_cedula?: string | null;
   prof_nacionalidad?: string | null;
+  contrato_nombre?: string | null;
 };
 
 type TipoLapso = 'TRIMESTRAL' | 'SEMESTRAL';
@@ -17,6 +18,7 @@ type LapsoRef = { n: number; tipo: TipoLapso };
 interface ProfReporte {
   nombre: string; // APELLIDOS NOMBRES en mayúsculas
   cedula: number; // para ordenar
+  dedicacion: string; // tipo de contrato; vacío si no tiene
   items: ReporteRow[];
   total: number;
 }
@@ -141,8 +143,9 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
             .trim() || `Docente #${id}`
         ).toUpperCase();
         const cedula = parseInt(prof?.cedula ?? items[0].prof_cedula ?? '', 10) || Number.MAX_SAFE_INTEGER;
+        const dedicacion = prof?.tipo_contrato_nombre ?? items[0].contrato_nombre ?? '';
         items.sort((a, b) => a.materia_nombre.localeCompare(b.materia_nombre));
-        return { nombre, cedula, items, total: items.reduce((acc, r) => acc + (r.horas_semanales || 0), 0) };
+        return { nombre, cedula, dedicacion, items, total: items.reduce((acc, r) => acc + (r.horas_semanales || 0), 0) };
       })
       .sort((a, b) => a.cedula - b.cedula);
   };
@@ -210,12 +213,13 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           { width: 10 }, // F Turno
           { width: 8 },  // G Horas por U/C
           { width: 8 },  // H Total de Horas
+          { width: 16 }, // I Dedicación
         ];
 
-        // Encabezado institucional (5 líneas, cada una combinada A:H)
+        // Encabezado institucional (5 líneas, cada una combinada A:I)
         header.forEach((tpl, i) => {
           const r = ws.getRow(i + 1);
-          ws.mergeCells(i + 1, 1, i + 1, 8);
+          ws.mergeCells(i + 1, 1, i + 1, 9);
           const cell = r.getCell(1);
           cell.value = linea(tpl, hoja);
           cell.font = { bold: true, size: 11 };
@@ -230,6 +234,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           ['D7:D8', 'Trayecto'],
           ['E7:E8', 'Sección'],
           ['F7:F8', 'Turno'],
+          ['I7:I8', 'Dedicación'],
         ];
         for (const [rango, texto] of fijos) {
           ws.mergeCells(rango);
@@ -274,6 +279,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           if (fin > inicio) {
             ws.mergeCells(inicio, 1, fin, 1);
             ws.mergeCells(inicio, 8, fin, 8);
+            ws.mergeCells(inicio, 9, fin, 9);
           }
           const cNom = ws.getCell(inicio, 1);
           cNom.value = prof.nombre;
@@ -282,12 +288,15 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           cTotal.value = prof.total;
           cTotal.font = { bold: true };
           cTotal.alignment = centrado;
+          const cDed = ws.getCell(inicio, 9);
+          cDed.value = prof.dedicacion || null;
+          cDed.alignment = centrado;
         }
         const ultima = fila - 1;
 
         // Bordes en toda la tabla (encabezados + datos)
         for (let f = 7; f <= ultima; f++) {
-          for (let c = 1; c <= 8; c++) {
+          for (let c = 1; c <= 9; c++) {
             ws.getCell(f, c).border = borde;
           }
         }
@@ -300,7 +309,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           fitToWidth: 1,
           fitToHeight: 0,
           margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
-          printArea: `A1:H${ultima}`,
+          printArea: `A1:I${ultima}`,
         } as ExcelJS.PageSetup;
       }
 
@@ -344,7 +353,9 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
                   i === 0 ? `<td rowspan="${prof.items.length}" class="prof">${escapeHtml(prof.nombre)}</td>` : '';
                 const tdTot =
                   i === 0 ? `<td rowspan="${prof.items.length}" class="num tot">${prof.total}</td>` : '';
-                return `<tr>${tdProf}<td>${escapeHtml(item.materia_nombre)}</td><td>${escapeHtml(item.pnf_nombre)}</td><td>${escapeHtml(item.trayecto_nombre)}</td><td>${escapeHtml(item.seccion_nombre)}</td><td>${escapeHtml(item.turno_nombre)}</td><td class="num">${item.horas_semanales}</td>${tdTot}</tr>`;
+                const tdDed =
+                  i === 0 ? `<td rowspan="${prof.items.length}" class="ded">${escapeHtml(prof.dedicacion)}</td>` : '';
+                return `<tr>${tdProf}<td>${escapeHtml(item.materia_nombre)}</td><td>${escapeHtml(item.pnf_nombre)}</td><td>${escapeHtml(item.trayecto_nombre)}</td><td>${escapeHtml(item.seccion_nombre)}</td><td>${escapeHtml(item.turno_nombre)}</td><td class="num">${item.horas_semanales}</td>${tdTot}${tdDed}</tr>`;
               })
               .join('')
           )
@@ -352,7 +363,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         return `<section class="hoja">${encabezado}
 <table>
 <thead>
-<tr><th rowspan="2">Profesor</th><th rowspan="2">Unidad Curricular</th><th rowspan="2">PNF</th><th rowspan="2">Trayecto</th><th rowspan="2">Sección</th><th rowspan="2">Turno</th><th colspan="2">${escapeHtml(hoja.lapsoLabel)}</th></tr>
+<tr><th rowspan="2">Profesor</th><th rowspan="2">Unidad Curricular</th><th rowspan="2">PNF</th><th rowspan="2">Trayecto</th><th rowspan="2">Sección</th><th rowspan="2">Turno</th><th colspan="2">${escapeHtml(hoja.lapsoLabel)}</th><th rowspan="2">Dedicación</th></tr>
 <tr><th class="v">Horas por U/C</th><th class="v">Total de Horas</th></tr>
 </thead>
 <tbody>${filas}</tbody>
@@ -374,6 +385,7 @@ th.v { font-size: 7.5pt; }
 td.num { text-align: center; }
 td.prof { vertical-align: middle; font-weight: bold; }
 td.tot { font-weight: bold; font-size: 11pt; vertical-align: middle; }
+td.ded { text-align: center; vertical-align: middle; }
 </style></head><body>${secciones}</body></html>`;
 
     const win = window.open('', '_blank');
