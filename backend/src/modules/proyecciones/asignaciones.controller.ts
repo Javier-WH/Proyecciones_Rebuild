@@ -7,6 +7,8 @@ interface AsignacionBody {
   seccion_id: number;
   trimestre: number;
   profesor_id: number | null;
+  // true = aplicar la asignación a todos los lapsos en que se dicta la materia
+  todos_lapsos?: boolean;
 }
 
 // Lapsos en los que una materia se dicta, según el régimen de su proyección
@@ -101,6 +103,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
           materia_id: f.materia_id,
           materia_nombre: f.materia_nombre,
           horas_semanales: f.horas_semanales,
+          tipo_proyeccion: f.tipo_proyeccion,
           seccion_id: f.seccion_id,
           seccion_nombre: f.seccion_nombre,
           turno_nombre: f.turno_nombre,
@@ -144,7 +147,7 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
   try {
     // Validar que la materia y la sección pertenezcan a la proyección
     const val = await query<any[]>(
-      `SELECT p.pnf_saga_id, p.periodo_academico,
+      `SELECT p.pnf_saga_id, p.periodo_academico, p.tipo_proyeccion,
               (SELECT COUNT(*) FROM proyeccion_materias m
                 WHERE m.id = ? AND m.proyeccion_id = p.id AND (m.seccion_id IS NULL OR m.seccion_id = ?)) AS materia_ok,
               (SELECT COUNT(*) FROM proyeccion_secciones s
@@ -163,13 +166,31 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
       return reply.status(403).send({ success: false, message: 'Solo puede asignar profesores en su PNF.' });
     }
 
+    // Lapsos objetivo: solo el lapso indicado, o todos los lapsos de la materia
+    // cuando el cliente agrupa (todos_lapsos = true).
+    const termino = val[0].tipo_proyeccion === 'SEMESTRAL' ? 'semestres' : 'trimestres';
+    let lapsos = [trimestre];
+    if (body.todos_lapsos) {
+      const m = await query<any[]>(
+        'SELECT q1, q2, q3, semestre1, semestre2 FROM proyeccion_materias WHERE id = ? LIMIT 1',
+        [materiaId]
+      );
+      if (m.length > 0) lapsos = lapsosDeMateria(m[0], val[0].tipo_proyeccion);
+    }
+
     if (profesorId === null) {
-      await query('DELETE FROM proyeccion_asignaciones WHERE materia_id = ? AND seccion_id = ? AND trimestre = ?', [
-        materiaId,
-        seccionId,
-        trimestre,
-      ]);
-      return reply.send({ success: true, message: 'Asignación eliminada. La materia quedó sin profesor.' });
+      const ph = lapsos.map(() => '?').join(',');
+      await query(
+        `DELETE FROM proyeccion_asignaciones WHERE materia_id = ? AND seccion_id = ? AND trimestre IN (${ph})`,
+        [materiaId, seccionId, ...lapsos]
+      );
+      return reply.send({
+        success: true,
+        message:
+          lapsos.length > 1
+            ? `Asignación eliminada en ${lapsos.length} ${termino}. La materia quedó sin profesor.`
+            : 'Asignación eliminada. La materia quedó sin profesor.',
+      });
     }
 
     const prof = await query<any[]>('SELECT id, activo, nombres, apellidos FROM profesores WHERE id = ? LIMIT 1', [
@@ -182,12 +203,14 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
       return reply.status(400).send({ success: false, message: 'No se puede asignar un profesor desactivado.' });
     }
 
-    await query(
-      `INSERT INTO proyeccion_asignaciones (proyeccion_id, materia_id, seccion_id, trimestre, profesor_id)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE profesor_id = VALUES(profesor_id)`,
-      [proyeccionId, materiaId, seccionId, trimestre, profesorId]
-    );
+    for (const lapso of lapsos) {
+      await query(
+        `INSERT INTO proyeccion_asignaciones (proyeccion_id, materia_id, seccion_id, trimestre, profesor_id)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE profesor_id = VALUES(profesor_id)`,
+        [proyeccionId, materiaId, seccionId, lapso, profesorId]
+      );
+    }
 
     // Carga resultante del profesor en el periodo (para feedback de sobrecarga)
     const carga = await query<any[]>(
@@ -201,7 +224,10 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
 
     return reply.send({
       success: true,
-      message: `Materia asignada a ${prof[0].apellidos}, ${prof[0].nombres}.`,
+      message:
+        lapsos.length > 1
+          ? `Materia asignada a ${prof[0].apellidos}, ${prof[0].nombres} en ${lapsos.length} ${termino}.`
+          : `Materia asignada a ${prof[0].apellidos}, ${prof[0].nombres}.`,
       data: { profesor_id: profesorId, horas_asignadas: carga[0]?.total ?? 0 },
     });
   } catch (error: any) {

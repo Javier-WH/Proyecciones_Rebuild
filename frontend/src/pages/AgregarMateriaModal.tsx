@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
-import { X, Search, AlertCircle, Plus, CheckCircle2, UserX } from 'lucide-react';
+import { X, Search, AlertCircle, Plus, CheckCircle2, UserX, Layers } from 'lucide-react';
 
 // Misma forma de fila que usa la página de carga docente
 export interface MateriaAsignableRow {
   proyeccion_id: number;
   proyeccion_nombre: string;
+  tipo_proyeccion: 'TRIMESTRAL' | 'SEMESTRAL';
   pnf_nombre: string;
   trayecto_nombre: string;
   materia_id: number;
@@ -21,6 +22,21 @@ export interface MateriaAsignableRow {
   prof_nombres: string | null;
   prof_apellidos: string | null;
 }
+
+// Etiqueta de un lapso según el régimen de su proyección: 'Trimestre 2' / 'Semestre 1'
+export const labelLapso = (n: number, tipo?: string | null): string =>
+  `${tipo === 'SEMESTRAL' ? 'Semestre' : 'Trimestre'} ${n}`;
+
+// Término genérico para un conjunto de filas: si todas son del mismo régimen usa
+// su término; si mezcla tipos (o no hay datos) usa el neutro 'Lapso'.
+export const terminoLapso = (tipos: (string | null | undefined)[]): string => {
+  const set = new Set(tipos.filter(Boolean));
+  if (set.size === 1) return set.has('SEMESTRAL') ? 'Semestre' : 'Trimestre';
+  return 'Lapso';
+};
+
+export const pluralLapso = (termino: string): string =>
+  termino === 'Trimestre' ? 'trimestres' : termino === 'Semestre' ? 'semestres' : 'lapsos';
 
 interface AgregarMateriaModalProps {
   isOpen: boolean;
@@ -44,6 +60,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   const [search, setSearch] = useState('');
   const [lapso, setLapso] = useState<string>('todos');
   const [soloSinAsignar, setSoloSinAsignar] = useState(true);
+  const [agruparLapsos, setAgruparLapsos] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -53,6 +70,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       setSearch('');
       setLapso(lapsoInicial != null ? String(lapsoInicial) : 'todos');
       setSoloSinAsignar(true);
+      setAgruparLapsos(true);
       setErrorMsg(null);
     }
   }, [isOpen, lapsoInicial]);
@@ -61,6 +79,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
 
   // Lapsos disponibles según las materias existentes (1-3 trimestral, 1-2 semestral)
   const lapsosDisponibles = [...new Set(rows.map((r) => r.trimestre))].sort((a, b) => a - b);
+  const lapsoTermino = terminoLapso(rows.map((r) => r.tipo_proyeccion));
 
   const texto = search.toLowerCase();
   const filtradas = rows
@@ -95,6 +114,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
         seccion_id: r.seccion_id,
         trimestre: r.trimestre,
         profesor_id: quitar ? null : profesor.id,
+        todos_lapsos: agruparLapsos,
       }),
     });
     setBusyKey(null);
@@ -137,16 +157,16 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
           </div>
         </div>
 
-        <div className="p-4 border-b border-slate-800 shrink-0 flex items-center gap-2">
+        <div className="p-4 border-b border-slate-800 shrink-0 flex flex-wrap items-center gap-2">
           <select
             value={lapso}
             onChange={(e) => setLapso(e.target.value)}
             className="bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
           >
-            <option value="todos">Todos los lapsos</option>
+            <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
             {lapsosDisponibles.map((l) => (
               <option key={l} value={l}>
-                Lapso {l}
+                {lapsoTermino} {l}
               </option>
             ))}
           </select>
@@ -172,6 +192,22 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
             <UserX className="w-3.5 h-3.5" />
             <span>Solo sin asignar</span>
           </button>
+          <label
+            className="w-full flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer select-none mt-1"
+            title={`Si la materia se dicta en varios ${pluralLapso(lapsoTermino)}, se asigna (o quita) en todos ellos`}
+          >
+            <input
+              type="checkbox"
+              checked={agruparLapsos}
+              onChange={(e) => setAgruparLapsos(e.target.checked)}
+              className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer"
+            />
+            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+            <span>
+              <span className="font-semibold text-slate-300">Agrupar {pluralLapso(lapsoTermino)}:</span>{' '}
+              asignar la materia en todos los {pluralLapso(lapsoTermino)} en que se dicta
+            </span>
+          </label>
         </div>
 
         <div className="p-4 overflow-y-auto flex-1 space-y-1.5">
@@ -207,8 +243,8 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-white truncate">{r.materia_nombre}</div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
-                      {r.pnf_nombre} · {r.trayecto_nombre} · Sec. {r.seccion_nombre} · {r.turno_nombre} · Lapso{' '}
-                      {r.trimestre}
+                      {r.pnf_nombre} · {r.trayecto_nombre} · Sec. {r.seccion_nombre} · {r.turno_nombre} ·{' '}
+                      {labelLapso(r.trimestre, r.tipo_proyeccion)}
                     </div>
                     {esDeOtro && (
                       <div className="text-[10px] text-amber-400/90 mt-0.5">

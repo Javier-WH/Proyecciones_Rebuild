@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
-import { AgregarMateriaModal, MateriaAsignableRow } from './AgregarMateriaModal.js';
+import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso } from './AgregarMateriaModal.js';
 import {
   ClipboardList,
   Loader2,
@@ -123,6 +123,9 @@ export const CargaDocentePage: React.FC = () => {
     () => [...new Map(rows.map((r) => [r.proyeccion_id, r.proyeccion_nombre])).entries()],
     [rows]
   );
+
+  // 'Trimestre' o 'Semestre' si todas las filas son de un mismo régimen; 'Lapso' si se mezclan
+  const lapsoTermino = useMemo(() => terminoLapso(rows.map((r) => r.tipo_proyeccion)), [rows]);
 
   // Filas que pasan los filtros de lapso/PNF/proyección (filtros de "materia")
   const rowsPorFiltro = useMemo(
@@ -248,7 +251,7 @@ export const CargaDocentePage: React.FC = () => {
             <td className="py-3 px-4 text-slate-400">{r.turno_nombre}</td>
             <td className="py-3 px-4 text-center">
               <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300">
-                Lapso {r.trimestre}
+                {labelLapso(r.trimestre, r.tipo_proyeccion)}
               </span>
             </td>
             <td className="py-3 px-4 text-center font-bold text-blue-300">{r.horas_semanales}</td>
@@ -350,10 +353,10 @@ export const CargaDocentePage: React.FC = () => {
           onChange={(e) => setFilterLapso(e.target.value)}
           className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
-          <option value="todos">Todos los lapsos</option>
-          <option value="1">Lapso 1</option>
-          <option value="2">Lapso 2</option>
-          <option value="3">Lapso 3</option>
+          <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
+          <option value="1">{lapsoTermino} 1</option>
+          <option value="2">{lapsoTermino} 2</option>
+          <option value="3">{lapsoTermino} 3</option>
         </select>
 
         <select
@@ -464,7 +467,7 @@ export const CargaDocentePage: React.FC = () => {
                 <th className="py-3.5 px-4">Trayecto</th>
                 <th className="py-3.5 px-4">Sección</th>
                 <th className="py-3.5 px-4">Turno</th>
-                <th className="py-3.5 px-4 text-center">Lapso</th>
+                <th className="py-3.5 px-4 text-center">{lapsoTermino}</th>
                 <th className="py-3.5 px-4 text-center">Hrs x U/C</th>
                 <th className="py-3.5 px-4 text-center">Total Hrs</th>
                 <th className="py-3.5 px-4">Dedicación</th>
@@ -502,7 +505,7 @@ export const CargaDocentePage: React.FC = () => {
                       <td className="py-3 px-4 text-slate-400">{r.turno_nombre}</td>
                       <td className="py-3 px-4 text-center">
                         <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300">
-                          Lapso {r.trimestre}
+                          {labelLapso(r.trimestre, r.tipo_proyeccion)}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center font-bold text-blue-300">{r.horas_semanales}</td>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
+import { labelLapso } from './AgregarMateriaModal.js';
 import { X, Loader2, Search, AlertCircle, UserX } from 'lucide-react';
 
 export interface AsignacionRow {
@@ -9,6 +10,7 @@ export interface AsignacionRow {
   materia_id: number;
   seccion_id: number;
   trimestre: number;
+  tipo_proyeccion: 'TRIMESTRAL' | 'SEMESTRAL';
   materia_nombre: string;
   seccion_nombre: string;
   horas_semanales: number;
@@ -98,8 +100,8 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
             </button>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            <span className="font-semibold text-indigo-300">{row.materia_nombre}</span> — Sección {row.seccion_nombre},
-            Lapso {row.trimestre} · {row.horas_semanales} hrs/sem
+            <span className="font-semibold text-indigo-300">{row.materia_nombre}</span> — Sección {row.seccion_nombre},{' '}
+            {labelLapso(row.trimestre, row.tipo_proyeccion)} · {row.horas_semanales} hrs/sem
           </p>
         </div>
 
