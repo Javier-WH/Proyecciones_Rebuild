@@ -23,8 +23,10 @@ interface AsignarProfesorModalProps {
   row: AsignacionRow | null;
   // true = la asignación aplica a todos los lapsos de la materia (vista agrupada)
   todosLapsos?: boolean;
-  // Mapa profesor_id -> horas ya asignadas en el periodo (calculado por la página)
-  cargaPorProfesor: Map<number, number>;
+  // Lapsos existentes en el periodo, para mostrar la carga de cada profesor por lapso
+  lapsos: number[];
+  // Mapa profesor_id -> (lapso -> horas asignadas) calculado por la página
+  cargaPorProfesor: Map<number, Map<number, number>>;
 }
 
 export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
@@ -33,6 +35,7 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
   onAssigned,
   row,
   todosLapsos = false,
+  lapsos,
   cargaPorProfesor,
 }) => {
   const [profesores, setProfesores] = useState<Profesor[]>([]);
@@ -85,13 +88,9 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
     }
   };
 
-  const barraCarga = (p: Profesor) => {
-    const asignadas = cargaPorProfesor.get(p.id) || 0;
-    const contrato = p.tipo_contrato_horas || 0;
-    const pct = contrato > 0 ? Math.min(100, Math.round((asignadas / contrato) * 100)) : 0;
-    const color = contrato > 0 && asignadas > contrato ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-emerald-500';
-    return { asignadas, contrato, pct, color };
-  };
+  // La carga se evalúa por lapso: cada lapso ocurre en un momento distinto del año
+  const cargaDe = (p: Profesor, lapso: number) => cargaPorProfesor.get(p.id)?.get(lapso) || 0;
+  const abrevLapso = (n: number) => (row?.tipo_proyeccion === 'SEMESTRAL' ? `S${n}` : `T${n}`);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
@@ -153,7 +152,8 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
             <div className="py-8 text-center text-slate-500 text-xs">Sin profesores que coincidan.</div>
           ) : (
             filtered.map((p) => {
-              const { asignadas, contrato, pct, color } = barraCarga(p);
+              const contrato = p.tipo_contrato_horas || 0;
+              const lapsosVista = lapsos.length > 0 ? lapsos : [row.trimestre];
               return (
                 <button
                   key={p.id}
@@ -170,17 +170,39 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
                       {p.nacionalidad}-{p.cedula}
                       {p.pnf_nombre ? ` · ${p.pnf_nombre}` : ''}
                     </div>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <span
-                        className={`text-[10px] font-bold shrink-0 ${
-                          contrato > 0 && asignadas > contrato ? 'text-red-400' : 'text-slate-400'
-                        }`}
-                      >
-                        {asignadas}/{contrato || '—'} hrs
-                      </span>
+                    <div className="mt-1.5 space-y-1">
+                      {lapsosVista.map((l) => {
+                        const asignadas = cargaDe(p, l);
+                        const pct = contrato > 0 ? Math.min(100, Math.round((asignadas / contrato) * 100)) : 0;
+                        const color =
+                          contrato > 0 && asignadas > contrato
+                            ? 'bg-red-500'
+                            : pct >= 80
+                              ? 'bg-amber-500'
+                              : 'bg-emerald-500';
+                        const esObjetivo = !todosLapsos && l === row.trimestre;
+                        return (
+                          <div key={l} className="flex items-center gap-2">
+                            <span
+                              className={`text-[9px] font-bold w-6 shrink-0 ${
+                                esObjetivo ? 'text-emerald-300' : 'text-slate-500'
+                              }`}
+                            >
+                              {abrevLapso(l)}
+                            </span>
+                            <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span
+                              className={`text-[10px] font-bold shrink-0 ${
+                                contrato > 0 && asignadas > contrato ? 'text-red-400' : 'text-slate-400'
+                              }`}
+                            >
+                              {asignadas}/{contrato || '—'} hrs
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   {p.tipo_contrato_nombre && (

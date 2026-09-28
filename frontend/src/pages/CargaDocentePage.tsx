@@ -105,12 +105,18 @@ export const CargaDocentePage: React.FC = () => {
     }
   };
 
-  // Carga total por profesor (todas las filas, sin filtros) para los modales
+  // Carga por profesor POR LAPSO (todas las filas, sin filtros) para los modales:
+  // los lapsos ocurren en momentos distintos del año, la carga no se suma entre ellos
   const cargaPorProfesor = useMemo(() => {
-    const map = new Map<number, number>();
+    const map = new Map<number, Map<number, number>>();
     for (const r of rows) {
       if (r.profesor_id) {
-        map.set(r.profesor_id, (map.get(r.profesor_id) || 0) + (r.horas_semanales || 0));
+        let porLapso = map.get(r.profesor_id);
+        if (!porLapso) {
+          porLapso = new Map();
+          map.set(r.profesor_id, porLapso);
+        }
+        porLapso.set(r.trimestre, (porLapso.get(r.trimestre) || 0) + (r.horas_semanales || 0));
       }
     }
     return map;
@@ -763,6 +769,7 @@ export const CargaDocentePage: React.FC = () => {
         isOpen={modalAsignar.open}
         row={modalAsignar.row}
         todosLapsos={modalAsignar.todosLapsos === true}
+        lapsos={lapsosCols}
         cargaPorProfesor={cargaPorProfesor}
         onClose={() => setModalAsignar({ open: false, row: null })}
         onAssigned={fetchCarga}
