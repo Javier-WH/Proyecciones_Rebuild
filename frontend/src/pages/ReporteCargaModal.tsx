@@ -6,6 +6,7 @@ import { X, FileSpreadsheet, Printer, Users } from 'lucide-react';
 
 // Filas de carga necesarias para el reporte (subconjunto de CargaRow)
 export type ReporteRow = MateriaAsignableRow & {
+  pnf_saga_id?: number | null;
   prof_cedula?: string | null;
   prof_nacionalidad?: string | null;
 };
@@ -80,6 +81,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
 }) => {
   const [pnfSel, setPnfSel] = useState<number[]>([]); // vacío = reporte general
   const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
+  const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
   const [generando, setGenerando] = useState(false);
 
@@ -114,7 +116,15 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
       if (r.profesor_id == null) continue;
       if (r.tipo_proyeccion !== lapso.tipo || r.trimestre !== lapso.n) continue;
       const prof = profMap.get(r.profesor_id);
-      if (pnfId !== null && prof?.pnf_saga_id !== pnfId) continue;
+      if (pnfId !== null) {
+        if (incluirOtrosPnf) {
+          // Solo materias del PNF seleccionado: el docente entra si tiene alguna,
+          // sin importar su PNF asociado (y solo ve esas materias)
+          if (r.pnf_saga_id !== pnfId) continue;
+        } else if (prof?.pnf_saga_id !== pnfId) {
+          continue;
+        }
+      }
       let g = grupos.get(r.profesor_id);
       if (!g) {
         g = [];
@@ -171,7 +181,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     }
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pnfSel, lapsoSel, lapsos, rows, profMap, pnfOptions]);
+  }, [pnfSel, lapsoSel, incluirOtrosPnf, lapsos, rows, profMap, pnfOptions]);
 
   const linea = (tpl: string, hoja: HojaReporte): string =>
     tpl
@@ -445,6 +455,24 @@ td.tot { font-weight: bold; font-size: 11pt; vertical-align: middle; }
             <p className="text-[10px] text-slate-500 mt-1.5">
               Se genera una hoja por PNF × lapso. Sin selección, una hoja por lapso con todos los docentes.
             </p>
+            {pnfSel.length > 0 && (
+              <label
+                className="mt-2 flex items-start gap-2 text-[11px] text-slate-400 cursor-pointer select-none"
+                title="Incluye docentes cuyo PNF asociado es distinto, solo si tienen materias del PNF seleccionado; en el reporte solo aparecen esas materias"
+              >
+                <input
+                  type="checkbox"
+                  checked={incluirOtrosPnf}
+                  onChange={(e) => setIncluirOtrosPnf(e.target.checked)}
+                  className="w-3.5 h-3.5 mt-0.5 accent-emerald-500 cursor-pointer"
+                />
+                <span>
+                  <span className="font-semibold text-slate-300">Incluir docentes de otros PNF</span>: si
+                  tienen materias de los PNF seleccionados, se agregan al reporte mostrando solo esas
+                  materias
+                </span>
+              </label>
+            )}
           </div>
 
           {/* Selector de lapsos a incluir */}
