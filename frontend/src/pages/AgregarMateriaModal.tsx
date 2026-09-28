@@ -38,6 +38,10 @@ export const terminoLapso = (tipos: (string | null | undefined)[]): string => {
 export const pluralLapso = (termino: string): string =>
   termino === 'Trimestre' ? 'trimestres' : termino === 'Semestre' ? 'semestres' : 'lapsos';
 
+// Clave compuesta de un lapso: 'TRIMESTRAL:1' / 'SEMESTRAL:2'.
+// El número de lapso solo es único dentro de su régimen (T1 ≠ S1).
+export const lapsoKey = (tipo: string | null | undefined, n: number): string => `${tipo}:${n}`;
+
 interface AgregarMateriaModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -45,8 +49,8 @@ interface AgregarMateriaModalProps {
   profesor: Profesor | null;
   // Todas las filas asignables; el lapso se filtra dentro del modal
   rows: MateriaAsignableRow[];
-  // Lapso seleccionado en la tabla (se preselecciona aquí)
-  lapsoInicial?: number | null;
+  // Lapso seleccionado en la tabla como clave compuesta 'tipo:n' (se preselecciona aquí)
+  lapsoInicial?: string | null;
 }
 
 export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
@@ -68,7 +72,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setSearch('');
-      setLapso(lapsoInicial != null ? String(lapsoInicial) : 'todos');
+      setLapso(lapsoInicial != null ? lapsoInicial : 'todos');
       setSoloSinAsignar(true);
       setAgruparLapsos(true);
       setErrorMsg(null);
@@ -77,14 +81,19 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
 
   if (!isOpen || !profesor) return null;
 
-  // Lapsos disponibles según las materias existentes (1-3 trimestral, 1-2 semestral)
-  const lapsosDisponibles = [...new Set(rows.map((r) => r.trimestre))].sort((a, b) => a - b);
+  // Lapsos disponibles por régimen: primero TRIMESTRAL (1-3), luego SEMESTRAL (1-2),
+  // solo de los regímenes presentes en las materias
+  const lapsosDisponibles = (['TRIMESTRAL', 'SEMESTRAL'] as const).flatMap((tipo) =>
+    [...new Set(rows.filter((r) => r.tipo_proyeccion === tipo).map((r) => r.trimestre))]
+      .sort((a, b) => a - b)
+      .map((n) => ({ n, tipo }))
+  );
   const lapsoTermino = terminoLapso(rows.map((r) => r.tipo_proyeccion));
 
   const texto = search.toLowerCase();
   const filtradas = rows
     .filter((r) => {
-      if (lapso !== 'todos' && r.trimestre !== Number(lapso)) return false;
+      if (lapso !== 'todos' && lapsoKey(r.tipo_proyeccion, r.trimestre) !== lapso) return false;
       if (soloSinAsignar && r.profesor_id !== null && r.profesor_id !== profesor.id) return false;
       if (texto) {
         return (
@@ -103,7 +112,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
     });
 
   const handleAssign = async (r: MateriaAsignableRow, quitar = false) => {
-    const key = `${r.materia_id}-${r.seccion_id}-${r.trimestre}`;
+    const key = `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`;
     setBusyKey(key);
     setErrorMsg(null);
     const res = await apiFetch('/proyecciones/asignaciones', {
@@ -165,8 +174,8 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
           >
             <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
             {lapsosDisponibles.map((l) => (
-              <option key={l} value={l}>
-                {lapsoTermino} {l}
+              <option key={lapsoKey(l.tipo, l.n)} value={lapsoKey(l.tipo, l.n)}>
+                {labelLapso(l.n, l.tipo)}
               </option>
             ))}
           </select>
@@ -226,7 +235,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
             </div>
           ) : (
             filtradas.map((r) => {
-              const key = `${r.materia_id}-${r.seccion_id}-${r.trimestre}`;
+              const key = `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`;
               const esDeEste = r.profesor_id === profesor.id;
               const esDeOtro = r.profesor_id !== null && !esDeEste;
               return (

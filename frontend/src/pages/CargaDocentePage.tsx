@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
-import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso } from './AgregarMateriaModal.js';
+import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
 import {
   ClipboardList,
   Loader2,
@@ -106,9 +106,10 @@ export const CargaDocentePage: React.FC = () => {
   };
 
   // Carga por profesor POR LAPSO (todas las filas, sin filtros) para los modales:
-  // los lapsos ocurren en momentos distintos del año, la carga no se suma entre ellos
+  // los lapsos ocurren en momentos distintos del año, la carga no se suma entre ellos.
+  // La clave es compuesta (tipo:n) para no mezclar regímenes (T1 ≠ S1).
   const cargaPorProfesor = useMemo(() => {
-    const map = new Map<number, Map<number, number>>();
+    const map = new Map<number, Map<string, number>>();
     for (const r of rows) {
       if (r.profesor_id) {
         let porLapso = map.get(r.profesor_id);
@@ -116,7 +117,8 @@ export const CargaDocentePage: React.FC = () => {
           porLapso = new Map();
           map.set(r.profesor_id, porLapso);
         }
-        porLapso.set(r.trimestre, (porLapso.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+        const k = lapsoKey(r.tipo_proyeccion, r.trimestre);
+        porLapso.set(k, (porLapso.get(k) || 0) + (r.horas_semanales || 0));
       }
     }
     return map;
@@ -136,13 +138,22 @@ export const CargaDocentePage: React.FC = () => {
 
   // Vista agrupada por materia (una columna por lapso) cuando el filtro muestra todos
   const pivoted = filterLapso === 'todos';
-  const lapsosCols = useMemo(() => [...new Set(rows.map((r) => r.trimestre))].sort((a, b) => a - b), [rows]);
+  // Columnas de lapsos por régimen: primero TRIMESTRAL (1-3), luego SEMESTRAL (1-2),
+  // solo de los regímenes presentes en los datos
+  const lapsoCols = useMemo(() => {
+    const tipos: Array<'TRIMESTRAL' | 'SEMESTRAL'> = ['TRIMESTRAL', 'SEMESTRAL'];
+    return tipos.flatMap((tipo) =>
+      [...new Set(rows.filter((r) => r.tipo_proyeccion === tipo).map((r) => r.trimestre))]
+        .sort((a, b) => a - b)
+        .map((n) => ({ n, tipo }))
+    );
+  }, [rows]);
 
   // Filas que pasan los filtros de lapso/PNF/proyección (filtros de "materia")
   const rowsPorFiltro = useMemo(
     () =>
       rows.filter((r) => {
-        if (filterLapso !== 'todos' && r.trimestre !== Number(filterLapso)) return false;
+        if (filterLapso !== 'todos' && lapsoKey(r.tipo_proyeccion, r.trimestre) !== filterLapso) return false;
         if (filterPnf !== 'todos' && r.pnf_saga_id !== Number(filterPnf)) return false;
         if (filterProyeccion !== 'todas' && r.proyeccion_id !== Number(filterProyeccion)) return false;
         return true;
@@ -255,7 +266,7 @@ export const CargaDocentePage: React.FC = () => {
     return (
       <Fragment key={p.id}>
         {grupo.rows.map((r, idx) => (
-          <tr key={`${r.materia_id}-${r.seccion_id}-${r.trimestre}`} className="hover:bg-slate-800/40 transition-colors">
+          <tr key={`${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`} className="hover:bg-slate-800/40 transition-colors">
             {idx === 0 && profesorCell(p, span)}
             <td className="py-3 px-4 font-medium text-white">{r.materia_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{r.pnf_nombre}</td>
@@ -325,16 +336,17 @@ export const CargaDocentePage: React.FC = () => {
   const renderGrupoPivoted = (grupo: ProfesorGrupo) => {
     const p = grupo.profesor;
 
-    // Colapsar filas por materia+sección guardando las horas de cada lapso
-    const mergedMap = new Map<string, { base: CargaRow; horas: Map<number, number> }>();
+    // Colapsar filas por materia+sección+régimen guardando las horas de cada lapso
+    const mergedMap = new Map<string, { base: CargaRow; horas: Map<string, number> }>();
     for (const r of grupo.rows) {
-      const k = `${r.materia_id}:${r.seccion_id}`;
+      const k = `${r.materia_id}:${r.seccion_id}:${r.tipo_proyeccion}`;
       let e = mergedMap.get(k);
       if (!e) {
         e = { base: r, horas: new Map() };
         mergedMap.set(k, e);
       }
-      e.horas.set(r.trimestre, (e.horas.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+      const lk = lapsoKey(r.tipo_proyeccion, r.trimestre);
+      e.horas.set(lk, (e.horas.get(lk) || 0) + (r.horas_semanales || 0));
     }
     const merged = [...mergedMap.values()];
     const n = merged.length;
@@ -343,33 +355,42 @@ export const CargaDocentePage: React.FC = () => {
     const span = puedeAsignar ? n + 1 : Math.max(n, 1);
     const dataSpan = Math.max(n, 1);
 
-    // Total del profesor por lapso (misma regla de suma de horas, por lapso)
-    const totalPorLapso = new Map<number, number>();
-    for (const l of lapsosCols) {
+    // Total del profesor por lapso+régimen (misma regla de suma de horas, por lapso)
+    const totalPorLapso = new Map<string, number>();
+    for (const l of lapsoCols) {
+      const k = lapsoKey(l.tipo, l.n);
       totalPorLapso.set(
-        l,
-        grupo.rows.filter((r) => r.trimestre === l).reduce((acc, r) => acc + (r.horas_semanales || 0), 0)
+        k,
+        grupo.rows
+          .filter((r) => lapsoKey(r.tipo_proyeccion, r.trimestre) === k)
+          .reduce((acc, r) => acc + (r.horas_semanales || 0), 0)
       );
     }
 
     return (
       <Fragment key={p.id}>
         {merged.map((m, idx) => (
-          <tr key={`${m.base.materia_id}-${m.base.seccion_id}`} className="hover:bg-slate-800/40 transition-colors">
+          <tr
+            key={`${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
+            className="hover:bg-slate-800/40 transition-colors"
+          >
             {idx === 0 && profesorCell(p, span)}
             <td className="py-3 px-4 font-medium text-white">{m.base.materia_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{m.base.pnf_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{m.base.trayecto_nombre}</td>
             <td className="py-3 px-4 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{m.base.turno_nombre}</td>
-            {lapsosCols.map((l) => (
-              <Fragment key={l}>
-                <td className="py-3 px-4 text-center font-bold text-blue-300">
-                  {m.horas.has(l) ? m.horas.get(l) : '—'}
-                </td>
-                {idx === 0 && totalCell(totalPorLapso.get(l) || 0, p.tipo_contrato_horas, dataSpan)}
-              </Fragment>
-            ))}
+            {lapsoCols.map((l) => {
+              const k = lapsoKey(l.tipo, l.n);
+              return (
+                <Fragment key={k}>
+                  <td className="py-3 px-4 text-center font-bold text-blue-300">
+                    {m.horas.has(k) ? m.horas.get(k) : '—'}
+                  </td>
+                  {idx === 0 && totalCell(totalPorLapso.get(k) || 0, p.tipo_contrato_horas, dataSpan)}
+                </Fragment>
+              );
+            })}
             {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, dataSpan)}
             {puedeAsignar && (
               <td className="py-3 px-4">
@@ -406,7 +427,7 @@ export const CargaDocentePage: React.FC = () => {
         {(puedeAsignar || n === 0) && (
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
-            <td colSpan={6 + lapsosCols.length * 2} className="py-2 px-4">
+            <td colSpan={6 + lapsoCols.length * 2} className="py-2 px-4">
               {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
@@ -430,15 +451,16 @@ export const CargaDocentePage: React.FC = () => {
 
   // Grupo SIN ASIGNAR en vista agrupada: colapsa por materia×sección igual que los profesores
   const renderSinAsignarPivoted = () => {
-    const mergedMap = new Map<string, { base: CargaRow; horas: Map<number, number> }>();
+    const mergedMap = new Map<string, { base: CargaRow; horas: Map<string, number> }>();
     for (const r of sinAsignar) {
-      const k = `${r.materia_id}:${r.seccion_id}`;
+      const k = `${r.materia_id}:${r.seccion_id}:${r.tipo_proyeccion}`;
       let e = mergedMap.get(k);
       if (!e) {
         e = { base: r, horas: new Map() };
         mergedMap.set(k, e);
       }
-      e.horas.set(r.trimestre, (e.horas.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+      const lk = lapsoKey(r.tipo_proyeccion, r.trimestre);
+      e.horas.set(lk, (e.horas.get(lk) || 0) + (r.horas_semanales || 0));
     }
     const merged = [...mergedMap.values()];
 
@@ -446,7 +468,7 @@ export const CargaDocentePage: React.FC = () => {
       <Fragment key="sin-asignar-pivoted">
         {merged.map((m, idx) => (
           <tr
-            key={`sa-${m.base.materia_id}-${m.base.seccion_id}`}
+            key={`sa-${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
             className="bg-amber-500/[0.03] hover:bg-amber-500/[0.07] transition-colors"
           >
             {idx === 0 && (
@@ -467,18 +489,21 @@ export const CargaDocentePage: React.FC = () => {
             <td className="py-3 px-4 text-slate-400">{m.base.trayecto_nombre}</td>
             <td className="py-3 px-4 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{m.base.turno_nombre}</td>
-            {lapsosCols.map((l) => (
-              <Fragment key={l}>
-                <td className="py-3 px-4 text-center font-bold text-blue-300">
-                  {m.horas.has(l) ? m.horas.get(l) : '—'}
-                </td>
-                {idx === 0 && (
-                  <td rowSpan={merged.length} className="py-3 px-4 text-center align-middle border-l border-slate-800/60">
-                    <span className="text-base font-extrabold text-slate-500">—</span>
+            {lapsoCols.map((l) => {
+              const k = lapsoKey(l.tipo, l.n);
+              return (
+                <Fragment key={k}>
+                  <td className="py-3 px-4 text-center font-bold text-blue-300">
+                    {m.horas.has(k) ? m.horas.get(k) : '—'}
                   </td>
-                )}
-              </Fragment>
-            ))}
+                  {idx === 0 && (
+                    <td rowSpan={merged.length} className="py-3 px-4 text-center align-middle border-l border-slate-800/60">
+                      <span className="text-base font-extrabold text-slate-500">—</span>
+                    </td>
+                  )}
+                </Fragment>
+              );
+            })}
             {idx === 0 && (
               <td rowSpan={merged.length} className="py-3 px-4 align-middle border-l border-slate-800/60">
                 <span className="text-slate-600 italic text-[10px]">—</span>
@@ -547,9 +572,11 @@ export const CargaDocentePage: React.FC = () => {
           className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
           <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
-          <option value="1">{lapsoTermino} 1</option>
-          <option value="2">{lapsoTermino} 2</option>
-          <option value="3">{lapsoTermino} 3</option>
+          {lapsoCols.map((l) => (
+            <option key={lapsoKey(l.tipo, l.n)} value={lapsoKey(l.tipo, l.n)}>
+              {labelLapso(l.n, l.tipo)}
+            </option>
+          ))}
         </select>
 
         <select
@@ -662,21 +689,21 @@ export const CargaDocentePage: React.FC = () => {
                     <th rowSpan={2} className="py-3.5 px-4">Trayecto</th>
                     <th rowSpan={2} className="py-3.5 px-4">Sección</th>
                     <th rowSpan={2} className="py-3.5 px-4">Turno</th>
-                    {lapsosCols.map((l) => (
+                    {lapsoCols.map((l) => (
                       <th
-                        key={l}
+                        key={lapsoKey(l.tipo, l.n)}
                         colSpan={2}
                         className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap"
                       >
-                        {lapsoTermino} {l}
+                        {labelLapso(l.n, l.tipo)}
                       </th>
                     ))}
                     <th rowSpan={2} className="py-3.5 px-4 border-l border-slate-800/60">Dedicación</th>
                     {puedeAsignar && <th rowSpan={2} className="py-3.5 px-4 text-center w-[90px]">Acciones</th>}
                   </tr>
                   <tr>
-                    {lapsosCols.map((l) => (
-                      <Fragment key={l}>
+                    {lapsoCols.map((l) => (
+                      <Fragment key={lapsoKey(l.tipo, l.n)}>
                         <th className="py-2 px-3 text-center border-l border-slate-800/60">Hrs x U/C</th>
                         <th className="py-2 px-3 text-center">Total Horas</th>
                       </Fragment>
@@ -707,7 +734,7 @@ export const CargaDocentePage: React.FC = () => {
                 <Fragment key="sin-asignar">
                   {sinAsignar.map((r, idx) => (
                     <tr
-                      key={`sa-${r.materia_id}-${r.seccion_id}-${r.trimestre}`}
+                      key={`sa-${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`}
                       className="bg-amber-500/[0.03] hover:bg-amber-500/[0.07] transition-colors"
                     >
                       {idx === 0 && (
@@ -769,7 +796,7 @@ export const CargaDocentePage: React.FC = () => {
         isOpen={modalAsignar.open}
         row={modalAsignar.row}
         todosLapsos={modalAsignar.todosLapsos === true}
-        lapsos={lapsosCols}
+        lapsos={lapsoCols.filter((c) => c.tipo === modalAsignar.row?.tipo_proyeccion).map((c) => c.n)}
         cargaPorProfesor={cargaPorProfesor}
         onClose={() => setModalAsignar({ open: false, row: null })}
         onAssigned={fetchCarga}
@@ -779,7 +806,7 @@ export const CargaDocentePage: React.FC = () => {
         isOpen={modalMaterias.open}
         profesor={modalMaterias.profesor}
         rows={rows}
-        lapsoInicial={filterLapso !== 'todos' ? Number(filterLapso) : null}
+        lapsoInicial={filterLapso !== 'todos' ? filterLapso : null}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}
       />

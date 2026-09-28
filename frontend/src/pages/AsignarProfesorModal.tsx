@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
-import { labelLapso, terminoLapso, pluralLapso } from './AgregarMateriaModal.js';
+import { labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
 import { X, Loader2, Search, AlertCircle, UserX } from 'lucide-react';
 
 export interface AsignacionRow {
@@ -23,10 +23,10 @@ interface AsignarProfesorModalProps {
   row: AsignacionRow | null;
   // true = la asignación aplica a todos los lapsos de la materia (vista agrupada)
   todosLapsos?: boolean;
-  // Lapsos existentes en el periodo, para mostrar la carga de cada profesor por lapso
+  // Lapsos existentes en el régimen de la materia, para mostrar la carga por lapso
   lapsos: number[];
-  // Mapa profesor_id -> (lapso -> horas asignadas) calculado por la página
-  cargaPorProfesor: Map<number, Map<number, number>>;
+  // Mapa profesor_id -> (lapsoKey 'tipo:n' -> horas asignadas) calculado por la página
+  cargaPorProfesor: Map<number, Map<string, number>>;
 }
 
 export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
@@ -88,8 +88,9 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
     }
   };
 
-  // La carga se evalúa por lapso: cada lapso ocurre en un momento distinto del año
-  const cargaDe = (p: Profesor, lapso: number) => cargaPorProfesor.get(p.id)?.get(lapso) || 0;
+  // La carga se evalúa por lapso+régimen: cada lapso ocurre en un momento distinto del año
+  const cargaDe = (p: Profesor, lapso: number) =>
+    cargaPorProfesor.get(p.id)?.get(lapsoKey(row.tipo_proyeccion, lapso)) || 0;
   const abrevLapso = (n: number) => (row?.tipo_proyeccion === 'SEMESTRAL' ? `S${n}` : `T${n}`);
 
   return (
