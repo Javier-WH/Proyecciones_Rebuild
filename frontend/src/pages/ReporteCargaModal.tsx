@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import ExcelJS from 'exceljs';
 import { Profesor } from './ProfesorModal.js';
-import { MateriaAsignableRow } from './AgregarMateriaModal.js';
+import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import { X, FileSpreadsheet, Printer, Users } from 'lucide-react';
 
 // Filas de carga necesarias para el reporte (subconjunto de CargaRow)
@@ -79,6 +79,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   periodo,
 }) => {
   const [pnfSel, setPnfSel] = useState<number[]>([]); // vacío = reporte general
+  const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
   const [generando, setGenerando] = useState(false);
 
@@ -139,8 +140,11 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const hojas = useMemo<HojaReporte[]>(() => {
     const nombrarHoja = crearNombradorHojas();
     const lista: HojaReporte[] = [];
+    // Sin selección se incluyen todos; con selección solo los marcados.
+    // Cada hoja se crea solo si hay datos (docentes con carga) en ese lapso.
+    const lapsosUso = lapsoSel.length > 0 ? lapsos.filter((l) => lapsoSel.includes(`${l.tipo}:${l.n}`)) : lapsos;
     if (pnfSel.length === 0) {
-      for (const lapso of lapsos) {
+      for (const lapso of lapsosUso) {
         const profes = profesDe(lapso, null);
         if (profes.length === 0) continue;
         lista.push({
@@ -153,7 +157,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     } else {
       for (const pnfId of pnfSel) {
         const pnfNombre = pnfOptions.find(([id]) => id === pnfId)?.[1] ?? `PNF ${pnfId}`;
-        for (const lapso of lapsos) {
+        for (const lapso of lapsosUso) {
           const profes = profesDe(lapso, pnfId);
           if (profes.length === 0) continue;
           lista.push({
@@ -167,7 +171,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     }
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pnfSel, lapsos, rows, profMap, pnfOptions]);
+  }, [pnfSel, lapsoSel, lapsos, rows, profMap, pnfOptions]);
 
   const linea = (tpl: string, hoja: HojaReporte): string =>
     tpl
@@ -378,6 +382,8 @@ td.tot { font-weight: bold; font-size: 11pt; vertical-align: middle; }
 
   const togglePnf = (id: number) =>
     setPnfSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggleLapso = (key: string) =>
+    setLapsoSel((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
@@ -438,6 +444,50 @@ td.tot { font-weight: bold; font-size: 11pt; vertical-align: middle; }
             </div>
             <p className="text-[10px] text-slate-500 mt-1.5">
               Se genera una hoja por PNF × lapso. Sin selección, una hoja por lapso con todos los docentes.
+            </p>
+          </div>
+
+          {/* Selector de lapsos a incluir */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Lapsos a incluir
+              </label>
+              {lapsoSel.length > 0 && (
+                <button
+                  onClick={() => setLapsoSel([])}
+                  className="text-[10px] text-slate-400 hover:text-emerald-300 font-semibold cursor-pointer"
+                >
+                  Limpiar (todos los lapsos)
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {lapsos.map((l) => {
+                const key = `${l.tipo}:${l.n}`;
+                const activo = lapsoSel.includes(key);
+                return (
+                  <label
+                    key={key}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-xs font-semibold transition-colors border ${
+                      activo
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={activo}
+                      onChange={() => toggleLapso(key)}
+                      className="accent-emerald-500"
+                    />
+                    <span>{labelLapso(l.n, l.tipo)}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-1.5">
+              Sin selección se incluyen todos. Cada lapso genera su propia hoja solo si existen datos en él.
             </p>
           </div>
 
