@@ -118,9 +118,10 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
       const prof = profMap.get(r.profesor_id);
       if (pnfId !== null) {
         if (incluirOtrosPnf) {
-          // Solo materias del PNF seleccionado: el docente entra si tiene alguna,
-          // sin importar su PNF asociado (y solo ve esas materias)
-          if (r.pnf_saga_id !== pnfId) continue;
+          // Docentes del propio PNF: todas sus materias. Docentes de otros PNF:
+          // solo entran si tienen materias del PNF seleccionado y solo se listan esas
+          const esPropio = prof?.pnf_saga_id === pnfId;
+          if (!esPropio && r.pnf_saga_id !== pnfId) continue;
         } else if (prof?.pnf_saga_id !== pnfId) {
           continue;
         }
