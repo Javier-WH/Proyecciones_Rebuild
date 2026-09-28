@@ -330,7 +330,10 @@ export const CargaDocentePage: React.FC = () => {
     }
     const merged = [...mergedMap.values()];
     const n = merged.length;
+    // El profesor cubre también la fila 'agregar'; totales/dedicación solo las filas de datos,
+    // así la fila del botón queda con todas sus columnas libres y el colSpan no se solapa
     const span = puedeAsignar ? n + 1 : Math.max(n, 1);
+    const dataSpan = Math.max(n, 1);
 
     // Total del profesor por lapso (misma regla de suma de horas, por lapso)
     const totalPorLapso = new Map<number, number>();
@@ -356,10 +359,10 @@ export const CargaDocentePage: React.FC = () => {
                 <td className="py-3 px-4 text-center font-bold text-blue-300">
                   {m.horas.has(l) ? m.horas.get(l) : '—'}
                 </td>
-                {idx === 0 && totalCell(totalPorLapso.get(l) || 0, p.tipo_contrato_horas, span)}
+                {idx === 0 && totalCell(totalPorLapso.get(l) || 0, p.tipo_contrato_horas, dataSpan)}
               </Fragment>
             ))}
-            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, span)}
+            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, dataSpan)}
             {puedeAsignar && (
               <td className="py-3 px-4">
                 <div className="flex items-center justify-center gap-1">
@@ -395,7 +398,7 @@ export const CargaDocentePage: React.FC = () => {
         {(puedeAsignar || n === 0) && (
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
-            <td colSpan={5 + lapsosCols.length} className="py-2 px-4">
+            <td colSpan={6 + lapsosCols.length * 2} className="py-2 px-4">
               {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
@@ -410,8 +413,6 @@ export const CargaDocentePage: React.FC = () => {
                 <span className="block text-center text-[10px] text-slate-600 italic">Sin materias asignadas</span>
               )}
             </td>
-            {n === 0 && lapsosCols.map((l) => totalCell(0, p.tipo_contrato_horas, 1))}
-            {n === 0 && dedicacionCell(p.tipo_contrato_nombre, 1)}
             {puedeAsignar && <td />}
           </tr>
         )}
