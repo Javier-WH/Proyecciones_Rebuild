@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
-import { labelLapso } from './AgregarMateriaModal.js';
+import { labelLapso, terminoLapso, pluralLapso } from './AgregarMateriaModal.js';
 import { X, Loader2, Search, AlertCircle, UserX } from 'lucide-react';
 
 export interface AsignacionRow {
@@ -21,6 +21,8 @@ interface AsignarProfesorModalProps {
   onClose: () => void;
   onAssigned: () => void;
   row: AsignacionRow | null;
+  // true = la asignación aplica a todos los lapsos de la materia (vista agrupada)
+  todosLapsos?: boolean;
   // Mapa profesor_id -> horas ya asignadas en el periodo (calculado por la página)
   cargaPorProfesor: Map<number, number>;
 }
@@ -30,6 +32,7 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
   onClose,
   onAssigned,
   row,
+  todosLapsos = false,
   cargaPorProfesor,
 }) => {
   const [profesores, setProfesores] = useState<Profesor[]>([]);
@@ -70,6 +73,7 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
         seccion_id: row.seccion_id,
         trimestre: row.trimestre,
         profesor_id: profesorId,
+        todos_lapsos: todosLapsos,
       }),
     });
     setAssigning(false);
@@ -101,7 +105,10 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
             <span className="font-semibold text-indigo-300">{row.materia_nombre}</span> — Sección {row.seccion_nombre},{' '}
-            {labelLapso(row.trimestre, row.tipo_proyeccion)} · {row.horas_semanales} hrs/sem
+            {todosLapsos
+              ? `Todos los ${pluralLapso(terminoLapso([row.tipo_proyeccion]))}`
+              : labelLapso(row.trimestre, row.tipo_proyeccion)}
+            {' '}· {row.horas_semanales} hrs/sem
           </p>
         </div>
 

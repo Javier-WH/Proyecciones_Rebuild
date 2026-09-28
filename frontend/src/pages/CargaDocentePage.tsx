@@ -54,7 +54,7 @@ export const CargaDocentePage: React.FC = () => {
   const [soloSinAsignar, setSoloSinAsignar] = useState(false);
   const [soloPnf, setSoloPnf] = useState(true);
 
-  const [modalAsignar, setModalAsignar] = useState<{ open: boolean; row: CargaRow | null }>({
+  const [modalAsignar, setModalAsignar] = useState<{ open: boolean; row: CargaRow | null; todosLapsos?: boolean }>({
     open: false,
     row: null,
   });
@@ -86,7 +86,7 @@ export const CargaDocentePage: React.FC = () => {
     fetchProfesores();
   }, []);
 
-  const handleAssign = async (row: CargaRow, profesorId: number | null) => {
+  const handleAssign = async (row: CargaRow, profesorId: number | null, todosLapsos = false) => {
     const res = await apiFetch('/proyecciones/asignaciones', {
       method: 'PUT',
       body: JSON.stringify({
@@ -95,6 +95,7 @@ export const CargaDocentePage: React.FC = () => {
         seccion_id: row.seccion_id,
         trimestre: row.trimestre,
         profesor_id: profesorId,
+        todos_lapsos: todosLapsos,
       }),
     });
     if (res.success) {
@@ -126,6 +127,10 @@ export const CargaDocentePage: React.FC = () => {
 
   // 'Trimestre' o 'Semestre' si todas las filas son de un mismo régimen; 'Lapso' si se mezclan
   const lapsoTermino = useMemo(() => terminoLapso(rows.map((r) => r.tipo_proyeccion)), [rows]);
+
+  // Vista agrupada por materia (una columna por lapso) cuando el filtro muestra todos
+  const pivoted = filterLapso === 'todos';
+  const lapsosCols = useMemo(() => [...new Set(rows.map((r) => r.trimestre))].sort((a, b) => a - b), [rows]);
 
   // Filas que pasan los filtros de lapso/PNF/proyección (filtros de "materia")
   const rowsPorFiltro = useMemo(
@@ -308,6 +313,185 @@ export const CargaDocentePage: React.FC = () => {
     );
   };
 
+  // Vista agrupada: una fila por materia×sección con columnas de horas por lapso
+  const renderGrupoPivoted = (grupo: ProfesorGrupo) => {
+    const p = grupo.profesor;
+
+    // Colapsar filas por materia+sección guardando las horas de cada lapso
+    const mergedMap = new Map<string, { base: CargaRow; horas: Map<number, number> }>();
+    for (const r of grupo.rows) {
+      const k = `${r.materia_id}:${r.seccion_id}`;
+      let e = mergedMap.get(k);
+      if (!e) {
+        e = { base: r, horas: new Map() };
+        mergedMap.set(k, e);
+      }
+      e.horas.set(r.trimestre, (e.horas.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+    }
+    const merged = [...mergedMap.values()];
+    const n = merged.length;
+    const span = puedeAsignar ? n + 1 : Math.max(n, 1);
+
+    // Total del profesor por lapso (misma regla de suma de horas, por lapso)
+    const totalPorLapso = new Map<number, number>();
+    for (const l of lapsosCols) {
+      totalPorLapso.set(
+        l,
+        grupo.rows.filter((r) => r.trimestre === l).reduce((acc, r) => acc + (r.horas_semanales || 0), 0)
+      );
+    }
+
+    return (
+      <Fragment key={p.id}>
+        {merged.map((m, idx) => (
+          <tr key={`${m.base.materia_id}-${m.base.seccion_id}`} className="hover:bg-slate-800/40 transition-colors">
+            {idx === 0 && profesorCell(p, span)}
+            <td className="py-3 px-4 font-medium text-white">{m.base.materia_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">{m.base.pnf_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">{m.base.trayecto_nombre}</td>
+            <td className="py-3 px-4 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">{m.base.turno_nombre}</td>
+            {lapsosCols.map((l) => (
+              <Fragment key={l}>
+                <td className="py-3 px-4 text-center font-bold text-blue-300">
+                  {m.horas.has(l) ? m.horas.get(l) : '—'}
+                </td>
+                {idx === 0 && totalCell(totalPorLapso.get(l) || 0, p.tipo_contrato_horas, span)}
+              </Fragment>
+            ))}
+            {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, span)}
+            {puedeAsignar && (
+              <td className="py-3 px-4">
+                <div className="flex items-center justify-center gap-1">
+                  <button
+                    onClick={() => setModalAsignar({ open: true, row: m.base, todosLapsos: true })}
+                    className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                    title={`Reasignar a otro profesor en todos los ${pluralLapso(lapsoTermino)}`}
+                  >
+                    <UserSearch className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `¿Quitar "${m.base.materia_nombre}" en todos sus ${pluralLapso(lapsoTermino)}?`
+                        )
+                      ) {
+                        handleAssign(m.base, null, true);
+                      }
+                    }}
+                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                    title={`Quitar materia en todos los ${pluralLapso(lapsoTermino)}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            )}
+          </tr>
+        ))}
+
+        {/* Fila final del grupo: agregar materia (o fila única si no tiene materias) */}
+        {(puedeAsignar || n === 0) && (
+          <tr className="border-b border-slate-800/60">
+            {n === 0 && profesorCell(p, 1)}
+            <td colSpan={5 + lapsosCols.length} className="py-2 px-4">
+              {puedeAsignar ? (
+                <button
+                  onClick={() => setModalMaterias({ open: true, profesor: p })}
+                  className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer uppercase"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>
+                    Agregar materia a {p.apellidos}, {p.nombres}
+                  </span>
+                </button>
+              ) : (
+                <span className="block text-center text-[10px] text-slate-600 italic">Sin materias asignadas</span>
+              )}
+            </td>
+            {n === 0 && lapsosCols.map((l) => totalCell(0, p.tipo_contrato_horas, 1))}
+            {n === 0 && dedicacionCell(p.tipo_contrato_nombre, 1)}
+            {puedeAsignar && <td />}
+          </tr>
+        )}
+      </Fragment>
+    );
+  };
+
+  // Grupo SIN ASIGNAR en vista agrupada: colapsa por materia×sección igual que los profesores
+  const renderSinAsignarPivoted = () => {
+    const mergedMap = new Map<string, { base: CargaRow; horas: Map<number, number> }>();
+    for (const r of sinAsignar) {
+      const k = `${r.materia_id}:${r.seccion_id}`;
+      let e = mergedMap.get(k);
+      if (!e) {
+        e = { base: r, horas: new Map() };
+        mergedMap.set(k, e);
+      }
+      e.horas.set(r.trimestre, (e.horas.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+    }
+    const merged = [...mergedMap.values()];
+
+    return (
+      <Fragment key="sin-asignar-pivoted">
+        {merged.map((m, idx) => (
+          <tr
+            key={`sa-${m.base.materia_id}-${m.base.seccion_id}`}
+            className="bg-amber-500/[0.03] hover:bg-amber-500/[0.07] transition-colors"
+          >
+            {idx === 0 && (
+              <td rowSpan={merged.length} className="py-3 px-4 align-top border-r border-slate-800/60">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-11 h-11 rounded-full border border-amber-500/30 bg-amber-500/10 flex items-center justify-center shrink-0">
+                    <UserX className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-amber-300 text-sm leading-tight">SIN ASIGNAR</div>
+                    <div className="text-[10px] text-slate-500">{merged.length} materia(s) pendiente(s)</div>
+                  </div>
+                </div>
+              </td>
+            )}
+            <td className="py-3 px-4 font-medium text-white">{m.base.materia_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">{m.base.pnf_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">{m.base.trayecto_nombre}</td>
+            <td className="py-3 px-4 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">{m.base.turno_nombre}</td>
+            {lapsosCols.map((l) => (
+              <Fragment key={l}>
+                <td className="py-3 px-4 text-center font-bold text-blue-300">
+                  {m.horas.has(l) ? m.horas.get(l) : '—'}
+                </td>
+                {idx === 0 && (
+                  <td rowSpan={merged.length} className="py-3 px-4 text-center align-middle border-l border-slate-800/60">
+                    <span className="text-base font-extrabold text-slate-500">—</span>
+                  </td>
+                )}
+              </Fragment>
+            ))}
+            {idx === 0 && (
+              <td rowSpan={merged.length} className="py-3 px-4 align-middle border-l border-slate-800/60">
+                <span className="text-slate-600 italic text-[10px]">—</span>
+              </td>
+            )}
+            {puedeAsignar && (
+              <td className="py-3 px-4 text-center">
+                <button
+                  onClick={() => setModalAsignar({ open: true, row: m.base, todosLapsos: true })}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <UserSearch className="w-3.5 h-3.5" />
+                  <span>Asignar</span>
+                </button>
+              </td>
+            )}
+          </tr>
+        ))}
+      </Fragment>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Panel */}
@@ -460,25 +644,57 @@ export const CargaDocentePage: React.FC = () => {
         <div className="border border-slate-800 rounded-3xl overflow-hidden bg-slate-900/80 shadow-xl overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300 min-w-[1280px]">
             <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
-              <tr>
-                <th className="py-3.5 px-4 min-w-[210px]">Profesor</th>
-                <th className="py-3.5 px-4 min-w-[220px]">Unidad Curricular</th>
-                <th className="py-3.5 px-4">PNF</th>
-                <th className="py-3.5 px-4">Trayecto</th>
-                <th className="py-3.5 px-4">Sección</th>
-                <th className="py-3.5 px-4">Turno</th>
-                <th className="py-3.5 px-4 text-center">{lapsoTermino}</th>
-                <th className="py-3.5 px-4 text-center">Hrs x U/C</th>
-                <th className="py-3.5 px-4 text-center">Total Hrs</th>
-                <th className="py-3.5 px-4">Dedicación</th>
-                {puedeAsignar && <th className="py-3.5 px-4 text-center w-[90px]">Acciones</th>}
-              </tr>
+              {pivoted ? (
+                <>
+                  <tr>
+                    <th rowSpan={2} className="py-3.5 px-4 min-w-[210px]">Profesor</th>
+                    <th rowSpan={2} className="py-3.5 px-4 min-w-[220px]">Unidad Curricular</th>
+                    <th rowSpan={2} className="py-3.5 px-4">PNF</th>
+                    <th rowSpan={2} className="py-3.5 px-4">Trayecto</th>
+                    <th rowSpan={2} className="py-3.5 px-4">Sección</th>
+                    <th rowSpan={2} className="py-3.5 px-4">Turno</th>
+                    {lapsosCols.map((l) => (
+                      <th
+                        key={l}
+                        colSpan={2}
+                        className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap"
+                      >
+                        {lapsoTermino} {l}
+                      </th>
+                    ))}
+                    <th rowSpan={2} className="py-3.5 px-4 border-l border-slate-800/60">Dedicación</th>
+                    {puedeAsignar && <th rowSpan={2} className="py-3.5 px-4 text-center w-[90px]">Acciones</th>}
+                  </tr>
+                  <tr>
+                    {lapsosCols.map((l) => (
+                      <Fragment key={l}>
+                        <th className="py-2 px-3 text-center border-l border-slate-800/60">Hrs x U/C</th>
+                        <th className="py-2 px-3 text-center">Total Horas</th>
+                      </Fragment>
+                    ))}
+                  </tr>
+                </>
+              ) : (
+                <tr>
+                  <th className="py-3.5 px-4 min-w-[210px]">Profesor</th>
+                  <th className="py-3.5 px-4 min-w-[220px]">Unidad Curricular</th>
+                  <th className="py-3.5 px-4">PNF</th>
+                  <th className="py-3.5 px-4">Trayecto</th>
+                  <th className="py-3.5 px-4">Sección</th>
+                  <th className="py-3.5 px-4">Turno</th>
+                  <th className="py-3.5 px-4 text-center">{lapsoTermino}</th>
+                  <th className="py-3.5 px-4 text-center">Hrs x U/C</th>
+                  <th className="py-3.5 px-4 text-center">Total Hrs</th>
+                  <th className="py-3.5 px-4">Dedicación</th>
+                  {puedeAsignar && <th className="py-3.5 px-4 text-center w-[90px]">Acciones</th>}
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {grupos.map(renderGrupo)}
+              {grupos.map((g) => (pivoted ? renderGrupoPivoted(g) : renderGrupo(g)))}
 
               {/* Grupo SIN ASIGNAR */}
-              {sinAsignar.length > 0 && (
+              {sinAsignar.length > 0 && !pivoted && (
                 <Fragment key="sin-asignar">
                   {sinAsignar.map((r, idx) => (
                     <tr
@@ -534,6 +750,7 @@ export const CargaDocentePage: React.FC = () => {
                   ))}
                 </Fragment>
               )}
+              {pivoted && renderSinAsignarPivoted()}
             </tbody>
           </table>
         </div>
@@ -542,6 +759,7 @@ export const CargaDocentePage: React.FC = () => {
       <AsignarProfesorModal
         isOpen={modalAsignar.open}
         row={modalAsignar.row}
+        todosLapsos={modalAsignar.todosLapsos === true}
         cargaPorProfesor={cargaPorProfesor}
         onClose={() => setModalAsignar({ open: false, row: null })}
         onAssigned={fetchCarga}
