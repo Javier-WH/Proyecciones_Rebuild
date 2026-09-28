@@ -11,6 +11,7 @@ import {
   listTiposContratoHandler,
   createTipoContratoHandler,
   updateTipoContratoHandler,
+  deleteTipoContratoHandler,
   syncTiposContratoHandler,
 } from './profesores.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
@@ -23,6 +24,7 @@ export async function profesoresRoutes(fastify: FastifyInstance) {
   fastify.get('/tipos-contrato', { preHandler: [authenticate] }, listTiposContratoHandler);
   fastify.post('/tipos-contrato', { preHandler: [authenticate, authorizeRoles(...ADMINS)] }, createTipoContratoHandler);
   fastify.put('/tipos-contrato/:id', { preHandler: [authenticate, authorizeRoles(...ADMINS)] }, updateTipoContratoHandler);
+  fastify.delete('/tipos-contrato/:id', { preHandler: [authenticate, authorizeRoles(...ADMINS)] }, deleteTipoContratoHandler);
   fastify.post('/tipos-contrato/sync', { preHandler: [authenticate, authorizeRoles(...ADMINS)] }, syncTiposContratoHandler);
 
   // Sincronización de profesores con la API SAGA

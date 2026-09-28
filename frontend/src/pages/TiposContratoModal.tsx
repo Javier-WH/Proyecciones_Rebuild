@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { TipoContrato } from './ProfesorModal.js';
-import { X, Loader2, AlertCircle, Plus, RefreshCw, Save, CheckCircle2, XCircle } from 'lucide-react';
+import { X, Loader2, AlertCircle, Plus, RefreshCw, Save, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 
 interface TiposContratoModalProps {
   isOpen: boolean;
@@ -17,6 +17,7 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoHoras, setNuevoHoras] = useState('');
@@ -78,6 +79,20 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
       fetchTipos();
     } else {
       setFeedback({ type: 'err', text: res.message || 'Error creando tipo de contrato.' });
+    }
+  };
+
+  const handleDelete = async (t: EditableTipo) => {
+    if (!window.confirm(`¿Está seguro de eliminar el tipo de contrato "${t.nombre}"?`)) return;
+    setDeletingId(t.id);
+    setFeedback(null);
+    const res = await apiFetch(`/profesores/tipos-contrato/${t.id}`, { method: 'DELETE' });
+    setDeletingId(null);
+    if (res.success) {
+      setTipos((prev) => prev.filter((x) => x.id !== t.id));
+      setFeedback({ type: 'ok', text: res.message || 'Tipo de contrato eliminado.' });
+    } else {
+      setFeedback({ type: 'err', text: res.message || 'Error eliminando tipo de contrato.' });
     }
   };
 
@@ -184,6 +199,19 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
                     title="Guardar cambios"
                   >
                     {savingId === t.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(t)}
+                    disabled={deletingId === t.id}
+                    className="p-1.5 bg-red-600/15 hover:bg-red-600/35 border border-red-500/30 text-red-400 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default shrink-0"
+                    title="Eliminar tipo de contrato"
+                  >
+                    {deletingId === t.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               ))}

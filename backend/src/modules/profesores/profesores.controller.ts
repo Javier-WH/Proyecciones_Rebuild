@@ -588,6 +588,34 @@ export async function updateTipoContratoHandler(request: FastifyRequest, reply: 
   }
 }
 
+export async function deleteTipoContratoHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+
+  try {
+    const rows = await query<any[]>('SELECT id, nombre FROM tipos_contrato WHERE id = ? LIMIT 1', [id]);
+    if (rows.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Tipo de contrato no encontrado.' });
+    }
+
+    // La FK profesores.tipo_contrato_id usa ON DELETE SET NULL:
+    // los profesores asociados quedan sin tipo de contrato asignado.
+    const usage = await query<any[]>('SELECT COUNT(*) AS total FROM profesores WHERE tipo_contrato_id = ?', [id]);
+    const total = Number(usage[0]?.total || 0);
+
+    await query('DELETE FROM tipos_contrato WHERE id = ?', [id]);
+
+    return reply.send({
+      success: true,
+      message: `Tipo de contrato "${rows[0].nombre}" eliminado.${
+        total > 0 ? ` ${total} profesor(es) quedaron sin tipo de contrato asignado.` : ''
+      }`,
+    });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error eliminando tipo de contrato.' });
+  }
+}
+
 export async function syncTiposContratoHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
     const result = await syncTiposContratoDesdeSaga();
