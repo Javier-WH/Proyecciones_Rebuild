@@ -50,7 +50,19 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
   const user = request.userPayload!;
   const body = request.body as CreateProyeccionBody;
 
-  if (!body.nombre || !body.pnf_saga_id || !body.trayecto_saga_id || !body.maya_id || !body.periodo_academico) {
+  // Nota: los ids de SAGA pueden ser 0 (ej. TRAYECTO INICIAL), por eso se valida
+  // presencia (null/undefined/NaN) y no verdad/falsedad.
+  const faltanCampos =
+    !body.nombre?.trim() ||
+    !body.periodo_academico?.trim() ||
+    body.pnf_saga_id == null ||
+    isNaN(Number(body.pnf_saga_id)) ||
+    body.trayecto_saga_id == null ||
+    isNaN(Number(body.trayecto_saga_id)) ||
+    body.maya_id == null ||
+    isNaN(Number(body.maya_id));
+
+  if (faltanCampos) {
     return reply.status(400).send({
       success: false,
       message: 'Faltan campos obligatorios para crear la proyección.',

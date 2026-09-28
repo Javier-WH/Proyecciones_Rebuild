@@ -449,8 +449,8 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   // Autogenerar nombre de la proyección
   useEffect(() => {
     if (selectedPnf !== '' && selectedTrayecto !== '') {
-      const pnfObj = pnfList.find((p) => p.id === Number(selectedPnf));
-      const trayObj = trayectosList.find((t) => t.id === Number(selectedTrayecto));
+      const pnfObj = pnfList.find((p) => Number(p.id) === Number(selectedPnf));
+      const trayObj = trayectosList.find((t) => Number(t.id) === Number(selectedTrayecto));
       if (pnfObj && trayObj) {
         setNombreProyeccion(`Proyección ${pnfObj.programa} - ${trayObj.trayecto} (${periodoAcademico})`);
       }
@@ -581,7 +581,10 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (selectedPnf === '' || selectedTrayecto === '' || selectedMaya === '' || !periodoAcademico) {
+    const idsValidos = [selectedPnf, selectedTrayecto, selectedMaya].every(
+      (v) => v !== '' && Number.isFinite(Number(v))
+    );
+    if (!idsValidos || !periodoAcademico) {
       setErrorMsg('Debe seleccionar PNF, Trayecto, Pensum y Periodo Académico.');
       return;
     }
@@ -591,14 +594,16 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       return;
     }
 
-    const pnfObj = pnfList.find((p) => p.id === Number(selectedPnf));
-    const trayObj = trayectosList.find((t) => t.id === Number(selectedTrayecto));
-    const mayaObj = mayasList.find((m) => m.id === Number(selectedMaya));
+    const pnfObj = pnfList.find((p) => Number(p.id) === Number(selectedPnf));
+    const trayObj = trayectosList.find((t) => Number(t.id) === Number(selectedTrayecto));
+    const mayaObj = mayasList.find((m) => Number(m.id) === Number(selectedMaya));
 
     setSaving(true);
 
     const payload = {
-      nombre: nombreProyeccion,
+      nombre:
+        nombreProyeccion ||
+        `Proyección ${pnfObj?.programa ?? 'PNF'} - ${trayObj?.trayecto ?? 'Trayecto'} (${periodoAcademico})`,
       pnf_saga_id: Number(selectedPnf),
       pnf_nombre: pnfObj?.programa || '',
       trayecto_saga_id: Number(selectedTrayecto),
