@@ -201,7 +201,12 @@ export const CargaDocentePage: React.FC = () => {
           rows: susRows,
         });
       }
-      lista.sort((a, b) => `${a.profesor.apellidos} ${a.profesor.nombres}`.localeCompare(`${b.profesor.apellidos} ${b.profesor.nombres}`));
+      // Primero los que tienen materias asignadas; dentro de cada bloque, por cédula
+      lista.sort((a, b) => {
+        const d = (a.rows.length === 0 ? 1 : 0) - (b.rows.length === 0 ? 1 : 0);
+        if (d !== 0) return d;
+        return (parseInt(a.profesor.cedula, 10) || Infinity) - (parseInt(b.profesor.cedula, 10) || Infinity);
+      });
     }
 
     const sinAsignarRows = rowsPorFiltro.filter((r) => r.profesor_id === null && coincideTextoMateria(r));
