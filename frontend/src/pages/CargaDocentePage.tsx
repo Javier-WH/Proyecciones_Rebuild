@@ -237,8 +237,8 @@ export const CargaDocentePage: React.FC = () => {
     </td>
   );
 
-  const totalCell = (total: number, horas: number | null | undefined, span: number) => (
-    <td rowSpan={span} className="py-3 px-4 text-center align-middle border-l border-slate-800/60">
+  const totalCell = (total: number, horas: number | null | undefined, span: number, compact = false) => (
+    <td rowSpan={span} className={`py-3 ${compact ? 'px-2' : 'px-4'} text-center align-middle border-l border-slate-800/60`}>
       <span className={`text-base font-extrabold ${sobrecargaColor(total, horas)}`}>{total}</span>
     </td>
   );
@@ -375,19 +375,19 @@ export const CargaDocentePage: React.FC = () => {
             className="hover:bg-slate-800/40 transition-colors"
           >
             {idx === 0 && profesorCell(p, span)}
-            <td className="py-3 px-4 font-medium text-white">{m.base.materia_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{m.base.pnf_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{m.base.trayecto_nombre}</td>
-            <td className="py-3 px-4 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{m.base.turno_nombre}</td>
+            <td className="py-3 px-3 font-medium text-white">{m.base.materia_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">{m.base.pnf_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">{m.base.trayecto_nombre}</td>
+            <td className="py-3 px-3 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">{m.base.turno_nombre}</td>
             {lapsoCols.map((l) => {
               const k = lapsoKey(l.tipo, l.n);
               return (
                 <Fragment key={k}>
-                  <td className="py-3 px-4 text-center font-bold text-blue-300">
+                  <td className="py-3 px-1.5 text-center font-bold text-blue-300">
                     {m.horas.has(k) ? m.horas.get(k) : '—'}
                   </td>
-                  {idx === 0 && totalCell(totalPorLapso.get(k) || 0, p.tipo_contrato_horas, dataSpan)}
+                  {idx === 0 && totalCell(totalPorLapso.get(k) || 0, p.tipo_contrato_horas, dataSpan, true)}
                 </Fragment>
               );
             })}
@@ -484,16 +484,16 @@ export const CargaDocentePage: React.FC = () => {
                 </div>
               </td>
             )}
-            <td className="py-3 px-4 font-medium text-white">{m.base.materia_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{m.base.pnf_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{m.base.trayecto_nombre}</td>
-            <td className="py-3 px-4 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{m.base.turno_nombre}</td>
+            <td className="py-3 px-3 font-medium text-white">{m.base.materia_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">{m.base.pnf_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">{m.base.trayecto_nombre}</td>
+            <td className="py-3 px-3 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">{m.base.turno_nombre}</td>
             {lapsoCols.map((l) => {
               const k = lapsoKey(l.tipo, l.n);
               return (
                 <Fragment key={k}>
-                  <td className="py-3 px-4 text-center font-bold text-blue-300">
+                  <td className="py-3 px-1.5 text-center font-bold text-blue-300">
                     {m.horas.has(k) ? m.horas.get(k) : '—'}
                   </td>
                   {idx === 0 && (
@@ -678,34 +678,37 @@ export const CargaDocentePage: React.FC = () => {
         </div>
       ) : (
         <div className="border border-slate-800 rounded-3xl overflow-hidden bg-slate-900/80 shadow-xl overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300 min-w-[1280px]">
+          <table
+            className="w-full text-left text-xs text-slate-300"
+            style={{ minWidth: pivoted ? `${820 + lapsoCols.length * 80}px` : '1280px' }}
+          >
             <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
               {pivoted ? (
                 <>
                   <tr>
-                    <th rowSpan={2} className="py-3.5 px-4 min-w-[210px]">Profesor</th>
-                    <th rowSpan={2} className="py-3.5 px-4 min-w-[220px]">Unidad Curricular</th>
-                    <th rowSpan={2} className="py-3.5 px-4">PNF</th>
-                    <th rowSpan={2} className="py-3.5 px-4">Trayecto</th>
-                    <th rowSpan={2} className="py-3.5 px-4">Sección</th>
-                    <th rowSpan={2} className="py-3.5 px-4">Turno</th>
+                    <th rowSpan={2} className="py-3.5 px-3 min-w-[180px]">Profesor</th>
+                    <th rowSpan={2} className="py-3.5 px-3 min-w-[190px]">Unidad Curricular</th>
+                    <th rowSpan={2} className="py-3.5 px-3">PNF</th>
+                    <th rowSpan={2} className="py-3.5 px-3">Trayecto</th>
+                    <th rowSpan={2} className="py-3.5 px-3">Sección</th>
+                    <th rowSpan={2} className="py-3.5 px-3">Turno</th>
                     {lapsoCols.map((l) => (
                       <th
                         key={lapsoKey(l.tipo, l.n)}
                         colSpan={2}
-                        className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap"
+                        className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap text-[10px]"
                       >
                         {labelLapso(l.n, l.tipo)}
                       </th>
                     ))}
-                    <th rowSpan={2} className="py-3.5 px-4 border-l border-slate-800/60">Dedicación</th>
-                    {puedeAsignar && <th rowSpan={2} className="py-3.5 px-4 text-center w-[90px]">Acciones</th>}
+                    <th rowSpan={2} className="py-3.5 px-3 border-l border-slate-800/60">Dedicación</th>
+                    {puedeAsignar && <th rowSpan={2} className="py-3.5 px-3 text-center w-[90px]">Acciones</th>}
                   </tr>
                   <tr>
                     {lapsoCols.map((l) => (
                       <Fragment key={lapsoKey(l.tipo, l.n)}>
-                        <th className="py-2 px-3 text-center border-l border-slate-800/60">Hrs x U/C</th>
-                        <th className="py-2 px-3 text-center">Total Horas</th>
+                        <th className="py-2 px-1.5 text-center border-l border-slate-800/60" title="Horas por U/C">Hrs</th>
+                        <th className="py-2 px-1.5 text-center" title="Total de horas del profesor en el lapso">Tot</th>
                       </Fragment>
                     ))}
                   </tr>
