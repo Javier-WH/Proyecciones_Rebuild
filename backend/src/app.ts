@@ -10,6 +10,7 @@ import { proyeccionesRoutes } from './modules/proyecciones/proyecciones.routes.j
 import { periodosRoutes } from './modules/periodos/periodos.routes.js';
 import { profesoresRoutes } from './modules/profesores/profesores.routes.js';
 import { usuariosRoutes } from './modules/usuarios/usuarios.routes.js';
+import { horariosRoutes } from './modules/horarios/horarios.routes.js';
 
 export function buildApp() {
   const app = Fastify({
@@ -49,6 +50,7 @@ export function buildApp() {
   app.register(periodosRoutes, { prefix: '/api/periodos' });
   app.register(profesoresRoutes, { prefix: '/api/profesores' });
   app.register(usuariosRoutes, { prefix: '/api/usuarios' });
+  app.register(horariosRoutes, { prefix: '/api/horarios' });
 
   return app;
 }

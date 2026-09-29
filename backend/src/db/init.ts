@@ -71,12 +71,43 @@ export async function initializeDatabase() {
   `);
 
   // 6. Crear tabla de Turnos
+  // saga_id NULL = turno local (respaldo cuando SAGA no está disponible).
+  // dias_semana: CSV de días hábiles del turno, 1=Lunes … 7=Domingo.
   await db.query(`
     CREATE TABLE IF NOT EXISTS turnos (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      saga_id INT UNIQUE NOT NULL,
+      saga_id INT UNIQUE NULL,
       nombre VARCHAR(50) NOT NULL,
+      dias_semana VARCHAR(20) NOT NULL DEFAULT '1,2,3,4,5',
+      activo TINYINT(1) DEFAULT 1,
       INDEX idx_saga_id (saga_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // En instalaciones viejas saga_id era NOT NULL: relajar para permitir turnos locales
+  const [sagaIdCol] = await db.query<any[]>(
+    `SELECT IS_NULLABLE FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'turnos' AND COLUMN_NAME = 'saga_id'`,
+    [env.DB_NAME]
+  );
+  if (sagaIdCol.length > 0 && sagaIdCol[0].IS_NULLABLE === 'NO') {
+    await db.query('ALTER TABLE turnos MODIFY saga_id INT NULL');
+    console.log("✅ Columna 'saga_id' de turnos ahora admite NULL (turnos locales)");
+  }
+
+  // 6b. Bloques horarios por turno (horas de clase y recesos).
+  // es_receso=1 = bloque no asignable (se muestra en la grilla como RECESO).
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS turno_bloques (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      turno_id INT NOT NULL,
+      orden INT NOT NULL DEFAULT 1,
+      hora_inicio TIME NOT NULL,
+      hora_fin TIME NOT NULL,
+      es_receso TINYINT(1) DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_bloque (turno_id, orden),
+      FOREIGN KEY (turno_id) REFERENCES turnos(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
@@ -198,6 +229,10 @@ export async function initializeDatabase() {
     { tabla: 'proyeccion_secciones', nombre: 'maya_descripcion', definicion: 'VARCHAR(255) NULL AFTER maya_id' },
     { tabla: 'proyeccion_materias', nombre: 'seccion_id', definicion: 'INT NULL AFTER proyeccion_id' },
     { tabla: 'proyeccion_materias', nombre: 'eliminada', definicion: 'TINYINT(1) DEFAULT 0 AFTER semestre2' },
+    { tabla: 'turnos', nombre: 'dias_semana', definicion: "VARCHAR(20) NOT NULL DEFAULT '1,2,3,4,5' AFTER nombre" },
+    { tabla: 'turnos', nombre: 'activo', definicion: 'TINYINT(1) DEFAULT 1 AFTER dias_semana' },
+    { tabla: 'aulas', nombre: 'pnf_saga_id', definicion: 'INT NULL AFTER tipo' },
+    { tabla: 'aulas', nombre: 'pnf_nombre', definicion: 'VARCHAR(255) NULL AFTER pnf_saga_id' },
   ];
   for (const col of columnasExtra) {
     const [existe] = await db.query<any[]>(
@@ -302,6 +337,41 @@ export async function initializeDatabase() {
       FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE CASCADE,
       INDEX idx_proyeccion (proyeccion_id),
       INDEX idx_profesor (profesor_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 9d. Tabla de Horarios: una fila = una clase en un bloque/día/aula.
+  // La unidad agendada es (materia_id, seccion_id, trimestre) — la misma fila
+  // "asignable" de la carga docente; profesor_id es un snapshot denormalizado
+  // que se sincroniza al cambiar la asignación (NULL = materia sin profesor).
+  // Las claves únicas evitan choque de aula, sección y profesor dentro del mismo
+  // (periodo, régimen, lapso, día, bloque). El solape entre regímenes
+  // (SEMESTRAL S1 coexiste con TRIMESTRAL T1/T2) se valida en código.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS horario_entries (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      periodo_academico VARCHAR(50) NOT NULL,
+      tipo_proyeccion ENUM('TRIMESTRAL', 'SEMESTRAL') NOT NULL DEFAULT 'TRIMESTRAL',
+      trimestre TINYINT NOT NULL DEFAULT 1,
+      materia_id INT NOT NULL,
+      seccion_id INT NOT NULL,
+      profesor_id INT NULL,
+      dia_semana TINYINT NOT NULL,
+      bloque_id INT NOT NULL,
+      aula_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_aula (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, aula_id),
+      UNIQUE KEY uq_seccion (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, seccion_id),
+      UNIQUE KEY uq_profesor (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, profesor_id),
+      FOREIGN KEY (materia_id) REFERENCES proyeccion_materias(id) ON DELETE CASCADE,
+      FOREIGN KEY (seccion_id) REFERENCES proyeccion_secciones(id) ON DELETE CASCADE,
+      FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE SET NULL,
+      FOREIGN KEY (bloque_id) REFERENCES turno_bloques(id) ON DELETE CASCADE,
+      FOREIGN KEY (aula_id) REFERENCES aulas(id) ON DELETE CASCADE,
+      INDEX idx_periodo (periodo_academico, tipo_proyeccion, trimestre),
+      INDEX idx_profesor (profesor_id),
+      INDEX idx_aula (aula_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 

@@ -1,0 +1,556 @@
+import React, { useMemo, useState } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  DragStartEvent,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import { snapCenterToCursor } from '@dnd-kit/modifiers';
+import { apiFetch } from '../../api/client.js';
+import { MateriaAsignableRow } from '../AgregarMateriaModal.js';
+import {
+  Aula,
+  Bloque,
+  HorarioEntry,
+  SeccionRef,
+  Turno,
+  DIAS_NOMBRES,
+  DIAS_CORTOS,
+  fmtHora,
+  traslapan,
+} from './types.js';
+import { Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
+
+interface DragData {
+  tipo: 'pendiente' | 'entry';
+  materia_id: number;
+  seccion_id: number;
+  profesor_id: number | null;
+  titulo: string;
+  subtitulo: string;
+  entry_id?: number;
+}
+
+interface SeccionGridProps {
+  seccion: SeccionRef;
+  turno: Turno | null | undefined;
+  materias: MateriaAsignableRow[];
+  entries: HorarioEntry[];
+  aulas: Aula[];
+  trimestre: number;
+  puedeEditar: boolean;
+  onChanged: () => void;
+}
+
+export const SeccionGrid: React.FC<SeccionGridProps> = ({
+  seccion,
+  turno,
+  materias,
+  entries,
+  aulas,
+  trimestre,
+  puedeEditar,
+  onChanged,
+}) => {
+  const [activo, setActivo] = useState<DragData | null>(null);
+  const [aviso, setAviso] = useState<{ error: boolean; msg: string } | null>(null);
+  const [menuEntry, setMenuEntry] = useState<HorarioEntry | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  const bloques = useMemo(() => turno?.bloques ?? [], [turno]);
+  const dias = useMemo(
+    () => (turno?.dias_semana ?? '').split(',').map(Number).filter(Boolean).sort(),
+    [turno]
+  );
+  const aulasActivas = useMemo(() => aulas.filter((a) => a.activa), [aulas]);
+
+  // Entries de la sección actual indexados por celda
+  const porCelda = useMemo(() => {
+    const map = new Map<string, HorarioEntry>();
+    for (const e of entries) {
+      if (e.seccion_id === seccion.seccion_id) map.set(`${e.bloque_id}:${e.dia_semana}`, e);
+    }
+    return map;
+  }, [entries, seccion.seccion_id]);
+
+  // Progreso por materia: horas agendadas vs horas semanales
+  const progreso = useMemo(() => {
+    const map = new Map<number, { total: number; puestas: number; row: MateriaAsignableRow }>();
+    for (const m of materias) {
+      map.set(m.materia_id, { total: m.horas_semanales, puestas: 0, row: m });
+    }
+    for (const e of entries) {
+      if (e.seccion_id !== seccion.seccion_id) continue;
+      const p = map.get(e.materia_id);
+      if (p) p.puestas++;
+    }
+    return map;
+  }, [materias, entries, seccion.seccion_id]);
+
+  const pendientes = useMemo(
+    () => [...progreso.values()].filter((p) => p.total - p.puestas !== 0),
+    [progreso]
+  );
+
+  const mostrarAviso = (msg: string, error = false) => {
+    setAviso({ error, msg });
+    window.setTimeout(() => setAviso((a) => (a?.msg === msg ? null : a)), 5000);
+  };
+
+  // Aulas ocupadas en un slot (día + rango horario) por clases de cualquier sección/lapso rival
+  const aulasOcupadasEn = (dia: number, inicio: string, fin: string, excluir?: number): Set<number> => {
+    const ocup = new Set<number>();
+    for (const e of entries) {
+      if (excluir && e.id === excluir) continue;
+      if (e.dia_semana !== dia) continue;
+      if (traslapan(inicio, fin, e.hora_inicio, e.hora_fin)) ocup.add(e.aula_id);
+    }
+    return ocup;
+  };
+
+  // ¿Es válido soltar el drag en esta celda?
+  const celdaValida = (bloque: Bloque, dia: number, drag: DragData): boolean => {
+    if (bloque.es_receso) return false;
+    const ocupada = porCelda.get(`${bloque.id}:${dia}`);
+    if (ocupada && ocupada.id !== drag.entry_id) return false;
+    const excl = drag.entry_id;
+    for (const e of entries) {
+      if (excl && e.id === excl) continue;
+      if (e.dia_semana !== dia) continue;
+      if (!traslapan(bloque.hora_inicio, bloque.hora_fin, e.hora_inicio, e.hora_fin)) continue;
+      if (drag.profesor_id && e.profesor_id === drag.profesor_id) return false;
+      if (e.seccion_id === drag.seccion_id) return false;
+    }
+    return aulasOcupadasEn(dia, bloque.hora_inicio, bloque.hora_fin, excl).size < aulasActivas.length;
+  };
+
+  const handleDropEnCelda = async (bloque: Bloque, dia: number, drag: DragData) => {
+    const res = await apiFetch('/horarios/entries', {
+      method: 'PUT',
+      body: JSON.stringify({
+        entry_id: drag.entry_id,
+        materia_id: drag.materia_id,
+        seccion_id: drag.seccion_id,
+        trimestre,
+        dia_semana: dia,
+        bloque_id: bloque.id,
+      }),
+    });
+    if (res.success) {
+      mostrarAviso('Clase agendada.');
+      onChanged();
+    } else {
+      mostrarAviso(res.message || 'No se pudo agendar.', true);
+    }
+  };
+
+  const handleDesagendar = async (entryId: number) => {
+    const res = await apiFetch(`/horarios/entries/${entryId}`, { method: 'DELETE' });
+    if (res.success) {
+      mostrarAviso('Clase desagendada.');
+      setMenuEntry(null);
+      onChanged();
+    } else {
+      mostrarAviso(res.message || 'No se pudo quitar.', true);
+    }
+  };
+
+  const handleCambiarAula = async (entry: HorarioEntry, aulaId: number) => {
+    const res = await apiFetch('/horarios/entries', {
+      method: 'PUT',
+      body: JSON.stringify({
+        entry_id: entry.id,
+        materia_id: entry.materia_id,
+        seccion_id: entry.seccion_id,
+        trimestre: entry.trimestre,
+        dia_semana: entry.dia_semana,
+        bloque_id: entry.bloque_id,
+        aula_id: aulaId,
+      }),
+    });
+    if (res.success) {
+      mostrarAviso('Aula actualizada.');
+      setMenuEntry(null);
+      onChanged();
+    } else {
+      mostrarAviso(res.message || 'No se pudo cambiar el aula.', true);
+    }
+  };
+
+  const onDragStart = (ev: DragStartEvent) => setActivo(ev.active.data.current as DragData);
+
+  const onDragEnd = async (ev: DragEndEvent) => {
+    const drag = ev.active.data.current as DragData;
+    setActivo(null);
+    const over = ev.over?.id as string | undefined;
+    if (!over || !drag) return;
+    if (over === 'pendientes') {
+      if (drag.entry_id) await handleDesagendar(drag.entry_id);
+      return;
+    }
+    if (over.startsWith('cell:')) {
+      const [, bloqueId, dia] = over.split(':');
+      const bloque = bloques.find((b) => b.id === Number(bloqueId));
+      if (!bloque) return;
+      if (!celdaValida(bloque, Number(dia), drag)) {
+        mostrarAviso('Esa celda no es válida para la clase (ocupada, receso o sin aula libre).', true);
+        return;
+      }
+      await handleDropEnCelda(bloque, Number(dia), drag);
+    }
+  };
+
+  if (!turno) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">
+        El turno <span className="text-amber-400 font-semibold">'{seccion.turno_nombre}'</span> de esta
+        sección no está configurado. Ve a <span className="text-white font-semibold">Turnos y Bloques</span>{' '}
+        para definir sus días y horas de clase.
+      </div>
+    );
+  }
+  if (bloques.length === 0) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">
+        El turno <span className="text-amber-400 font-semibold">'{turno.nombre}'</span> no tiene bloques
+        horarios. Configúralos en <span className="text-white font-semibold">Turnos y Bloques</span>.
+      </div>
+    );
+  }
+
+  return (
+    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      {aviso && (
+        <div
+          className={`mb-3 px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+            aviso.error
+              ? 'bg-red-500/10 border-red-500/40 text-red-300'
+              : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+          }`}
+        >
+          {aviso.msg}
+        </div>
+      )}
+
+      <div className="flex gap-4 items-start">
+        {/* Panel de materias pendientes (droppable para desagendar) */}
+        <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} />
+
+        {/* Grilla días × bloques */}
+        <div className="flex-1 overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-3">
+          <table className="w-full border-separate border-spacing-1 min-w-[720px]">
+            <thead>
+              <tr>
+                <th className="w-28 text-[10px] uppercase tracking-wider text-slate-500 font-bold pb-1">
+                  {turno.nombre}
+                </th>
+                {dias.map((d) => (
+                  <th
+                    key={d}
+                    className="text-[11px] uppercase tracking-wider text-slate-300 font-bold pb-1"
+                  >
+                    {DIAS_NOMBRES[d]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {bloques.map((b) =>
+                b.es_receso ? (
+                  <tr key={b.id}>
+                    <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
+                      {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                    </td>
+                    <td
+                      colSpan={dias.length}
+                      className="h-7 rounded-lg bg-slate-800/50 border border-dashed border-slate-700/60 text-center"
+                    >
+                      <span className="text-[9px] font-bold tracking-[0.3em] text-slate-500 uppercase inline-flex items-center gap-1">
+                        <Coffee className="w-3 h-3" /> Receso
+                      </span>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={b.id}>
+                    <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                      </span>
+                    </td>
+                    {dias.map((d) => {
+                      const entry = porCelda.get(`${b.id}:${d}`);
+                      const valida = activo ? celdaValida(b, d, activo) : null;
+                      return (
+                        <Celda
+                          key={d}
+                          id={`cell:${b.id}:${d}`}
+                          entry={entry}
+                          valida={valida}
+                          activo={!!activo}
+                          puedeEditar={puedeEditar}
+                          onAbrirMenu={setMenuEntry}
+                        />
+                      );
+                    })}
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Menú de una clase agendada: cambiar aula / quitar */}
+      {menuEntry && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenuEntry(null)} />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="text-sm font-bold text-white">{menuEntry.materia_nombre}</div>
+                <div className="text-[11px] text-slate-400">
+                  {menuEntry.prof_apellidos
+                    ? `${menuEntry.prof_apellidos}, ${menuEntry.prof_nombres}`
+                    : 'Sin profesor asignado'}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {DIAS_NOMBRES[menuEntry.dia_semana]} · {fmtHora(menuEntry.hora_inicio)}–
+                  {fmtHora(menuEntry.hora_fin)} · Aula {menuEntry.aula_codigo}
+                </div>
+              </div>
+              <button onClick={() => setMenuEntry(null)} className="text-slate-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {puedeEditar && (
+              <>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                  Cambiar aula
+                </label>
+                <select
+                  className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200"
+                  value={menuEntry.aula_id}
+                  onChange={(e) => handleCambiarAula(menuEntry, Number(e.target.value))}
+                >
+                  <option value={menuEntry.aula_id}>
+                    {menuEntry.aula_codigo} — {menuEntry.aula_nombre}
+                  </option>
+                  {aulasActivas
+                    .filter(
+                      (a) =>
+                        a.id !== menuEntry.aula_id &&
+                        !aulasOcupadasEn(
+                          menuEntry.dia_semana,
+                          menuEntry.hora_inicio,
+                          menuEntry.hora_fin,
+                          menuEntry.id
+                        ).has(a.id)
+                    )
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.codigo} — {a.nombre}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={() => handleDesagendar(menuEntry.id)}
+                  className="mt-3 w-full py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-semibold cursor-pointer"
+                >
+                  Quitar del horario
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      <DragOverlay modifiers={[snapCenterToCursor]} dropAnimation={{ duration: 180, easing: 'ease' }}>
+        {activo ? <Chip titulo={activo.titulo} subtitulo={activo.subtitulo} overlay /> : null}
+      </DragOverlay>
+    </DndContext>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Sub-componentes
+// ---------------------------------------------------------------------------
+
+const Chip: React.FC<{ titulo: string; subtitulo?: string; overlay?: boolean }> = ({
+  titulo,
+  subtitulo,
+  overlay,
+}) => (
+  <div
+    className={`rounded-lg border px-2 py-1.5 text-left select-none ${
+      overlay
+        ? 'bg-blue-600/95 border-blue-400 shadow-2xl shadow-blue-500/40 scale-105 rotate-1'
+        : 'bg-blue-500/10 border-blue-500/40 hover:border-blue-400/70 hover:bg-blue-500/20'
+    } transition-colors`}
+  >
+    <div className="text-[10px] font-bold text-blue-100 leading-tight line-clamp-2">{titulo}</div>
+    {subtitulo && <div className="text-[9px] text-blue-300/70 leading-tight mt-0.5">{subtitulo}</div>}
+  </div>
+);
+
+const PendientesPanel: React.FC<{
+  pendientes: { total: number; puestas: number; row: MateriaAsignableRow }[];
+  puedeEditar: boolean;
+}> = ({ pendientes, puedeEditar }) => {
+  const { setNodeRef, isOver } = useDroppable({ id: 'pendientes' });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`w-56 shrink-0 bg-slate-900 border rounded-2xl p-3 transition-colors ${
+        isOver ? 'border-amber-400/70 bg-amber-500/5' : 'border-slate-800'
+      }`}
+    >
+      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2 flex items-center gap-1.5">
+        <Layers className="w-3.5 h-3.5" /> Materias pendientes
+      </div>
+      <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-0.5">
+        {pendientes.length === 0 && (
+          <div className="text-[11px] text-slate-500 italic px-1 py-2">
+            Todas las materias tienen sus horas completas. Arrastra una clase aquí para desagendarla.
+          </div>
+        )}
+        {pendientes.map((p) => (
+          <PendienteChip key={p.row.materia_id} p={p} puedeEditar={puedeEditar} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const PendienteChip: React.FC<{
+  p: { total: number; puestas: number; row: MateriaAsignableRow };
+  puedeEditar: boolean;
+}> = ({ p, puedeEditar }) => {
+  const restantes = p.total - p.puestas;
+  const sinProfesor = !p.row.profesor_id;
+  const data: DragData = {
+    tipo: 'pendiente',
+    materia_id: p.row.materia_id,
+    seccion_id: p.row.seccion_id,
+    profesor_id: p.row.profesor_id,
+    titulo: p.row.materia_nombre,
+    subtitulo: p.row.prof_apellidos
+      ? `${p.row.prof_apellidos} ${p.row.prof_nombres ?? ''}`.trim()
+      : 'Sin profesor',
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `pend:${p.row.materia_id}`,
+    data,
+    disabled: !puedeEditar || restantes <= 0,
+  });
+
+  const color =
+    restantes > 0
+      ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-400/70'
+      : 'bg-red-500/10 border-red-500/40';
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`rounded-lg border px-2 py-1.5 ${color} ${
+        isDragging ? 'opacity-30' : ''
+      } ${puedeEditar && restantes > 0 ? 'cursor-grab active:cursor-grabbing' : ''} transition-all`}
+    >
+      <div className="flex items-center gap-1.5">
+        {puedeEditar && restantes > 0 && <GripVertical className="w-3 h-3 text-slate-500 shrink-0" />}
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold text-slate-100 leading-tight line-clamp-2">
+            {p.row.materia_nombre}
+          </div>
+          <div className="text-[9px] text-slate-400 leading-tight mt-0.5 flex items-center gap-1 flex-wrap">
+            {sinProfesor ? (
+              <span className="inline-flex items-center gap-0.5 text-slate-500">
+                <UserX className="w-2.5 h-2.5" /> Sin profesor
+              </span>
+            ) : (
+              <span className="truncate">
+                {p.row.prof_apellidos} {p.row.prof_nombres}
+              </span>
+            )}
+            <span
+              className={`font-bold ${restantes > 0 ? 'text-amber-300' : 'text-red-300'}`}
+            >
+              {p.puestas}/{p.total} hrs
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Celda: React.FC<{
+  id: string;
+  entry?: HorarioEntry;
+  valida: boolean | null;
+  activo: boolean;
+  puedeEditar: boolean;
+  onAbrirMenu: (e: HorarioEntry) => void;
+}> = ({ id, entry, valida, activo, puedeEditar, onAbrirMenu }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+
+  let cls =
+    'h-14 min-w-[110px] rounded-lg border align-top p-1 transition-all duration-150 ';
+  if (activo) {
+    cls += valida
+      ? 'border-emerald-400/60 bg-emerald-500/10 '
+      : 'border-slate-800/60 bg-slate-900/40 opacity-40 ';
+  } else {
+    cls += 'border-slate-800 bg-slate-950/40 ';
+  }
+  if (isOver && valida) cls += 'ring-2 ring-emerald-400 scale-[1.03] ';
+
+  return (
+    <td ref={setNodeRef} className={cls}>
+      {entry && <EntryChip entry={entry} puedeEditar={puedeEditar} onAbrirMenu={onAbrirMenu} />}
+    </td>
+  );
+};
+
+const EntryChip: React.FC<{
+  entry: HorarioEntry;
+  puedeEditar: boolean;
+  onAbrirMenu: (e: HorarioEntry) => void;
+}> = ({ entry, puedeEditar, onAbrirMenu }) => {
+  const data: DragData = {
+    tipo: 'entry',
+    entry_id: entry.id,
+    materia_id: entry.materia_id,
+    seccion_id: entry.seccion_id,
+    profesor_id: entry.profesor_id,
+    titulo: entry.materia_nombre,
+    subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHora(entry.hora_inicio)} · ${entry.aula_codigo}`,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `entry:${entry.id}`,
+    data,
+    disabled: !puedeEditar,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={() => onAbrirMenu(entry)}
+      className={`h-full w-full ${puedeEditar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
+        isDragging ? 'opacity-30' : ''
+      }`}
+    >
+      <Chip
+        titulo={entry.materia_nombre}
+        subtitulo={`${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo}`}
+      />
+    </div>
+  );
+};

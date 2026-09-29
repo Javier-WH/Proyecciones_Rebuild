@@ -5,6 +5,7 @@ import { ProyeccionesPage } from './ProyeccionesPage.js';
 import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
 import { CargaDocentePage } from './CargaDocentePage.js';
+import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import {
   GraduationCap,
@@ -23,12 +24,14 @@ import {
   LayoutDashboard,
   ClipboardList,
   Settings,
-  UserCog
+  UserCog,
+  CalendarClock
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores' | 'carga'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores' | 'carga' | 'horarios'>('dashboard');
+  const [horariosSubTab, setHorariosSubTab] = useState<HorariosSubTab>('horario');
   const [sagaConnected, setSagaConnected] = useState<boolean | null>(null);
   const [loadingSaga, setLoadingSaga] = useState(true);
   const [configMenuOpen, setConfigMenuOpen] = useState(false);
@@ -128,6 +131,15 @@ export const DashboardPage: React.FC = () => {
                 <ClipboardList className="w-3.5 h-3.5" />
                 <span>Carga Docente</span>
               </button>
+              <button
+                onClick={() => setActiveTab('horarios')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                  activeTab === 'horarios' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <CalendarClock className="w-3.5 h-3.5" />
+                <span>Horarios</span>
+              </button>
             </div>
 
             {/* Right Profile & Actions */}
@@ -219,6 +231,8 @@ export const DashboardPage: React.FC = () => {
           <ProfesoresPage />
         ) : activeTab === 'carga' ? (
           <CargaDocentePage />
+        ) : activeTab === 'horarios' ? (
+          <HorariosPage subTab={horariosSubTab} onSubTabChange={setHorariosSubTab} />
         ) : activeTab === 'proyecciones' ? (
           <ProyeccionesPage />
         ) : (
@@ -285,7 +299,13 @@ export const DashboardPage: React.FC = () => {
               </div>
 
               {/* Aulas */}
-              <div className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-5 transition-all group">
+              <div
+                onClick={() => {
+                  setHorariosSubTab('aulas');
+                  setActiveTab('horarios');
+                }}
+                className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-5 transition-all group cursor-pointer"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Building2 className="w-6 h-6" />
@@ -294,7 +314,13 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-white mb-1">Aulas de Clase</h3>
                 <p className="text-xs text-slate-400 mb-4">Catálogo de aulas, capacidades, laboratorios y estado.</p>
-                <button className="w-full py-2.5 bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                <button
+                  onClick={() => {
+                    setHorariosSubTab('aulas');
+                    setActiveTab('horarios');
+                  }}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
                   <span>Gestionar Aulas</span>
                 </button>
               </div>

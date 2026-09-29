@@ -47,7 +47,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
         pr.pnf_saga_id, pr.pnf_nombre, pr.trayecto_nombre,
         m.id AS materia_id, m.nombre AS materia_nombre, m.horas_semanales,
         m.q1, m.q2, m.q3, m.semestre1, m.semestre2, m.seccion_id AS materia_seccion_id,
-        s.id AS seccion_id, s.nombre AS seccion_nombre, s.turno_nombre
+        s.id AS seccion_id, s.nombre AS seccion_nombre, s.turno_saga_id, s.turno_nombre
       FROM proyecciones pr
       JOIN proyeccion_materias m ON m.proyeccion_id = pr.id AND m.eliminada = 0
       JOIN proyeccion_secciones s
@@ -106,6 +106,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
           tipo_proyeccion: f.tipo_proyeccion,
           seccion_id: f.seccion_id,
           seccion_nombre: f.seccion_nombre,
+          turno_saga_id: f.turno_saga_id,
           turno_nombre: f.turno_nombre,
           trimestre: lapso,
           profesor_id: asig?.profesor_id ?? null,
@@ -184,6 +185,12 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
         `DELETE FROM proyeccion_asignaciones WHERE materia_id = ? AND seccion_id = ? AND trimestre IN (${ph})`,
         [materiaId, seccionId, ...lapsos]
       );
+      // Las clases ya agendadas quedan sin profesor (se mantienen aula/bloque)
+      await query(
+        `UPDATE horario_entries SET profesor_id = NULL
+         WHERE materia_id = ? AND seccion_id = ? AND trimestre IN (${ph})`,
+        [materiaId, seccionId, ...lapsos]
+      );
       return reply.send({
         success: true,
         message:
@@ -211,6 +218,14 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
         [proyeccionId, materiaId, seccionId, lapso, profesorId]
       );
     }
+
+    // Mantener el snapshot de profesor en las clases ya agendadas
+    const phSync = lapsos.map(() => '?').join(',');
+    await query(
+      `UPDATE horario_entries SET profesor_id = ?
+       WHERE materia_id = ? AND seccion_id = ? AND trimestre IN (${phSync})`,
+      [profesorId, materiaId, seccionId, ...lapsos]
+    );
 
     // Carga resultante del profesor en el periodo (para feedback de sobrecarga)
     const carga = await query<any[]>(

@@ -9,6 +9,7 @@ export interface MateriaAsignableRow {
   proyeccion_id: number;
   proyeccion_nombre: string;
   tipo_proyeccion: 'TRIMESTRAL' | 'SEMESTRAL';
+  pnf_saga_id?: number;
   pnf_nombre: string;
   trayecto_nombre: string;
   materia_id: number;
@@ -16,6 +17,7 @@ export interface MateriaAsignableRow {
   horas_semanales: number;
   seccion_id: number;
   seccion_nombre: string;
+  turno_saga_id?: number;
   turno_nombre: string;
   trimestre: number;
   profesor_id: number | null;
