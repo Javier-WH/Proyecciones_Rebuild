@@ -57,7 +57,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-x-auto">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold px-1 pb-2">{titulo}</div>
-      <table className="w-full border-separate border-spacing-1 min-w-[720px]">
+      <table className="w-full table-fixed border-separate border-spacing-1 min-w-[640px]">
         <thead>
           <tr>
             <th className="w-24 text-[10px] uppercase tracking-wider text-slate-500 font-bold pb-1">Hora</th>
@@ -99,7 +99,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                 {dias.map((d) => {
                   const clases = porCelda.get(`${key}:${d}`) || [];
                   return (
-                    <td key={d} className="min-w-[110px] align-top">
+                    <td key={d} className="align-top">
                       {clases.map((e) => (
                         <div
                           key={e.id}

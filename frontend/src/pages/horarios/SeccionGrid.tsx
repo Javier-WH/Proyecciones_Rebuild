@@ -36,6 +36,21 @@ interface DragData {
   entry_id?: number;
 }
 
+// Paleta de colores por materia (estilo horario escolar)
+const PALETA = [
+  'bg-blue-500/15 border-blue-500/50 text-blue-200',
+  'bg-emerald-500/15 border-emerald-500/50 text-emerald-200',
+  'bg-violet-500/15 border-violet-500/50 text-violet-200',
+  'bg-amber-500/15 border-amber-500/50 text-amber-200',
+  'bg-rose-500/15 border-rose-500/50 text-rose-200',
+  'bg-cyan-500/15 border-cyan-500/50 text-cyan-200',
+  'bg-orange-500/15 border-orange-500/50 text-orange-200',
+  'bg-fuchsia-500/15 border-fuchsia-500/50 text-fuchsia-200',
+  'bg-teal-500/15 border-teal-500/50 text-teal-200',
+  'bg-pink-500/15 border-pink-500/50 text-pink-200',
+];
+export const colorMateria = (id: number): string => PALETA[id % PALETA.length];
+
 interface SeccionGridProps {
   seccion: SeccionRef;
   turno: Turno | null | undefined;
@@ -77,6 +92,48 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
     return map;
   }, [entries, seccion.seccion_id]);
+
+  // Runs verticales por día: bloques consecutivos (sin receso de por medio) de la
+  // misma materia+aula+profesor se fusionan en una sola celda (rowSpan).
+  const { spans, cubiertas } = useMemo(() => {
+    const spans = new Map<string, { n: number; fin: string }>();
+    const cubiertas = new Set<string>();
+    for (const d of dias) {
+      let i = 0;
+      while (i < bloques.length) {
+        const b = bloques[i];
+        if (b.es_receso) {
+          i++;
+          continue;
+        }
+        const e = porCelda.get(`${b.id}:${d}`);
+        if (!e) {
+          i++;
+          continue;
+        }
+        let n = 1;
+        let fin = b.hora_fin;
+        let j = i + 1;
+        while (j < bloques.length && !bloques[j].es_receso) {
+          const nxt = porCelda.get(`${bloques[j].id}:${d}`);
+          if (
+            nxt &&
+            nxt.materia_id === e.materia_id &&
+            nxt.aula_id === e.aula_id &&
+            nxt.profesor_id === e.profesor_id
+          ) {
+            n++;
+            fin = bloques[j].hora_fin;
+            cubiertas.add(`${bloques[j].id}:${d}`);
+            j++;
+          } else break;
+        }
+        spans.set(`${b.id}:${d}`, { n, fin });
+        i = j;
+      }
+    }
+    return { spans, cubiertas };
+  }, [bloques, dias, porCelda]);
 
   // Progreso por materia: horas agendadas vs horas semanales
   const progreso = useMemo(() => {
@@ -237,24 +294,25 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         </div>
       )}
 
-      <div className="flex gap-4 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Panel de materias pendientes (droppable para desagendar) */}
         <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} />
 
         {/* Grilla días × bloques */}
-        <div className="flex-1 overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-3">
-          <table className="w-full border-separate border-spacing-1 min-w-[720px]">
+        <div className="flex-1 min-w-0 overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-3">
+          <table className="w-full table-fixed border-separate border-spacing-1 min-w-[640px]">
             <thead>
               <tr>
-                <th className="w-28 text-[10px] uppercase tracking-wider text-slate-500 font-bold pb-1">
-                  {turno.nombre}
+                <th className="w-24 pb-1">
+                  <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-800/80 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+                    {turno.nombre}
+                  </span>
                 </th>
                 {dias.map((d) => (
-                  <th
-                    key={d}
-                    className="text-[11px] uppercase tracking-wider text-slate-300 font-bold pb-1"
-                  >
-                    {DIAS_NOMBRES[d]}
+                  <th key={d} className="pb-1">
+                    <span className="inline-block w-full px-2 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] uppercase tracking-wider text-slate-200 font-bold text-center">
+                      {DIAS_NOMBRES[d]}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -284,13 +342,18 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                       </span>
                     </td>
                     {dias.map((d) => {
-                      const entry = porCelda.get(`${b.id}:${d}`);
+                      const key = `${b.id}:${d}`;
+                      if (cubiertas.has(key)) return null; // cubierta por rowspan
+                      const entry = porCelda.get(key);
                       const valida = activo ? celdaValida(b, d, activo) : null;
+                      const sp = spans.get(key);
                       return (
                         <Celda
                           key={d}
                           id={`cell:${b.id}:${d}`}
                           entry={entry}
+                          span={sp?.n ?? 1}
+                          finHasta={sp?.fin}
                           valida={valida}
                           activo={!!activo}
                           puedeEditar={puedeEditar}
@@ -371,7 +434,9 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       )}
 
       <DragOverlay modifiers={[snapCenterToCursor]} dropAnimation={{ duration: 180, easing: 'ease' }}>
-        {activo ? <Chip titulo={activo.titulo} subtitulo={activo.subtitulo} overlay /> : null}
+        {activo ? (
+          <Chip titulo={activo.titulo} subtitulo={activo.subtitulo} overlay colorCls={colorMateria(activo.materia_id)} />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );
@@ -381,20 +446,28 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
 // Sub-componentes
 // ---------------------------------------------------------------------------
 
-const Chip: React.FC<{ titulo: string; subtitulo?: string; overlay?: boolean }> = ({
-  titulo,
-  subtitulo,
-  overlay,
-}) => (
+const Chip: React.FC<{
+  titulo: string;
+  subtitulo?: string;
+  overlay?: boolean;
+  colorCls?: string;
+  grande?: boolean;
+}> = ({ titulo, subtitulo, overlay, colorCls, grande }) => (
   <div
-    className={`rounded-lg border px-2 py-1.5 text-left select-none ${
+    className={`rounded-lg border px-2 py-1.5 text-left select-none transition-colors ${
       overlay
-        ? 'bg-blue-600/95 border-blue-400 shadow-2xl shadow-blue-500/40 scale-105 rotate-1'
-        : 'bg-blue-500/10 border-blue-500/40 hover:border-blue-400/70 hover:bg-blue-500/20'
-    } transition-colors`}
+        ? `${colorCls ?? 'bg-blue-600/95 border-blue-400 text-blue-50'} shadow-2xl shadow-black/50 scale-105 rotate-1`
+        : `${colorCls ?? 'bg-blue-500/10 border-blue-500/40 text-blue-200'} hover:brightness-125`
+    } ${grande ? 'h-full flex flex-col justify-center' : ''}`}
   >
-    <div className="text-[10px] font-bold text-blue-100 leading-tight line-clamp-2">{titulo}</div>
-    {subtitulo && <div className="text-[9px] text-blue-300/70 leading-tight mt-0.5">{subtitulo}</div>}
+    <div className={`${grande ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight line-clamp-2`}>
+      {titulo}
+    </div>
+    {subtitulo && (
+      <div className={`${grande ? 'text-[9px]' : 'text-[9px]'} opacity-75 leading-tight mt-0.5`}>
+        {subtitulo}
+      </div>
+    )}
   </div>
 );
 
@@ -406,7 +479,7 @@ const PendientesPanel: React.FC<{
   return (
     <div
       ref={setNodeRef}
-      className={`w-56 shrink-0 bg-slate-900 border rounded-2xl p-3 transition-colors ${
+      className={`w-full lg:w-56 shrink-0 bg-slate-900 border rounded-2xl p-3 transition-colors ${
         isOver ? 'border-amber-400/70 bg-amber-500/5' : 'border-slate-800'
       }`}
     >
@@ -493,36 +566,42 @@ const PendienteChip: React.FC<{
 const Celda: React.FC<{
   id: string;
   entry?: HorarioEntry;
+  span: number;
+  finHasta?: string;
   valida: boolean | null;
   activo: boolean;
   puedeEditar: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, valida, activo, puedeEditar, onAbrirMenu }) => {
+}> = ({ id, entry, span, finHasta, valida, activo, puedeEditar, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
-    'h-14 min-w-[110px] rounded-lg border align-top p-1 transition-all duration-150 ';
+    'rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
   if (activo) {
     cls += valida
       ? 'border-emerald-400/60 bg-emerald-500/10 '
       : 'border-slate-800/60 bg-slate-900/40 opacity-40 ';
   } else {
-    cls += 'border-slate-800 bg-slate-950/40 ';
+    cls += entry ? 'border-transparent bg-transparent p-0 ' : 'border-slate-800 bg-slate-950/40 ';
   }
   if (isOver && valida) cls += 'ring-2 ring-emerald-400 scale-[1.03] ';
 
   return (
-    <td ref={setNodeRef} className={cls}>
-      {entry && <EntryChip entry={entry} puedeEditar={puedeEditar} onAbrirMenu={onAbrirMenu} />}
+    <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: span > 1 ? 'auto' : '3.5rem' }}>
+      {entry && (
+        <EntryChip entry={entry} span={span} finHasta={finHasta} puedeEditar={puedeEditar} onAbrirMenu={onAbrirMenu} />
+      )}
     </td>
   );
 };
 
 const EntryChip: React.FC<{
   entry: HorarioEntry;
+  span: number;
+  finHasta?: string;
   puedeEditar: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, puedeEditar, onAbrirMenu }) => {
+}> = ({ entry, span, finHasta, puedeEditar, onAbrirMenu }) => {
   const data: DragData = {
     tipo: 'entry',
     entry_id: entry.id,
@@ -549,7 +628,13 @@ const EntryChip: React.FC<{
     >
       <Chip
         titulo={entry.materia_nombre}
-        subtitulo={`${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo}`}
+        subtitulo={
+          span > 1
+            ? `${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo} · ${fmtHora(entry.hora_inicio)}–${fmtHora(finHasta ?? entry.hora_fin)}`
+            : `${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo}`
+        }
+        colorCls={colorMateria(entry.materia_id)}
+        grande={span > 1}
       />
     </div>
   );

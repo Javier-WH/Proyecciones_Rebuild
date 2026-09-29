@@ -224,7 +224,7 @@ export const DashboardPage: React.FC = () => {
       </nav>
 
       {/* Main Content Area */}
-      <main className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${activeTab === 'carga' ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
+      <main className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${activeTab === 'carga' || activeTab === 'horarios' ? 'max-w-none' : 'max-w-7xl'}`}>
         {activeTab === 'periodos' ? (
           <PeriodosPage />
         ) : activeTab === 'profesores' ? (

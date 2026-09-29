@@ -15,6 +15,60 @@ interface BloqueEdit {
   es_receso: boolean;
 }
 
+const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+// Campo de hora con dos inputs separados (horas y minutos), independiente del
+// formato regional del navegador (input[type=time] exige AM/PM en locales 12h).
+const CampoHora: React.FC<{
+  value: string; // 'HH:MM'
+  disabled?: boolean;
+  onChange: (v: string) => void;
+}> = ({ value, disabled, onChange }) => {
+  const [hh = '', mm = ''] = value.split(':');
+  const minRef = React.useRef<HTMLInputElement>(null);
+
+  const cambiarHora = (v: string) => {
+    const d = v.replace(/[^\d]/g, '').slice(0, 2);
+    const hhClamped = d !== '' && Number(d) > 23 ? '23' : d;
+    onChange(`${hhClamped}:${mm}`);
+    if (hhClamped.length === 2) minRef.current?.select();
+  };
+  const cambiarMin = (v: string) => {
+    const d = v.replace(/[^\d]/g, '').slice(0, 2);
+    const mmClamped = d !== '' && Number(d) > 59 ? '59' : d;
+    onChange(`${hh}:${mmClamped}`);
+  };
+
+  const cls =
+    'w-9 bg-slate-900 border border-slate-700 rounded-lg px-1 py-1 text-xs text-white text-center';
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="HH"
+        value={hh}
+        disabled={disabled}
+        onChange={(e) => cambiarHora(e.target.value)}
+        onBlur={() => hh !== '' && onChange(`${hh.padStart(2, '0')}:${mm || '00'}`)}
+        className={cls}
+      />
+      <span className="text-slate-500 text-xs">:</span>
+      <input
+        ref={minRef}
+        type="text"
+        inputMode="numeric"
+        placeholder="MM"
+        value={mm}
+        disabled={disabled}
+        onChange={(e) => cambiarMin(e.target.value)}
+        onBlur={() => hh !== '' && onChange(`${hh}:${(mm || '00').padStart(2, '0')}`)}
+        className={cls}
+      />
+    </span>
+  );
+};
+
 export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, onChanged }) => {
   const [sel, setSel] = useState<number | null>(turnos[0]?.id ?? null);
   const [dias, setDias] = useState<number[]>([]);
@@ -26,10 +80,14 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
   const esAdmin = puedeEditar; // creación de turnos locales solo SUPER/ADMIN se valida server-side
 
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];
+  const dirtyRef = React.useRef(false);
 
   useEffect(() => {
     if (!turno) return;
+    // No pisar la edición en curso si solo fue una recarga de datos del mismo turno
+    if (dirtyRef.current && turno.id === sel) return;
     setSel(turno.id);
+    dirtyRef.current = false;
     setDias(
       String(turno.dias_semana)
         .split(',')
@@ -47,11 +105,21 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
     setMsg(null);
   }, [turno?.id, turnos]);
 
+  // Marca la edición como "sucia" para que una recarga de datos no la pise
+  const editDias: typeof setDias = (v) => {
+    dirtyRef.current = true;
+    setDias(v);
+  };
+  const editBloques: typeof setBloques = (v) => {
+    dirtyRef.current = true;
+    setBloques(v);
+  };
+
   const toggleDia = (d: number) =>
-    setDias((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+    editDias((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
 
   const moverBloque = (i: number, dir: -1 | 1) => {
-    setBloques((prev) => {
+    editBloques((prev) => {
       const copia = [...prev];
       const j = i + dir;
       if (j < 0 || j >= copia.length) return prev;
@@ -62,6 +130,20 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
 
   const guardar = async () => {
     if (!turno) return;
+    for (const [i, b] of bloques.entries()) {
+      if (!HORA_RE.test(b.hora_inicio) || !HORA_RE.test(b.hora_fin)) {
+        setMsg({ error: true, texto: `Bloque ${i + 1}: completa las horas en formato HH:MM.` });
+        return;
+      }
+      if (b.hora_inicio >= b.hora_fin) {
+        setMsg({ error: true, texto: `Bloque ${i + 1}: la hora de inicio debe ser menor que la de fin.` });
+        return;
+      }
+    }
+    if (dias.length === 0) {
+      setMsg({ error: true, texto: 'Selecciona al menos un día de clase para el turno.' });
+      return;
+    }
     setSaving(true);
     setMsg(null);
     const r1 = await apiFetch(`/horarios/turnos/${turno.id}`, {
@@ -80,6 +162,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
     setSaving(false);
     if (r2.success) {
       setMsg({ error: false, texto: 'Turno actualizado.' });
+      dirtyRef.current = false;
       onChanged();
     } else {
       setMsg({ error: true, texto: r2.message || 'Error guardando bloques.' });
@@ -122,9 +205,9 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
   }
 
   return (
-    <div className="flex gap-4 items-start">
+    <div className="flex flex-col lg:flex-row gap-4 items-start">
       {/* Lista de turnos */}
-      <div className="w-56 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-1.5">
+      <div className="w-full lg:w-56 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-1.5">
         {turnos.map((t) => (
           <button
             key={t.id}
@@ -249,13 +332,13 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
               {puedeEditar && (
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => setBloques((p) => [...p, { hora_inicio: '', hora_fin: '', es_receso: false }])}
+                    onClick={() => editBloques((p) => [...p, { hora_inicio: '', hora_fin: '', es_receso: false }])}
                     className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold cursor-pointer"
                   >
                     + Bloque
                   </button>
                   <button
-                    onClick={() => setBloques((p) => [...p, { hora_inicio: '', hora_fin: '', es_receso: true }])}
+                    onClick={() => editBloques((p) => [...p, { hora_inicio: '', hora_fin: '', es_receso: true }])}
                     className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
                   >
                     <Coffee className="w-3 h-3" /> Receso
@@ -278,24 +361,20 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
                 >
                   <span className="text-[10px] font-bold text-slate-500 w-5">{i + 1}</span>
                   {b.es_receso && <Coffee className="w-3.5 h-3.5 text-amber-400" />}
-                  <input
-                    type="time"
+                  <CampoHora
                     value={b.hora_inicio}
                     disabled={!puedeEditar}
-                    onChange={(e) =>
-                      setBloques((p) => p.map((x, j) => (j === i ? { ...x, hora_inicio: e.target.value } : x)))
+                    onChange={(v) =>
+                      editBloques((p) => p.map((x, j) => (j === i ? { ...x, hora_inicio: v } : x)))
                     }
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
                   />
                   <span className="text-slate-500 text-xs">a</span>
-                  <input
-                    type="time"
+                  <CampoHora
                     value={b.hora_fin}
                     disabled={!puedeEditar}
-                    onChange={(e) =>
-                      setBloques((p) => p.map((x, j) => (j === i ? { ...x, hora_fin: e.target.value } : x)))
+                    onChange={(v) =>
+                      editBloques((p) => p.map((x, j) => (j === i ? { ...x, hora_fin: v } : x)))
                     }
-                    className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white"
                   />
                   <div className="flex-1" />
                   {puedeEditar && (
@@ -307,7 +386,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
                         <ArrowDown className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => setBloques((p) => p.filter((_, j) => j !== i))}
+                        onClick={() => editBloques((p) => p.filter((_, j) => j !== i))}
                         className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-300 cursor-pointer"
                         title="Quitar"
                       >
