@@ -1,6 +1,34 @@
 import React, { useMemo } from 'react';
-import { HorarioEntry, Turno, DIAS_NOMBRES, DIAS_CORTOS, fmtHora, minutos } from './types.js';
+import { HorarioEntry, Turno, DIAS_NOMBRES, DIAS_CORTOS, fmtHora, minutos, colorMateria } from './types.js';
 import { Clock, Coffee } from 'lucide-react';
+
+interface ItemCelda {
+  e: HorarioEntry;
+  span: number;
+  fin: string;
+}
+
+const ChipClase: React.FC<{ item: ItemCelda; renderLinea2: (e: HorarioEntry) => string }> = ({
+  item,
+  renderLinea2,
+}) => (
+  <div
+    className={`rounded-lg border px-2 py-1.5 mb-1 ${colorMateria(item.e.materia_id)} ${
+      item.span > 1 ? 'h-full flex flex-col justify-center mb-0' : ''
+    }`}
+  >
+    <div className={`${item.span > 1 ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight line-clamp-2`}>
+      {item.e.materia_nombre}
+    </div>
+    <div className="text-[9px] opacity-75 leading-tight mt-0.5">
+      {renderLinea2(item.e)}
+      {item.span > 1 && ` · ${fmtHora(item.e.hora_inicio)}–${fmtHora(item.fin)}`}
+    </div>
+    <div className="text-[8px] opacity-60 mt-0.5">
+      {item.e.seccion_nombre} · {item.e.turno_nombre}
+    </div>
+  </div>
+);
 
 // Vista de solo lectura: grilla días × rangos horarios con las clases de un
 // recurso (aula o profesor). Las filas son rangos hora_inicio–hora_fin únicos.
@@ -54,16 +82,66 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
     return map;
   }, [entries]);
 
+  // Runs verticales por día: clases consecutivas (misma materia+sección+aula, en
+  // rangos contiguos sin receso) se fusionan en una sola celda (rowSpan).
+  // Solo se fusiona cuando cada celda del run contiene exactamente una clase.
+  const itemsPorCelda = useMemo(() => {
+    const items = new Map<string, ItemCelda[]>();
+    const cubiertas = new Set<number>();
+    for (const d of dias) {
+      for (let i = 0; i < filas.length; i++) {
+        const f = filas[i];
+        if (f.esReceso) continue;
+        const key = `${f.inicio}-${f.fin}:${d}`;
+        const cell = porCelda.get(key) || [];
+        const arr: ItemCelda[] = [];
+        for (const e of cell) {
+          if (cubiertas.has(e.id)) continue;
+          let span = 1;
+          let fin = f.fin;
+          if (cell.length === 1) {
+            let j = i + 1;
+            while (j < filas.length && !filas[j].esReceso && filas[j].inicio === fin) {
+              const nk = `${filas[j].inicio}-${filas[j].fin}:${d}`;
+              const nc = porCelda.get(nk) || [];
+              const nxt =
+                nc.length === 1 &&
+                nc[0].materia_id === e.materia_id &&
+                nc[0].seccion_id === e.seccion_id &&
+                nc[0].aula_id === e.aula_id
+                  ? nc[0]
+                  : null;
+              if (!nxt) break;
+              cubiertas.add(nxt.id);
+              span++;
+              fin = filas[j].fin;
+              j++;
+            }
+          }
+          arr.push({ e, span, fin });
+        }
+        items.set(key, arr);
+      }
+    }
+    return items;
+  }, [filas, dias, porCelda]);
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-x-auto">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold px-1 pb-2">{titulo}</div>
       <table className="w-full table-fixed border-separate border-spacing-1 min-w-[640px]">
         <thead>
           <tr>
-            <th className="w-24 text-[10px] uppercase tracking-wider text-slate-500 font-bold pb-1">Hora</th>
+            <th className="w-24 pb-1">
+              <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-800/80 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+                Hora
+              </span>
+            </th>
             {dias.map((d) => (
-              <th key={d} className="text-[11px] uppercase tracking-wider text-slate-300 font-bold pb-1">
-                {DIAS_NOMBRES[d]}
+              <th key={d} className="pb-1">
+                <span className="inline-block w-full px-2 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] uppercase tracking-wider text-slate-200 font-bold text-center">
+                  {DIAS_NOMBRES[d]}
+                </span>
               </th>
             ))}
           </tr>
@@ -97,25 +175,25 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                   </span>
                 </td>
                 {dias.map((d) => {
-                  const clases = porCelda.get(`${key}:${d}`) || [];
+                  const items = itemsPorCelda.get(`${key}:${d}`) || [];
+                  const cell = porCelda.get(`${key}:${d}`) || [];
+                  if (cell.length > 0 && items.length === 0) return null; // cubierta por rowspan
+                  const unico = items.length === 1 ? items[0] : null;
+                  const fusion = unico !== null && unico.span > 1;
                   return (
-                    <td key={d} className="align-top">
-                      {clases.map((e) => (
-                        <div
-                          key={e.id}
-                          className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-2 py-1.5 mb-1"
-                        >
-                          <div className="text-[10px] font-bold text-indigo-100 leading-tight line-clamp-2">
-                            {e.materia_nombre}
-                          </div>
-                          <div className="text-[9px] text-indigo-300/70 leading-tight mt-0.5">
-                            {renderLinea2(e)}
-                          </div>
-                          <div className="text-[8px] text-slate-500 mt-0.5">
-                            {e.seccion_nombre} · {e.turno_nombre}
-                          </div>
+                    <td
+                      key={d}
+                      rowSpan={fusion ? unico.span : undefined}
+                      className={`align-top ${fusion ? 'relative p-0' : ''}`}
+                      style={{ height: '3rem' }}
+                    >
+                      {fusion ? (
+                        <div className="absolute inset-0 p-0.5">
+                          <ChipClase item={unico} renderLinea2={renderLinea2} />
                         </div>
-                      ))}
+                      ) : (
+                        items.map((it) => <ChipClase key={it.e.id} item={it} renderLinea2={renderLinea2} />)
+                      )}
                     </td>
                   );
                 })}

@@ -72,6 +72,21 @@ export interface SeccionRef {
 export const DIAS_NOMBRES = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const DIAS_CORTOS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+// Paleta de colores por materia (estilo horario escolar)
+const PALETA = [
+  'bg-blue-500/15 border-blue-500/50 text-blue-200',
+  'bg-emerald-500/15 border-emerald-500/50 text-emerald-200',
+  'bg-violet-500/15 border-violet-500/50 text-violet-200',
+  'bg-amber-500/15 border-amber-500/50 text-amber-200',
+  'bg-rose-500/15 border-rose-500/50 text-rose-200',
+  'bg-cyan-500/15 border-cyan-500/50 text-cyan-200',
+  'bg-orange-500/15 border-orange-500/50 text-orange-200',
+  'bg-fuchsia-500/15 border-fuchsia-500/50 text-fuchsia-200',
+  'bg-teal-500/15 border-teal-500/50 text-teal-200',
+  'bg-pink-500/15 border-pink-500/50 text-pink-200',
+];
+export const colorMateria = (id: number): string => PALETA[id % PALETA.length];
+
 export const fmtHora = (h: string): string => h?.slice(0, 5) ?? '';
 
 export const minutos = (h: string): number => {
