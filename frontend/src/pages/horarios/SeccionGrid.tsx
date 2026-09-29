@@ -94,7 +94,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   }, [entries, seccion.seccion_id]);
 
   // Runs verticales por día: bloques consecutivos (sin receso de por medio) de la
-  // misma materia+aula+profesor se fusionan en una sola celda (rowSpan).
+  // misma materia+aula se fusionan en una sola celda (rowSpan).
   const { spans, cubiertas } = useMemo(() => {
     const spans = new Map<string, { n: number; fin: string }>();
     const cubiertas = new Set<string>();
@@ -116,12 +116,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         let j = i + 1;
         while (j < bloques.length && !bloques[j].es_receso) {
           const nxt = porCelda.get(`${bloques[j].id}:${d}`);
-          if (
-            nxt &&
-            nxt.materia_id === e.materia_id &&
-            nxt.aula_id === e.aula_id &&
-            nxt.profesor_id === e.profesor_id
-          ) {
+          if (nxt && nxt.materia_id === e.materia_id && nxt.aula_id === e.aula_id) {
             n++;
             fin = bloques[j].hora_fin;
             cubiertas.add(`${bloques[j].id}:${d}`);
@@ -458,7 +453,7 @@ const Chip: React.FC<{
       overlay
         ? `${colorCls ?? 'bg-blue-600/95 border-blue-400 text-blue-50'} shadow-2xl shadow-black/50 scale-105 rotate-1`
         : `${colorCls ?? 'bg-blue-500/10 border-blue-500/40 text-blue-200'} hover:brightness-125`
-    } ${grande ? 'h-full flex flex-col justify-center' : ''}`}
+    } h-full flex flex-col justify-center`}
   >
     <div className={`${grande ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight line-clamp-2`}>
       {titulo}
@@ -576,7 +571,7 @@ const Celda: React.FC<{
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
-    'rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
+    'relative rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
   if (activo) {
     cls += valida
       ? 'border-emerald-400/60 bg-emerald-500/10 '
@@ -587,9 +582,11 @@ const Celda: React.FC<{
   if (isOver && valida) cls += 'ring-2 ring-emerald-400 scale-[1.03] ';
 
   return (
-    <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: span > 1 ? 'auto' : '3.5rem' }}>
+    <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
-        <EntryChip entry={entry} span={span} finHasta={finHasta} puedeEditar={puedeEditar} onAbrirMenu={onAbrirMenu} />
+        <div className="absolute inset-0 p-0.5">
+          <EntryChip entry={entry} span={span} finHasta={finHasta} puedeEditar={puedeEditar} onAbrirMenu={onAbrirMenu} />
+        </div>
       )}
     </td>
   );

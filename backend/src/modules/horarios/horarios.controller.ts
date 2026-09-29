@@ -324,9 +324,23 @@ export async function replaceBloquesHandler(request: FastifyRequest, reply: Fast
       [Number(id)]
     );
     if (uso[0].n > 0) {
+      const clases = await query<any[]>(
+        `SELECT e.id, m.nombre AS materia_nombre, s.nombre AS seccion_nombre,
+                e.dia_semana, b.hora_inicio, b.hora_fin, a.codigo AS aula_codigo
+         FROM horario_entries e
+         JOIN turno_bloques b ON b.id = e.bloque_id
+         JOIN proyeccion_materias m ON m.id = e.materia_id
+         JOIN proyeccion_secciones s ON s.id = e.seccion_id
+         JOIN aulas a ON a.id = e.aula_id
+         WHERE b.turno_id = ?
+         ORDER BY e.dia_semana, b.orden
+         LIMIT 100`,
+        [Number(id)]
+      );
       return reply.status(409).send({
         success: false,
         message: 'Este turno tiene clases agendadas en sus bloques. Desagenda esas clases antes de modificar los bloques.',
+        data: { total: uso[0].n, clases },
       });
     }
 
@@ -341,5 +355,26 @@ export async function replaceBloquesHandler(request: FastifyRequest, reply: Fast
   } catch (e: any) {
     request.log.error(e);
     return reply.status(500).send({ success: false, message: 'Error guardando los bloques.' });
+  }
+}
+
+// DELETE /api/horarios/turnos/:id/entries — desagenda todas las clases del turno
+export async function deleteTurnoEntriesHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  try {
+    const r = await query<any>(
+      `DELETE e FROM horario_entries e
+       JOIN turno_bloques b ON b.id = e.bloque_id WHERE b.turno_id = ?`,
+      [Number(id)]
+    );
+    const n = r?.affectedRows ?? 0;
+    return reply.send({
+      success: true,
+      message: `${n} clase${n === 1 ? '' : 's'} desagendada${n === 1 ? '' : 's'}.`,
+      data: { eliminadas: n },
+    });
+  } catch (e: any) {
+    request.log.error(e);
+    return reply.status(500).send({ success: false, message: 'Error desagendando las clases.' });
   }
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
-import { Turno, DIAS_CORTOS } from './types.js';
-import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown } from 'lucide-react';
+import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHora } from './types.js';
+import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 
 interface TurnosPanelProps {
   turnos: Turno[];
@@ -15,6 +15,16 @@ interface BloqueEdit {
   es_receso: boolean;
 }
 
+interface ClaseConflicto {
+  id: number;
+  materia_nombre: string;
+  seccion_nombre: string;
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fin: string;
+  aula_codigo: string;
+}
+
 const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 // Campo de hora con dos inputs separados (horas y minutos), independiente del
@@ -26,6 +36,7 @@ const CampoHora: React.FC<{
 }> = ({ value, disabled, onChange }) => {
   const [hh = '', mm = ''] = value.split(':');
   const minRef = React.useRef<HTMLInputElement>(null);
+  const horaRef = React.useRef<HTMLInputElement>(null);
 
   const cambiarHora = (v: string) => {
     const d = v.replace(/[^\d]/g, '').slice(0, 2);
@@ -44,13 +55,21 @@ const CampoHora: React.FC<{
   return (
     <span className="inline-flex items-center gap-0.5">
       <input
+        ref={horaRef}
         type="text"
         inputMode="numeric"
         placeholder="HH"
         value={hh}
         disabled={disabled}
+        onFocus={(e) => e.target.select()}
+        onMouseUp={(e) => e.preventDefault()}
         onChange={(e) => cambiarHora(e.target.value)}
-        onBlur={() => hh !== '' && onChange(`${hh.padStart(2, '0')}:${mm || '00'}`)}
+        onBlur={(e) => {
+          // Leer del DOM: tras el auto-foco a minutos el closure `hh` puede estar desactualizado
+          const h = e.target.value.replace(/\D/g, '').slice(0, 2);
+          const m = (minRef.current?.value ?? mm).replace(/\D/g, '').slice(0, 2);
+          if (h !== '') onChange(`${h.padStart(2, '0')}:${m || '00'}`);
+        }}
         className={cls}
       />
       <span className="text-slate-500 text-xs">:</span>
@@ -61,8 +80,14 @@ const CampoHora: React.FC<{
         placeholder="MM"
         value={mm}
         disabled={disabled}
+        onFocus={(e) => e.target.select()}
+        onMouseUp={(e) => e.preventDefault()}
         onChange={(e) => cambiarMin(e.target.value)}
-        onBlur={() => hh !== '' && onChange(`${hh}:${(mm || '00').padStart(2, '0')}`)}
+        onBlur={(e) => {
+          const m = e.target.value.replace(/\D/g, '').slice(0, 2);
+          const h = (horaRef.current?.value ?? hh).replace(/\D/g, '').slice(0, 2);
+          if (h !== '') onChange(`${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}`);
+        }}
         className={cls}
       />
     </span>
@@ -77,6 +102,8 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
   const [msg, setMsg] = useState<{ error: boolean; texto: string } | null>(null);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [creando, setCreando] = useState(false);
+  const [conflicto, setConflicto] = useState<{ total: number; clases: ClaseConflicto[] } | null>(null);
+  const [desagendando, setDesagendando] = useState(false);
   const esAdmin = puedeEditar; // creación de turnos locales solo SUPER/ADMIN se valida server-side
 
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];
@@ -162,6 +189,39 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
     setSaving(false);
     if (r2.success) {
       setMsg({ error: false, texto: 'Turno actualizado.' });
+      dirtyRef.current = false;
+      onChanged();
+    } else if (r2.data?.clases && r2.data?.total > 0) {
+      // Conflicto: hay clases agendadas en los bloques — ofrecer desagendarlas
+      setConflicto({ total: r2.data.total, clases: r2.data.clases });
+    } else {
+      setMsg({ error: true, texto: r2.message || 'Error guardando bloques.' });
+    }
+  };
+
+  // Desagenda las clases del turno y reintenta guardar los bloques
+  const desagendarYGuardar = async () => {
+    if (!turno || !conflicto) return;
+    setDesagendando(true);
+    const del = await apiFetch(`/horarios/turnos/${turno.id}/entries`, { method: 'DELETE' });
+    if (!del.success) {
+      setDesagendando(false);
+      setConflicto(null);
+      setMsg({ error: true, texto: del.message || 'No se pudieron desagendar las clases.' });
+      return;
+    }
+    const r2 = await apiFetch(`/horarios/turnos/${turno.id}/bloques`, {
+      method: 'PUT',
+      body: JSON.stringify({ bloques }),
+    });
+    setDesagendando(false);
+    setConflicto(null);
+    if (r2.success) {
+      const n = del.data?.eliminadas ?? conflicto.total;
+      setMsg({
+        error: false,
+        texto: `Turno actualizado. ${n} clase${n === 1 ? '' : 's'} desagendada${n === 1 ? '' : 's'}.`,
+      });
       dirtyRef.current = false;
       onChanged();
     } else {
@@ -398,8 +458,79 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
               ))}
             </div>
             <p className="text-[10px] text-slate-500 mt-3">
-              Nota: si el turno tiene clases agendadas, no se podrán modificar sus bloques hasta desagendarlas.
+              Nota: si el turno tiene clases agendadas, se te ofrecerá desagendarlas antes de guardar.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: clases que impiden modificar los bloques */}
+      {conflicto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !desagendando && setConflicto(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-slate-900 border border-amber-500/40 rounded-2xl shadow-2xl p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Hay clases agendadas en este turno</h3>
+                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                  {conflicto.total} clase{conflicto.total === 1 ? '' : 's'} ocupa
+                  {conflicto.total === 1 ? '' : 'n'} los bloques de <strong>{turno?.nombre}</strong>.
+                  Para modificar los bloques hay que desagendarlas (las materias vuelven al panel de
+                  pendientes y puedes reagendarlas después).
+                </p>
+              </div>
+            </div>
+
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-800 divide-y divide-slate-800 mb-4">
+              {conflicto.clases.map((c) => (
+                <div key={c.id} className="px-3 py-2 flex items-center gap-2 text-xs">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-slate-200 font-semibold truncate">{c.materia_nombre}</div>
+                    <div className="text-slate-500 text-[10px]">Sección {c.seccion_nombre}</div>
+                  </div>
+                  <div className="text-slate-400 whitespace-nowrap">
+                    {DIAS_NOMBRES[c.dia_semana]} {fmtHora(c.hora_inicio)}
+                  </div>
+                  <div className="text-slate-500">{c.aula_codigo}</div>
+                </div>
+              ))}
+              {conflicto.total > conflicto.clases.length && (
+                <div className="px-3 py-2 text-[10px] text-slate-500 text-center">
+                  y {conflicto.total - conflicto.clases.length} más…
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConflicto(null)}
+                disabled={desagendando}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={desagendarYGuardar}
+                disabled={desagendando}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {desagendando ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Desagendando…
+                  </>
+                ) : (
+                  `Desagendar ${conflicto.total} clase${conflicto.total === 1 ? '' : 's'} y guardar`
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
