@@ -9,7 +9,9 @@ import {
   Sparkles,
   Camera,
   Trash2,
-  GraduationCap
+  GraduationCap,
+  Search,
+  HelpCircle
 } from 'lucide-react';
 
 export interface Profesor {
@@ -70,6 +72,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
   const [tiposContrato, setTiposContrato] = useState<TipoContrato[]>([]);
   const [perfilesList, setPerfilesList] = useState<Perfil[]>([]);
   const [perfilIdsSel, setPerfilIdsSel] = useState<Set<number>>(new Set());
+  const [buscarPerfil, setBuscarPerfil] = useState('');
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
   const [eliminarFoto, setEliminarFoto] = useState(false);
@@ -97,6 +100,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     setFormError(null);
 
     setPerfilIdsSel(new Set());
+    setBuscarPerfil('');
 
     const fetchCatalogs = async () => {
       const [resPnf, resTipos, resPerfiles] = await Promise.all([
@@ -198,6 +202,15 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     onSuccess();
     onClose();
   };
+
+  const textoPerfil = buscarPerfil.toLowerCase().trim();
+  const perfilesFiltrados = textoPerfil
+    ? perfilesList.filter(
+        (pf) =>
+          pf.nombre.toLowerCase().includes(textoPerfil) ||
+          (pf.descripcion || '').toLowerCase().includes(textoPerfil)
+      )
+    : perfilesList;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
@@ -391,13 +404,29 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
             <p className="text-[10px] text-slate-500 mt-1.5">
               Sugiere las materias afines al asignar carga (no restringe la asignación).
             </p>
-            <div className="mt-2.5 max-h-40 overflow-y-auto space-y-1">
+            {perfilesList.length > 0 && (
+              <div className="relative mt-2">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={buscarPerfil}
+                  onChange={(e) => setBuscarPerfil(e.target.value)}
+                  placeholder="Buscar perfil..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white text-[11px] placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            )}
+            <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
               {perfilesList.length === 0 ? (
                 <p className="text-[11px] text-slate-600 italic py-1">
                   No hay perfiles creados. Gestiónalos desde el botón "Perfiles" en la página de Profesores.
                 </p>
+              ) : perfilesFiltrados.length === 0 ? (
+                <p className="text-[11px] text-slate-600 italic py-1">
+                  Sin perfiles que coincidan con "{buscarPerfil}".
+                </p>
               ) : (
-                perfilesList.map((pf) => {
+                perfilesFiltrados.map((pf) => {
                   const sel = perfilIdsSel.has(pf.id);
                   return (
                     <label
@@ -424,8 +453,17 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
                       <span className={`text-[11px] ${sel ? 'text-indigo-200 font-semibold' : 'text-slate-300'}`}>
                         {pf.nombre}
                       </span>
-                      <span className="ml-auto text-[10px] text-slate-500">
-                        {pf.materias?.length ?? 0} materia{(pf.materias?.length ?? 0) === 1 ? '' : 's'}
+                      <span className="ml-auto flex items-center gap-2 shrink-0">
+                        <span
+                          title={pf.descripcion || 'Sin descripción'}
+                          className="text-slate-500 hover:text-indigo-300 cursor-help"
+                          onClick={(e) => e.preventDefault()}
+                        >
+                          <HelpCircle className="w-3.5 h-3.5" />
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {pf.materias?.length ?? 0} materia{(pf.materias?.length ?? 0) === 1 ? '' : 's'}
+                        </span>
                       </span>
                     </label>
                   );
