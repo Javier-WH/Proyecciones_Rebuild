@@ -2,7 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
 import { sagaService } from '../saga/saga.service.js';
 
-const TIPOS_AULA = ['AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO'] as const;
+const TIPOS_AULA = ['AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO', 'INSTALACION_DEPORTIVA', 'SALA_LECTURA'] as const;
 const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 // Resuelve el nombre de un PNF: primero en la tabla local `pnf`, luego en SAGA.

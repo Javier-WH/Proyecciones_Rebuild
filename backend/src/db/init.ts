@@ -254,11 +254,17 @@ export async function initializeDatabase() {
       nombre VARCHAR(150) NOT NULL,
       capacidad INT DEFAULT 30,
       ubicacion VARCHAR(150) NULL,
-      tipo ENUM('AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO') DEFAULT 'AULA_REGULAR',
+      tipo ENUM('AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO', 'INSTALACION_DEPORTIVA', 'SALA_LECTURA') DEFAULT 'AULA_REGULAR',
       activa TINYINT(1) DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // Migración: CREATE IF NOT EXISTS no actualiza el ENUM en tablas ya creadas;
+  // el MODIFY es idempotente y agrega los tipos nuevos.
+  await db.query(
+    "ALTER TABLE aulas MODIFY COLUMN tipo ENUM('AULA_REGULAR','LABORATORIO','TALLER','AUDITORIO','INSTALACION_DEPORTIVA','SALA_LECTURA') DEFAULT 'AULA_REGULAR'"
+  );
 
   // 9a. Tabla de Tipos de Contrato (dedicación docente)
   // saga_id corresponde a dedicacion_id de SAGA; NULL = tipo creado localmente.
