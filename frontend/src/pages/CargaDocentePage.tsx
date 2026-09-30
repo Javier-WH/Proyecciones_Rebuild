@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
-import { Profesor } from './ProfesorModal.js';
+import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
 import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
@@ -65,6 +65,10 @@ export const CargaDocentePage: React.FC = () => {
     profesor: null,
   });
   const [modalReporte, setModalReporte] = useState(false);
+  const [modalProfesor, setModalProfesor] = useState<{ open: boolean; profesor: Profesor | null }>({
+    open: false,
+    profesor: null,
+  });
 
   const fetchCarga = async () => {
     setLoading(true);
@@ -239,7 +243,11 @@ export const CargaDocentePage: React.FC = () => {
 
   const profesorCell = (p: Profesor, span: number) => (
     <td rowSpan={span} className="py-3 px-4 align-top border-r border-slate-800/60">
-      <div className="flex items-center gap-2.5">
+      <div
+        className="flex items-center gap-2.5 cursor-pointer"
+        title="Doble click para editar los datos del profesor"
+        onDoubleClick={() => setModalProfesor({ open: true, profesor: p })}
+      >
         <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} />
         <div className="min-w-0">
           <div className="font-bold text-white text-sm leading-tight uppercase">
@@ -851,6 +859,16 @@ export const CargaDocentePage: React.FC = () => {
         profesores={profesores}
         periodo={periodo}
         onClose={() => setModalReporte(false)}
+      />
+
+      <ProfesorModal
+        isOpen={modalProfesor.open}
+        profesor={modalProfesor.profesor}
+        onClose={() => setModalProfesor({ open: false, profesor: null })}
+        onSuccess={() => {
+          fetchProfesores();
+          fetchCarga();
+        }}
       />
     </div>
   );
