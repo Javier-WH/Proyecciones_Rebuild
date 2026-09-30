@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
+import { Perfil } from './PerfilesModal.js';
 import {
   X,
   Loader2,
@@ -8,8 +9,7 @@ import {
   Sparkles,
   Camera,
   Trash2,
-  GraduationCap,
-  Lock
+  GraduationCap
 } from 'lucide-react';
 
 export interface Profesor {
@@ -68,6 +68,8 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
 
   const [pnfList, setPnfList] = useState<PNF[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContrato[]>([]);
+  const [perfilesList, setPerfilesList] = useState<Perfil[]>([]);
+  const [perfilIdsSel, setPerfilIdsSel] = useState<Set<number>>(new Set());
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
   const [eliminarFoto, setEliminarFoto] = useState(false);
@@ -94,13 +96,24 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     setEliminarFoto(false);
     setFormError(null);
 
+    setPerfilIdsSel(new Set());
+
     const fetchCatalogs = async () => {
-      const [resPnf, resTipos] = await Promise.all([
+      const [resPnf, resTipos, resPerfiles] = await Promise.all([
         apiFetch<PNF[]>('/saga/programas'),
         apiFetch<TipoContrato[]>('/profesores/tipos-contrato'),
+        apiFetch<Perfil[]>('/perfiles'),
       ]);
       if (resPnf.success && resPnf.data) setPnfList(resPnf.data);
       if (resTipos.success && resTipos.data) setTiposContrato(resTipos.data);
+      if (resPerfiles.success && resPerfiles.data) {
+        setPerfilesList(resPerfiles.data.filter((p) => p.activo));
+      }
+      // Perfiles ya asignados (solo en edición)
+      if (profesor?.id) {
+        const resAsig = await apiFetch<number[]>(`/profesores/${profesor.id}/perfiles`);
+        if (resAsig.success && resAsig.data) setPerfilIdsSel(new Set(resAsig.data));
+      }
     };
     fetchCatalogs();
   }, [isOpen, profesor]);
@@ -171,6 +184,14 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
       });
     } else if (profesorId && eliminarFoto) {
       await apiFetch(`/profesores/${profesorId}/foto`, { method: 'DELETE' });
+    }
+
+    // Persistir perfiles asignados (reemplazo completo)
+    if (profesorId) {
+      await apiFetch(`/profesores/${profesorId}/perfiles`, {
+        method: 'PUT',
+        body: JSON.stringify({ perfil_ids: [...perfilIdsSel] }),
+      });
     }
 
     setSaving(false);
@@ -358,19 +379,59 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
             </div>
           </div>
 
-          {/* Perfil docente — se trabajará en una fase posterior */}
-          <div className="border border-dashed border-slate-700 rounded-2xl p-4 bg-slate-950/50">
+          {/* Perfiles docentes: especialidades que sugieren materias afines */}
+          <div className="border border-slate-800 rounded-2xl p-4 bg-slate-950/50">
             <div className="flex items-center gap-2 text-slate-400">
               <GraduationCap className="w-4 h-4 text-indigo-400" />
-              <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Perfil Docente</span>
-              <span className="ml-auto flex items-center gap-1 text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md">
-                <Lock className="w-3 h-3" /> Próximamente
+              <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Perfiles Docentes</span>
+              <span className="ml-auto text-[10px] text-slate-500">
+                {perfilIdsSel.size} asignado{perfilIdsSel.size === 1 ? '' : 's'}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-              Aquí se gestionarán las áreas de formación, títulos y materias afines al perfil del profesor.
-              Esta funcionalidad estará disponible en una próxima fase del sistema.
+            <p className="text-[10px] text-slate-500 mt-1.5">
+              Sugiere las materias afines al asignar carga (no restringe la asignación).
             </p>
+            <div className="mt-2.5 max-h-40 overflow-y-auto space-y-1">
+              {perfilesList.length === 0 ? (
+                <p className="text-[11px] text-slate-600 italic py-1">
+                  No hay perfiles creados. Gestiónalos desde el botón "Perfiles" en la página de Profesores.
+                </p>
+              ) : (
+                perfilesList.map((pf) => {
+                  const sel = perfilIdsSel.has(pf.id);
+                  return (
+                    <label
+                      key={pf.id}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border cursor-pointer transition-colors ${
+                        sel
+                          ? 'border-indigo-500/40 bg-indigo-500/10'
+                          : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sel}
+                        onChange={() =>
+                          setPerfilIdsSel((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(pf.id)) next.delete(pf.id);
+                            else next.add(pf.id);
+                            return next;
+                          })
+                        }
+                        className="w-3.5 h-3.5 accent-indigo-500 cursor-pointer"
+                      />
+                      <span className={`text-[11px] ${sel ? 'text-indigo-200 font-semibold' : 'text-slate-300'}`}>
+                        {pf.nombre}
+                      </span>
+                      <span className="ml-auto text-[10px] text-slate-500">
+                        {pf.materias?.length ?? 0} materia{(pf.materias?.length ?? 0) === 1 ? '' : 's'}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-end gap-3">

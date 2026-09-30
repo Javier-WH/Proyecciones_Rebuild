@@ -510,6 +510,78 @@ export async function syncProfesoresHandler(request: FastifyRequest, reply: Fast
 }
 
 // ---------------------------------------------------------------------------
+// PERFILES DEL PROFESOR (especialidades: no restringen, solo sugieren afinidad)
+// ---------------------------------------------------------------------------
+
+// GET /api/profesores/:id/perfiles — ids de los perfiles asignados al profesor
+export async function getPerfilesProfesorHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  try {
+    const rows = await query<any[]>(
+      'SELECT perfil_id FROM profesor_perfiles WHERE profesor_id = ?',
+      [id]
+    );
+    return reply.send({ success: true, data: rows.map((r) => r.perfil_id) });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error obteniendo los perfiles del profesor.' });
+  }
+}
+
+// PUT /api/profesores/:id/perfiles — reemplazo completo: body { perfil_ids: number[] }
+export async function setPerfilesProfesorHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const { perfil_ids } = request.body as { perfil_ids?: number[] };
+  const ids = [...new Set((perfil_ids || []).map(Number).filter((n) => n > 0))];
+
+  try {
+    const prof = await query<any[]>('SELECT id FROM profesores WHERE id = ? LIMIT 1', [id]);
+    if (prof.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+
+    await query('DELETE FROM profesor_perfiles WHERE profesor_id = ?', [id]);
+    for (const pid of ids) {
+      await query('INSERT IGNORE INTO profesor_perfiles (profesor_id, perfil_id) VALUES (?, ?)', [id, pid]);
+    }
+
+    return reply.send({ success: true, message: 'Perfiles del profesor actualizados.' });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error actualizando los perfiles del profesor.' });
+  }
+}
+
+// GET /api/profesores/:id/perfiles-materias — materias agregadas de todos sus
+// perfiles activos + los nombres de los perfiles (para el modal de asignación)
+export async function getPerfilMateriasProfesorHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  try {
+    const perfiles = await query<any[]>(
+      `SELECT pf.id, pf.nombre
+       FROM profesor_perfiles pp
+       JOIN perfiles pf ON pf.id = pp.perfil_id AND pf.activo = 1
+       WHERE pp.profesor_id = ?
+       ORDER BY pf.nombre ASC`,
+      [id]
+    );
+    const materias = await query<any[]>(
+      `SELECT DISTINCT pm.subject_saga_id, pm.nombre
+       FROM profesor_perfiles pp
+       JOIN perfiles pf ON pf.id = pp.perfil_id AND pf.activo = 1
+       JOIN perfil_materias pm ON pm.perfil_id = pp.perfil_id
+       WHERE pp.profesor_id = ?
+       ORDER BY pm.nombre ASC`,
+      [id]
+    );
+    return reply.send({ success: true, data: { perfiles, materias } });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error obteniendo las materias del perfil.' });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // TIPOS DE CONTRATO
 // ---------------------------------------------------------------------------
 

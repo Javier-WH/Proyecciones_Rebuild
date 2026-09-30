@@ -101,6 +101,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
           pnf_nombre: f.pnf_nombre,
           trayecto_nombre: f.trayecto_nombre,
           materia_id: f.materia_id,
+          subject_saga_id: f.subject_saga_id,
           materia_nombre: f.materia_nombre,
           horas_semanales: f.horas_semanales,
           tipo_proyeccion: f.tipo_proyeccion,

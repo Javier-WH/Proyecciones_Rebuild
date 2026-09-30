@@ -340,6 +340,45 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // 9c-bis. Perfiles docentes: etiquetas que agrupan materias afines (por
+  // subject_saga_id, estable entre periodos). Un profesor puede tener varios
+  // perfiles; solo sugieren afinidad, no restringen la asignación.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS perfiles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      nombre VARCHAR(150) UNIQUE NOT NULL,
+      descripcion VARCHAR(255) NULL,
+      activo TINYINT(1) DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS perfil_materias (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      perfil_id INT NOT NULL,
+      subject_saga_id INT NOT NULL,
+      nombre VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_perfil_materia (perfil_id, subject_saga_id),
+      FOREIGN KEY (perfil_id) REFERENCES perfiles(id) ON DELETE CASCADE,
+      INDEX idx_subject (subject_saga_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS profesor_perfiles (
+      profesor_id INT NOT NULL,
+      perfil_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (profesor_id, perfil_id),
+      FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE CASCADE,
+      FOREIGN KEY (perfil_id) REFERENCES perfiles(id) ON DELETE CASCADE,
+      INDEX idx_perfil (perfil_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // 9d. Tabla de Horarios: una fila = una clase en un bloque/día/aula.
   // La unidad agendada es (materia_id, seccion_id, trimestre) — la misma fila
   // "asignable" de la carga docente; profesor_id es un snapshot denormalizado

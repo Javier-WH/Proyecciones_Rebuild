@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
-import { X, Search, AlertCircle, Plus, CheckCircle2, UserX, Layers } from 'lucide-react';
+import { X, Search, AlertCircle, Plus, CheckCircle2, UserX, Layers, Star, GraduationCap } from 'lucide-react';
 
 // Misma forma de fila que usa la página de carga docente
 export interface MateriaAsignableRow {
@@ -13,6 +13,7 @@ export interface MateriaAsignableRow {
   pnf_nombre: string;
   trayecto_nombre: string;
   materia_id: number;
+  subject_saga_id?: number;
   materia_nombre: string;
   horas_semanales: number;
   seccion_id: number;
@@ -44,6 +45,16 @@ export const pluralLapso = (termino: string): string =>
 // El número de lapso solo es único dentro de su régimen (T1 ≠ S1).
 export const lapsoKey = (tipo: string | null | undefined, n: number): string => `${tipo}:${n}`;
 
+// Normaliza un nombre de materia para compararlo con las materias del perfil:
+// minúsculas, sin acentos y con espacios colapsados.
+export const normalizarNombre = (s: string | null | undefined): string =>
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̌-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 interface AgregarMateriaModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -68,8 +79,15 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   const [pnfFiltro, setPnfFiltro] = useState<string>('todos');
   const [soloSinAsignar, setSoloSinAsignar] = useState(true);
   const [agruparLapsos, setAgruparLapsos] = useState(true);
+  const [soloPerfil, setSoloPerfil] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Perfiles del profesor: nombres + materias afines agregadas (por
+  // subject_saga_id y por nombre normalizado para equivalencias entre PNF)
+  const [perfilNombres, setPerfilNombres] = useState<string[]>([]);
+  const [perfilMateriaIds, setPerfilMateriaIds] = useState<Set<number>>(new Set());
+  const [perfilMateriaNombres, setPerfilMateriaNombres] = useState<Set<string>>(new Set());
 
   // Al abrir: preseleccionar el lapso de la tabla, limpiar la búsqueda y
   // preseleccionar el PNF asociado del profesor si tiene uno
@@ -79,10 +97,27 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       setLapso(lapsoInicial != null ? lapsoInicial : 'todos');
       setSoloSinAsignar(true);
       setAgruparLapsos(true);
+      setSoloPerfil(false);
       setErrorMsg(null);
+      setPerfilNombres([]);
+      setPerfilMateriaIds(new Set());
+      setPerfilMateriaNombres(new Set());
       const pnfProf =
         profesor?.pnf_saga_id != null && profesor.pnf_nombre ? profesor.pnf_nombre.trim() : null;
       setPnfFiltro(pnfProf || 'todos');
+
+      // Cargar las materias afines a los perfiles del profesor
+      if (profesor?.id) {
+        apiFetch<{ perfiles: { id: number; nombre: string }[]; materias: { subject_saga_id: number; nombre: string }[] }>(
+          `/profesores/${profesor.id}/perfiles-materias`
+        ).then((res) => {
+          if (res.success && res.data) {
+            setPerfilNombres(res.data.perfiles.map((p) => p.nombre));
+            setPerfilMateriaIds(new Set(res.data.materias.map((m) => m.subject_saga_id)));
+            setPerfilMateriaNombres(new Set(res.data.materias.map((m) => normalizarNombre(m.nombre))));
+          }
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, lapsoInicial, profesor]);
@@ -110,12 +145,18 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   );
   const lapsoTermino = terminoLapso(rows.map((r) => r.tipo_proyeccion));
 
+  const tienePerfil = perfilMateriaIds.size > 0 || perfilMateriaNombres.size > 0;
+  const matchPerfil = (r: MateriaAsignableRow): boolean =>
+    (r.subject_saga_id != null && perfilMateriaIds.has(r.subject_saga_id)) ||
+    perfilMateriaNombres.has(normalizarNombre(r.materia_nombre));
+
   const texto = search.toLowerCase();
   const filtradas = rows
     .filter((r) => {
       if (lapso !== 'todos' && lapsoKey(r.tipo_proyeccion, r.trimestre) !== lapso) return false;
       if (pnfFiltro !== 'todos' && (r.pnf_nombre || '').trim() !== pnfFiltro) return false;
       if (soloSinAsignar && r.profesor_id !== null && r.profesor_id !== profesor.id) return false;
+      if (soloPerfil && tienePerfil && !matchPerfil(r)) return false;
       if (texto) {
         return (
           r.materia_nombre.toLowerCase().includes(texto) ||
@@ -127,6 +168,11 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       return true;
     })
     .sort((a, b) => {
+      // Primero las materias que concuerdan con el perfil del profesor,
+      // luego el orden habitual (asignadas a él → sin asignar → de otros)
+      const aPerfil = matchPerfil(a) ? 0 : 1;
+      const bPerfil = matchPerfil(b) ? 0 : 1;
+      if (aPerfil !== bPerfil) return aPerfil - bPerfil;
       const aDeEste = a.profesor_id === profesor.id ? 0 : a.profesor_id === null ? 1 : 2;
       const bDeEste = b.profesor_id === profesor.id ? 0 : b.profesor_id === null ? 1 : 2;
       return aDeEste - bDeEste;
@@ -184,6 +230,20 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                 </span>
               )}
             </div>
+            {perfilNombres.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {perfilNombres.map((n) => (
+                  <span
+                    key={n}
+                    className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-1.5 py-0.5 rounded-md text-[9px] font-bold"
+                    title="Perfil docente"
+                  >
+                    <GraduationCap className="w-2.5 h-2.5" />
+                    {n}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -235,6 +295,23 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
             <UserX className="w-3.5 h-3.5" />
             <span>Solo sin asignar</span>
           </button>
+          {tienePerfil && (
+            <label
+              className="flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer select-none"
+              title="Mostrar solo las materias que concuerdan con el perfil del profesor"
+            >
+              <input
+                type="checkbox"
+                checked={soloPerfil}
+                onChange={(e) => setSoloPerfil(e.target.checked)}
+                className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+              />
+              <Star className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                <span className="font-semibold text-slate-300">Solo su perfil:</span> materias afines al profesor
+              </span>
+            </label>
+          )}
           <label
             className="w-full flex items-center gap-2 text-[11px] text-slate-400 cursor-pointer select-none mt-1"
             title={`Si la materia se dicta en varios ${pluralLapso(lapsoTermino)}, se asigna (o quita) en todos ellos`}
@@ -263,15 +340,18 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
 
           {filtradas.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs">
-              {soloSinAsignar
-                ? 'No quedan materias sin asignar. Desactive el filtro para reasignar materias de otros profesores.'
-                : 'Sin materias que coincidan con la búsqueda.'}
+              {soloPerfil
+                ? 'Ninguna materia coincide con el perfil del profesor. Desactive el filtro para ver todas.'
+                : soloSinAsignar
+                  ? 'No quedan materias sin asignar. Desactive el filtro para reasignar materias de otros profesores.'
+                  : 'Sin materias que coincidan con la búsqueda.'}
             </div>
           ) : (
             filtradas.map((r) => {
               const key = `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`;
               const esDeEste = r.profesor_id === profesor.id;
               const esDeOtro = r.profesor_id !== null && !esDeEste;
+              const esDePerfil = matchPerfil(r);
               return (
                 <div
                   key={key}
@@ -280,15 +360,27 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                       ? 'border-emerald-500/40 bg-emerald-500/5'
                       : esDeOtro
                         ? 'border-slate-800 bg-slate-950/40 opacity-75'
-                        : 'border-slate-800 bg-slate-950/60 hover:border-emerald-500/40'
+                        : esDePerfil
+                          ? 'border-amber-500/40 bg-amber-500/5 hover:border-amber-400/60'
+                          : 'border-slate-800 bg-slate-950/60 hover:border-emerald-500/40'
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-white truncate">{r.materia_nombre}</div>
+                    <div className="text-xs font-semibold text-white truncate flex items-center gap-1.5">
+                      {esDePerfil && (
+                        <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 shrink-0" />
+                      )}
+                      <span className="truncate">{r.materia_nombre}</span>
+                    </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       {r.pnf_nombre} · {r.trayecto_nombre} · Sec. {r.seccion_nombre} · {r.turno_nombre} ·{' '}
                       {labelLapso(r.trimestre, r.tipo_proyeccion)}
                     </div>
+                    {esDePerfil && (
+                      <div className="text-[10px] text-amber-400/90 mt-0.5">
+                        Coincide con su perfil
+                      </div>
+                    )}
                     {esDeOtro && (
                       <div className="text-[10px] text-amber-400/90 mt-0.5">
                         Asignada a {r.prof_apellidos}, {r.prof_nombres}
