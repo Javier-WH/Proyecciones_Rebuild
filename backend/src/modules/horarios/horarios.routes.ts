@@ -11,6 +11,7 @@ import {
   replaceBloquesHandler,
   deleteTurnoEntriesHandler,
   listPnfsHandler,
+  updatePnfColorHandler,
 } from './horarios.controller.js';
 import {
   listEntriesHandler,
@@ -32,6 +33,7 @@ export async function horariosRoutes(fastify: FastifyInstance) {
 
   // Catálogo completo de PNFs del sistema
   fastify.get('/pnfs', { preHandler: [authenticate] }, listPnfsHandler);
+  fastify.put('/pnfs/:sagaId/color', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, updatePnfColorHandler);
 
   // Turnos y bloques horarios
   fastify.get('/turnos', { preHandler: [authenticate] }, listTurnosHandler);

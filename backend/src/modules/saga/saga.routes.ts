@@ -37,6 +37,12 @@ export async function sagaRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true, data: data || [] });
   });
 
+  fastify.get('/materias-maya/:pnfSagaId/:mayaId', { preHandler: [authenticate] }, async (req, reply) => {
+    const { pnfSagaId, mayaId } = req.params as { pnfSagaId: string; mayaId: string };
+    const data = await sagaService.getMateriasPorMaya(pnfSagaId, mayaId);
+    return reply.send({ success: true, data: data || [] });
+  });
+
   fastify.get('/ucslist/:pnfSagaId/:trayectoSagaId/:mayaId', { preHandler: [authenticate] }, async (req, reply) => {
     const { pnfSagaId, trayectoSagaId, mayaId } = req.params as {
       pnfSagaId: string;

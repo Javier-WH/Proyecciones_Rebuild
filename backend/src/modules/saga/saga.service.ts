@@ -122,6 +122,20 @@ export const sagaService = {
     return list.sort((a, b) => b.id - a.id);
   },
 
+  // Materias de una malla agrupadas por trayecto: ucslist en SAGA es por
+  // (pnf, trayecto, maya), así que se consulta cada trayecto y se fusiona.
+  getMateriasPorMaya: async (pnfSagaId: number | string, mayaId: number | string) => {
+    const trayectos = (await sagaService.getTrayectos()) ?? [];
+    const grupos = await Promise.all(
+      trayectos.map(async (t) => ({
+        trayecto_saga_id: Number(t.id),
+        trayecto: t.trayecto,
+        materias: await sagaService.getUcsList(pnfSagaId, t.id, mayaId),
+      }))
+    );
+    return grupos.filter((g) => g.materias.length > 0);
+  },
+
   getUcsList: async (pnfSagaId: number | string, trayectoSagaId: number | string, mayaId: number | string): Promise<SubjectUC[]> => {
     const rawList = await fetchFromSaga<any[]>(`/ucslist/${pnfSagaId}/${trayectoSagaId}/${mayaId}`);
     if (!rawList) return [];

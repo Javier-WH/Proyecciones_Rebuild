@@ -155,13 +155,52 @@ export async function listPnfsHandler(request: FastifyRequest, reply: FastifyRep
        SELECT DISTINCT pnf_saga_id, pnf_nombre FROM aulas WHERE pnf_saga_id IS NOT NULL`
     );
     for (const l of locales) if (l.id != null && !map.has(l.id)) map.set(l.id, l.nombre || `PNF #${l.id}`);
+
+    // Colores identificativos persistidos localmente por PNF
+    const colores = await query<any[]>('SELECT saga_id, color FROM pnf WHERE color IS NOT NULL');
+    const colorMap = new Map<number, string>();
+    for (const c of colores) if (c.saga_id != null && c.color) colorMap.set(Number(c.saga_id), c.color);
+
     const data = [...map.entries()]
-      .map(([id, nombre]) => ({ id, nombre }))
+      .map(([id, nombre]) => ({ id, nombre, color: colorMap.get(id) ?? null }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
     return reply.send({ success: true, data });
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error cargando PNFs.' });
+  }
+}
+
+// PUT /api/horarios/pnfs/:sagaId/color
+// Asigna (o quita, con color null) el color identificativo de un PNF.
+export async function updatePnfColorHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { sagaId } = request.params as { sagaId: string };
+  const body = request.body as { nombre?: string; color?: string | null };
+  const pnfSagaId = Number(sagaId);
+  if (isNaN(pnfSagaId)) {
+    return reply.status(400).send({ success: false, message: 'sagaId inválido.' });
+  }
+
+  // Validar formato #RRGGBB; null/'' vacío = sin color
+  const color = body.color?.trim() || null;
+  if (color && !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+    return reply.status(400).send({ success: false, message: 'Color inválido. Use formato #RRGGBB.' });
+  }
+
+  try {
+    // El color es el único atributo local que se configura aquí; el nombre se
+    // mantiene como cache (nunca se pisa con vacío).
+    await query(
+      `INSERT INTO pnf (saga_id, nombre, color) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         color = VALUES(color),
+         nombre = IF(nombre = '' AND VALUES(nombre) != '', VALUES(nombre), nombre)`,
+      [pnfSagaId, body.nombre?.trim() || `PNF #${pnfSagaId}`, color]
+    );
+    return reply.send({ success: true, data: { id: pnfSagaId, color }, message: 'Color del PNF actualizado.' });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error guardando el color del PNF.' });
   }
 }
 

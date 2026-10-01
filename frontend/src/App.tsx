@@ -1,5 +1,6 @@
 import React from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
+import { PnfColorProvider } from './context/PnfColorContext.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { Loader2 } from 'lucide-react';
@@ -28,7 +29,9 @@ const AppRoutes: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <PnfColorProvider>
+        <AppRoutes />
+      </PnfColorProvider>
     </AuthProvider>
   );
 };
