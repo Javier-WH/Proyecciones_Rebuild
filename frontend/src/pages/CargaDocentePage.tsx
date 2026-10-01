@@ -145,9 +145,16 @@ export const CargaDocentePage: React.FC = () => {
     () => [...new Map(rows.map((r) => [r.pnf_saga_id, r.pnf_nombre])).entries()],
     [rows]
   );
+  // Solo proyecciones del PNF seleccionado en el selector de PNF
   const proyOptions = useMemo(
-    () => [...new Map(rows.map((r) => [r.proyeccion_id, r.proyeccion_nombre])).entries()],
-    [rows]
+    () => [
+      ...new Map(
+        rows
+          .filter((r) => filterPnf === 'todos' || r.pnf_saga_id === Number(filterPnf))
+          .map((r) => [r.proyeccion_id, r.proyeccion_nombre])
+      ).entries(),
+    ],
+    [rows, filterPnf]
   );
 
   // 'Trimestre' o 'Semestre' si todas las filas son de un mismo régimen; 'Lapso' si se mezclan
@@ -650,7 +657,11 @@ export const CargaDocentePage: React.FC = () => {
 
         <select
           value={filterPnf}
-          onChange={(e) => setFilterPnf(e.target.value)}
+          onChange={(e) => {
+            setFilterPnf(e.target.value);
+            // La proyección elegida pertenece a otro PNF: se reinicia el filtro
+            setFilterProyeccion('todas');
+          }}
           className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[200px]"
         >
           <option value="todos">Todos los PNF</option>
