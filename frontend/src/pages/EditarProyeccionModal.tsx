@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
-import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable } from './CrearProyeccionModal.js';
+import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning } from './CrearProyeccionModal.js';
 import {
   X,
   BookOpen,
@@ -33,6 +33,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
   const [materias, setMaterias] = useState<MateriaPayload[]>([]);
 
   const [turnosList, setTurnosList] = useState<Array<{ id: number; turno: string }>>([]);
+  const [turnosLocales, setTurnosLocales] = useState<TurnoJornada[]>([]);
   const [mayasList, setMayasList] = useState<Array<{ id: number; descripcion: string; tipopensum_id: number }>>([]);
 
   const [saving, setSaving] = useState(false);
@@ -82,11 +83,13 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     );
 
     const fetchCatalogos = async () => {
-      const [resTurnos, resMayas] = await Promise.all([
+      const [resTurnos, resMayas, resTurnosLocales] = await Promise.all([
         apiFetch<Array<{ id: number; turno: string }>>('/saga/turnos'),
         apiFetch<Array<{ id: number; descripcion: string; tipopensum_id: number }>>(`/saga/mayas/${proyeccion.pnf_saga_id}`),
+        apiFetch<TurnoJornada[]>('/horarios/turnos'),
       ]);
       if (resTurnos.success && resTurnos.data) setTurnosList(resTurnos.data);
+      if (resTurnosLocales.success && resTurnosLocales.data) setTurnosLocales(resTurnosLocales.data);
       if (resMayas.success && resMayas.data) setMayasList(resMayas.data);
     };
     fetchCatalogos();
@@ -482,6 +485,15 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                           )}
                         </div>
                       )}
+
+                      <JornadaSeccionWarning
+                        excesos={excesosDeSeccion(
+                          sec,
+                          materias,
+                          tipoProyeccion,
+                          jornadaDeSeccion(turnosLocales, sec.turno_saga_id, sec.turno_nombre)
+                        )}
+                      />
                     </div>
 
                     <button

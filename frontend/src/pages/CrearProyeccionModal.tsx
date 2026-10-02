@@ -15,7 +15,8 @@ import {
   Plus,
   Trash2,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 
 interface PNF {
@@ -91,6 +92,81 @@ export function mapSubjectToMateriaPayload(m: SubjectUC): MateriaPayload {
     eliminada: !!m.eliminada,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Jornada semanal del turno (horas_jornada de la tabla local `turnos`).
+// La sección guarda el saga_id del turno; si no hay match se intenta por nombre.
+// ---------------------------------------------------------------------------
+export interface TurnoJornada {
+  saga_id: number | null;
+  nombre: string;
+  horas_jornada: number;
+}
+
+const normTurno = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+
+export function jornadaDeSeccion(
+  turnosLocales: TurnoJornada[],
+  turnoSagaId: number,
+  turnoNombre: string
+): number | null {
+  const porSaga = turnosLocales.find((t) => t.saga_id === turnoSagaId);
+  if (porSaga) return porSaga.horas_jornada;
+  return turnosLocales.find((t) => normTurno(t.nombre) === normTurno(turnoNombre))?.horas_jornada ?? null;
+}
+
+// Horas semanales que una sección cursa en cada lapso, vs la jornada del turno.
+// Materias: las del pensum propio de la sección si existe, si no las generales.
+export interface ExcesoJornada {
+  lapso: string;
+  horas: number;
+  jornada: number;
+}
+
+export function excesosDeSeccion(
+  sec: SeccionForm,
+  materiasGenerales: MateriaPayload[],
+  tipo: 'TRIMESTRAL' | 'SEMESTRAL',
+  jornada: number | null
+): ExcesoJornada[] {
+  if (!jornada) return [];
+  const lista = (sec.materias ?? materiasGenerales).filter((m) => !m.eliminada);
+  const lapsos: Array<[string, 'q1' | 'q2' | 'q3' | 'semestre1' | 'semestre2']> =
+    tipo === 'TRIMESTRAL'
+      ? [
+          ['T1', 'q1'],
+          ['T2', 'q2'],
+          ['T3', 'q3'],
+        ]
+      : [
+          ['S1', 'semestre1'],
+          ['S2', 'semestre2'],
+        ];
+  return lapsos
+    .map(([lapso, flag]) => ({
+      lapso,
+      horas: lista.reduce((acc, m) => acc + (m[flag] ? m.horas_semanales : 0), 0),
+      jornada,
+    }))
+    .filter((x) => x.horas > x.jornada);
+}
+
+// Advertencia (no bloqueante) cuando la carga de la sección supera la jornada
+export const JornadaSeccionWarning: React.FC<{ excesos: ExcesoJornada[] }> = ({ excesos }) =>
+  excesos.length === 0 ? null : (
+    <div className="flex items-start gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] leading-snug">
+      <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
+      <span>
+        La carga supera la jornada del turno ({excesos[0].jornada}h semanales):{' '}
+        {excesos.map((e) => `${e.lapso}: ${e.horas}h`).join(' · ')}
+      </span>
+    </div>
+  );
 
 interface CrearProyeccionModalProps {
   isOpen: boolean;
@@ -292,6 +368,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   const [mayasList, setMayasList] = useState<Maya[]>([]);
   const [periodoActivo, setPeriodoActivo] = useState<{ id: number; codigo: string; nombre: string } | null>(null);
   const [turnosList, setTurnosList] = useState<Array<{ id: number; turno: string }>>([]);
+  const [turnosLocales, setTurnosLocales] = useState<TurnoJornada[]>([]);
 
   // Selected Form States
   const [selectedPnf, setSelectedPnf] = useState<number | ''>('');
@@ -323,16 +400,18 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       setLoadingCatalogos(true);
       setErrorMsg(null);
 
-      const [resPnf, resTrayectos, resPeriodos, resTurnos] = await Promise.all([
+      const [resPnf, resTrayectos, resPeriodos, resTurnos, resTurnosLocales] = await Promise.all([
         apiFetch<PNF[]>('/saga/programas'),
         apiFetch<Trayecto[]>('/saga/trayectos'),
         apiFetch<Array<{ id: number; codigo: string; nombre: string; estado: string }>>('/periodos'),
         apiFetch<Array<{ id: number; turno: string }>>('/saga/turnos'),
+        apiFetch<TurnoJornada[]>('/horarios/turnos'),
       ]);
 
       if (resPnf.success && resPnf.data) setPnfList(resPnf.data);
       if (resTrayectos.success && resTrayectos.data) setTrayectosList(resTrayectos.data);
       if (resTurnos.success && resTurnos.data) setTurnosList(resTurnos.data);
+      if (resTurnosLocales.success && resTurnosLocales.data) setTurnosLocales(resTurnosLocales.data);
 
       // El periodo de la proyección siempre es el periodo ACTIVO (no editable)
       if (resPeriodos.success && resPeriodos.data) {
@@ -968,6 +1047,15 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                               )}
                             </div>
                           )}
+
+                          <JornadaSeccionWarning
+                            excesos={excesosDeSeccion(
+                              sec,
+                              materias.map(mapSubjectToMateriaPayload),
+                              tipoProyeccion,
+                              jornadaDeSeccion(turnosLocales, sec.turno_saga_id, sec.turno_nombre)
+                            )}
+                          />
                         </div>
 
                         <button
