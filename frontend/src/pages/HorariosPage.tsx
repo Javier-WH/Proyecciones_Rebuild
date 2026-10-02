@@ -32,6 +32,7 @@ import {
   Users,
   Crosshair,
   CheckCircle2,
+  Search,
 } from 'lucide-react';
 
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
@@ -558,17 +559,11 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               </select>
             )}
             {vista === 'profesor' && (
-              <select
-                value={profesorId ?? profesores[0]?.id ?? ''}
-                onChange={(e) => setProfesorId(Number(e.target.value))}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white max-w-[280px]"
-              >
-                {profesores.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.apellidos}, {p.nombres}
-                  </option>
-                ))}
-              </select>
+              <ProfesorSearchSelect
+                profesores={profesores}
+                value={profesorId ?? profesores[0]?.id ?? null}
+                onChange={setProfesorId}
+              />
             )}
           </div>
 
@@ -624,6 +619,78 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         turnos={turnos}
         entries={entries}
       />
+    </div>
+  );
+};
+
+// Selector de profesor con búsqueda (la lista puede ser muy larga)
+const ProfesorSearchSelect: React.FC<{
+  profesores: ProfesorLite[];
+  value: number | null;
+  onChange: (id: number) => void;
+}> = ({ profesores, value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const sel = profesores.find((p) => p.id === value);
+  const filtrados = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return profesores;
+    return profesores.filter((p) =>
+      `${p.apellidos} ${p.nombres}`.toLowerCase().includes(t)
+    );
+  }, [profesores, q]);
+
+  return (
+    <div className="relative w-[280px]">
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+      <input
+        value={open ? q : sel ? `${sel.apellidos}, ${sel.nombres}` : ''}
+        onFocus={() => {
+          setOpen(true);
+          setQ('');
+        }}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        placeholder="Buscar profesor..."
+        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+      />
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setOpen(false);
+              setQ('');
+            }}
+          />
+          <div className="absolute left-0 mt-1 w-full max-h-56 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl shadow-black/50 z-50">
+            {filtrados.length === 0 && (
+              <div className="px-3 py-3 text-[11px] text-slate-500 italic">
+                Sin profesores que coincidan con '{q}'.
+              </div>
+            )}
+            {filtrados.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => {
+                  onChange(p.id);
+                  setOpen(false);
+                  setQ('');
+                }}
+                className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer ${
+                  p.id === value
+                    ? 'bg-indigo-600/20 text-indigo-200'
+                    : 'text-slate-200 hover:bg-slate-800'
+                }`}
+              >
+                {p.apellidos}, {p.nombres}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
