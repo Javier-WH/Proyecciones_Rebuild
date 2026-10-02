@@ -6,6 +6,7 @@ export interface Turno {
   nombre: string;
   dias_semana: string; // CSV 1=Lun..7=Dom
   activo: number;
+  horas_jornada: number; // horas de clase semanales del turno (30 normal, 60 diurno)
   bloques: Bloque[];
 }
 

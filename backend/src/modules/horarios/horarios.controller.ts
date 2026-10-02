@@ -214,9 +214,10 @@ async function syncTurnosDesdeSaga(): Promise<void> {
   if (!sagaTurnos || sagaTurnos.length === 0) return;
   for (const t of sagaTurnos) {
     await query(
-      `INSERT INTO turnos (saga_id, nombre) VALUES (?, ?)
+      `INSERT INTO turnos (saga_id, nombre, horas_jornada)
+       VALUES (?, ?, IF(UPPER(?) LIKE '%DIURNO%', 60, 30))
        ON DUPLICATE KEY UPDATE nombre = VALUES(nombre)`,
-      [t.id, t.turno]
+      [t.id, t.turno, t.turno]
     );
   }
 }
@@ -231,7 +232,7 @@ export async function listTurnosHandler(request: FastifyRequest, reply: FastifyR
       // SAGA caído: se devuelven solo los turnos locales
     }
     const turnos = await query<any[]>(
-      'SELECT id, saga_id, nombre, dias_semana, activo FROM turnos ORDER BY nombre'
+      'SELECT id, saga_id, nombre, dias_semana, activo, horas_jornada FROM turnos ORDER BY nombre'
     );
     const bloques = await query<any[]>(
       'SELECT id, turno_id, orden, hora_inicio, hora_fin, es_receso FROM turno_bloques ORDER BY turno_id, orden'
@@ -432,9 +433,14 @@ export async function getConfigHandler(request: FastifyRequest, reply: FastifyRe
   }
 }
 
-// PUT /api/horarios/config — actualiza las reglas de generación automática
+// PUT /api/horarios/config — actualiza las reglas de generación automática y,
+// opcionalmente, las horas de jornada semanal de cada turno.
 export async function updateConfigHandler(request: FastifyRequest, reply: FastifyReply) {
-  const body = request.body as { min_horas_bloque?: number; max_horas_dia?: number };
+  const body = request.body as {
+    min_horas_bloque?: number;
+    max_horas_dia?: number;
+    jornadas?: { turno_id: number; horas: number }[];
+  };
   const min = Number(body.min_horas_bloque);
   const max = Number(body.max_horas_dia);
   if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max < 1) {
@@ -449,11 +455,27 @@ export async function updateConfigHandler(request: FastifyRequest, reply: Fastif
       message: 'Las horas mínimas por bloque no pueden superar el máximo por día.',
     });
   }
+  const jornadas = body.jornadas ?? [];
+  for (const j of jornadas) {
+    const horas = Number(j.horas);
+    if (!Number.isInteger(Number(j.turno_id)) || !Number.isInteger(horas) || horas < 1 || horas > 168) {
+      return reply.status(400).send({
+        success: false,
+        message: 'Las horas de jornada deben ser enteros entre 1 y 168.',
+      });
+    }
+  }
   try {
     await query(
       'INSERT INTO horario_config (id, min_horas_bloque, max_horas_dia) VALUES (1, ?, ?) ON DUPLICATE KEY UPDATE min_horas_bloque = VALUES(min_horas_bloque), max_horas_dia = VALUES(max_horas_dia)',
       [min, max]
     );
+    for (const j of jornadas) {
+      await query('UPDATE turnos SET horas_jornada = ? WHERE id = ?', [
+        Number(j.horas),
+        Number(j.turno_id),
+      ]);
+    }
     return reply.send({ success: true, message: 'Configuración de horarios actualizada.' });
   } catch (e: any) {
     request.log.error(e);

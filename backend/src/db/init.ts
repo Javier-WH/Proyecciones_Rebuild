@@ -96,6 +96,20 @@ export async function initializeDatabase() {
     console.log("✅ Columna 'saga_id' de turnos ahora admite NULL (turnos locales)");
   }
 
+  // horas_jornada: horas de clase semanales del turno. Default 30; los turnos
+  // "diurnos" (jornada completa) arrancan en 60. Se usará para validar
+  // proyecciones y bloques de turno.
+  const [jornadaCol] = await db.query<any[]>(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'turnos' AND COLUMN_NAME = 'horas_jornada'`,
+    [env.DB_NAME]
+  );
+  if (jornadaCol.length === 0) {
+    await db.query("ALTER TABLE turnos ADD COLUMN horas_jornada INT NOT NULL DEFAULT 30 AFTER activo");
+    await db.query("UPDATE turnos SET horas_jornada = 60 WHERE UPPER(nombre) LIKE '%DIURNO%'");
+    console.log("✅ Columna 'horas_jornada' agregada a turnos (30h por defecto, 60h en diurnos)");
+  }
+
   // 6b. Bloques horarios por turno (horas de clase y recesos).
   // es_receso=1 = bloque no asignable (se muestra en la grilla como RECESO).
   await db.query(`
