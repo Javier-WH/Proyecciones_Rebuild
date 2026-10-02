@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { HorarioEntry, Turno, DIAS_NOMBRES, DIAS_CORTOS, fmtHora, minutos, colorMateria } from './types.js';
-import { usePnfColors } from '../../context/PnfColorContext.js';
+import { HorarioEntry, Turno, DIAS_NOMBRES, fmtHora, minutos } from './types.js';
+import { ClaseCard } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
 interface ItemCelda {
@@ -9,57 +9,15 @@ interface ItemCelda {
   fin: string;
 }
 
-const ChipClase: React.FC<{
-  item: ItemCelda;
-  renderLinea2: (e: HorarioEntry) => string;
-  compacto?: boolean;
-}> = ({ item, renderLinea2, compacto }) => {
-  const { colorDePnf, catalogo } = usePnfColors();
-  const pnfColor = colorDePnf(item.e.pnf_saga_id);
-  const pnfNombre = catalogo.find((c) => c.id === item.e.pnf_saga_id)?.nombre;
-  return (
-    <div
-      className={`rounded-lg border px-2 py-1.5 flex flex-col justify-center ${colorMateria(item.e.materia_id)} ${
-        compacto ? 'flex-1 min-h-0 overflow-hidden' : 'h-full'
-      }`}
-    >
-      <div
-        className={`${item.span > 1 ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight flex items-start gap-1`}
-      >
-        {pnfColor && (
-          <span
-            title={pnfNombre ?? 'PNF'}
-            className="w-2 h-2 rounded-full shrink-0 mt-0.5 ring-1 ring-white/20"
-            style={{ backgroundColor: pnfColor }}
-          />
-        )}
-        <span className={`${compacto ? 'line-clamp-1' : 'line-clamp-2'} min-w-0`}>
-          {item.e.materia_nombre}
-        </span>
-      </div>
-      <div className="text-[9px] opacity-75 leading-tight mt-0.5 line-clamp-1">
-        {renderLinea2(item.e)}
-        {item.span > 1 && ` · ${fmtHora(item.e.hora_inicio)}–${fmtHora(item.fin)}`}
-      </div>
-      {!compacto && (
-        <div className="text-[8px] opacity-60 mt-0.5">
-          {item.e.seccion_nombre} · {item.e.turno_nombre}
-        </div>
-      )}
-    </div>
-  );
-};
-
 // Vista de solo lectura: grilla días × rangos horarios con las clases de un
 // recurso (aula o profesor). Las filas son rangos hora_inicio–hora_fin únicos.
 interface VistaRecursoProps {
   titulo: string;
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
-  renderLinea2: (e: HorarioEntry) => string;
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, renderLinea2 }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos }) => {
   // Filas: rangos horarios únicos (de bloques de turnos y de las propias entries)
   const filas = useMemo(() => {
     const map = new Map<string, { inicio: string; fin: string; esReceso: boolean }>();
@@ -209,10 +167,10 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                     >
                       <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
                         {items.map((it) => (
-                          <ChipClase
+                          <ClaseCard
                             key={it.e.id}
-                            item={it}
-                            renderLinea2={renderLinea2}
+                            entry={it.e}
+                            fin={it.fin}
                             compacto={items.length > 1}
                           />
                         ))}

@@ -616,9 +616,6 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo={`Ocupación del aula ${aulas.find((a) => a.id === (aulaId ?? aulas[0]?.id))?.codigo ?? ''}`}
               entries={entries.filter((e) => e.aula_id === (aulaId ?? aulas[0]?.id))}
               turnos={turnos}
-              renderLinea2={(e) =>
-                e.prof_apellidos ? `${e.prof_apellidos}, ${e.prof_nombres}` : 'Sin profesor'
-              }
             />
           )}
 
@@ -627,7 +624,6 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo="Agenda del profesor"
               entries={entries.filter((e) => e.profesor_id === (profesorId ?? profesores[0]?.id))}
               turnos={turnos}
-              renderLinea2={(e) => `Aula ${e.aula_codigo} · ${e.seccion_nombre}`}
             />
           )}
         </>

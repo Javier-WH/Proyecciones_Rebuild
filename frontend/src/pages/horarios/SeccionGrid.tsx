@@ -14,6 +14,7 @@ import { snapCenterToCursor } from '@dnd-kit/modifiers';
 import { apiFetch } from '../../api/client.js';
 import { usePnfColors } from '../../context/PnfColorContext.js';
 import { MateriaAsignableRow } from '../AgregarMateriaModal.js';
+import { ClaseCard } from './ClaseCard.js';
 import {
   Aula,
   Bloque,
@@ -665,8 +666,6 @@ const EntryChip: React.FC<{
     data,
     disabled: !puedeEditar,
   });
-  const { colorDePnf, catalogo } = usePnfColors();
-  const pnfNombre = catalogo.find((c) => c.id === entry.pnf_saga_id)?.nombre;
   return (
     <div
       ref={setNodeRef}
@@ -677,17 +676,10 @@ const EntryChip: React.FC<{
         isDragging ? 'opacity-30' : ''
       }`}
     >
-      <Chip
-        titulo={entry.materia_nombre}
-        colorDot={colorDePnf(entry.pnf_saga_id)}
-        dotTitle={pnfNombre ?? 'PNF'}
-        subtitulo={
-          span > 1
-            ? `${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo} · ${fmtHora(entry.hora_inicio)}–${fmtHora(finHasta ?? entry.hora_fin)}`
-            : `${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo}`
-        }
-        colorCls={colorMateria(entry.materia_id)}
-        grande={span > 1}
+      <ClaseCard
+        entry={entry}
+        fin={span > 1 ? finHasta : undefined}
+        className="hover:brightness-125 transition-colors"
       />
     </div>
   );
