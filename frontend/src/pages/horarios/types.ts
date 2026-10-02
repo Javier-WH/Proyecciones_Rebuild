@@ -24,7 +24,7 @@ export interface Aula {
   nombre: string;
   capacidad: number;
   ubicacion: string | null;
-  tipo: 'AULA_REGULAR' | 'LABORATORIO' | 'TALLER' | 'AUDITORIO';
+  tipo: 'AULA_REGULAR' | 'LABORATORIO' | 'TALLER' | 'AUDITORIO' | 'INSTALACION_DEPORTIVA' | 'SALA_LECTURA';
   pnf_saga_id: number | null;
   pnf_nombre: string | null;
   activa: number;

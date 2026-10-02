@@ -80,10 +80,11 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
   const codigo = body.codigo || `PROY-${body.pnf_saga_id}-${body.trayecto_saga_id}-${body.periodo_academico}-${Date.now().toString().slice(-4)}`;
 
   try {
-    // RF-23: Si esta proyección se crea como activa, desactivar las demás proyecciones del mismo PNF y periodo
+    // RF-23: Si esta proyección se crea como activa, desactivar las demás
+    // proyecciones equivalentes: mismo PNF, trayecto, maya y periodo.
     await query(
-      'UPDATE proyecciones SET activa = 0 WHERE pnf_saga_id = ? AND periodo_academico = ?',
-      [body.pnf_saga_id, body.periodo_academico]
+      'UPDATE proyecciones SET activa = 0 WHERE pnf_saga_id = ? AND trayecto_saga_id = ? AND maya_id = ? AND periodo_academico = ?',
+      [body.pnf_saga_id, body.trayecto_saga_id, body.maya_id, body.periodo_academico]
     );
 
     // 1. Insertar proyección
@@ -288,11 +289,12 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
 
     await conn.beginTransaction();
 
-    // RF-23: Si la proyección sigue activa, mantener una sola activa por PNF y periodo
+    // RF-23: Si la proyección sigue activa, mantener una sola activa por
+    // PNF + trayecto + maya + periodo
     if (proyeccion.activa) {
       await conn.query(
-        'UPDATE proyecciones SET activa = 0 WHERE pnf_saga_id = ? AND periodo_academico = ? AND id != ?',
-        [proyeccion.pnf_saga_id, periodoAcademico, id]
+        'UPDATE proyecciones SET activa = 0 WHERE pnf_saga_id = ? AND trayecto_saga_id = ? AND maya_id = ? AND periodo_academico = ? AND id != ?',
+        [proyeccion.pnf_saga_id, proyeccion.trayecto_saga_id, proyeccion.maya_id, periodoAcademico, id]
       );
     }
 
@@ -483,10 +485,10 @@ export async function toggleActiveProyeccionHandler(request: FastifyRequest, rep
     const newActiveState = proyeccion.activa ? 0 : 1;
 
     if (newActiveState === 1) {
-      // Desactivar las demás proyecciones del mismo PNF
+      // Desactivar las demás proyecciones equivalentes (mismo PNF, trayecto y maya)
       await query(
-        'UPDATE proyecciones SET activa = 0 WHERE pnf_saga_id = ? AND periodo_academico = ?',
-        [proyeccion.pnf_saga_id, proyeccion.periodo_academico]
+        'UPDATE proyecciones SET activa = 0 WHERE pnf_saga_id = ? AND trayecto_saga_id = ? AND maya_id = ? AND periodo_academico = ?',
+        [proyeccion.pnf_saga_id, proyeccion.trayecto_saga_id, proyeccion.maya_id, proyeccion.periodo_academico]
       );
     }
 

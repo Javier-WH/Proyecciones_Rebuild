@@ -3,6 +3,7 @@ import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import { TiposContratoModal } from './TiposContratoModal.js';
+import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import {
   Users,
@@ -18,7 +19,8 @@ import {
   Briefcase,
   Power,
   PowerOff,
-  Mail
+  Mail,
+  GraduationCap
 } from 'lucide-react';
 
 export const ProfesoresPage: React.FC = () => {
@@ -39,6 +41,7 @@ export const ProfesoresPage: React.FC = () => {
     profesor: null,
   });
   const [modalTipos, setModalTipos] = useState(false);
+  const [modalPerfiles, setModalPerfiles] = useState(false);
 
   const fetchProfesores = async () => {
     setLoading(true);
@@ -120,6 +123,13 @@ export const ProfesoresPage: React.FC = () => {
             >
               <Briefcase className="w-4 h-4 text-amber-400" />
               <span>Tipos de Contrato</span>
+            </button>
+            <button
+              onClick={() => setModalPerfiles(true)}
+              className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <GraduationCap className="w-4 h-4 text-indigo-400" />
+              <span>Perfiles</span>
             </button>
             <button
               onClick={handleSync}
@@ -340,6 +350,8 @@ export const ProfesoresPage: React.FC = () => {
       />
 
       <TiposContratoModal isOpen={modalTipos} onClose={() => setModalTipos(false)} />
+
+      <PerfilesModal isOpen={modalPerfiles} onClose={() => setModalPerfiles(false)} />
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { CargaDocentePage } from './CargaDocentePage.js';
 import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import { ConfigHorariosModal } from './ConfigHorariosModal.js';
+import { PnfMallasModal } from './PnfMallasModal.js';
 import {
   GraduationCap,
   LogOut,
@@ -39,6 +40,7 @@ export const DashboardPage: React.FC = () => {
   const [configMenuOpen, setConfigMenuOpen] = useState(false);
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
   const [configHorariosOpen, setConfigHorariosOpen] = useState(false);
+  const [pnfMallasOpen, setPnfMallasOpen] = useState(false);
 
   useEffect(() => {
     const checkSagaStatus = async () => {
@@ -222,6 +224,19 @@ export const DashboardPage: React.FC = () => {
                               <div className="text-[10px] text-slate-500">Reglas de generación automática</div>
                             </div>
                           </button>
+                          <button
+                            onClick={() => {
+                              setConfigMenuOpen(false);
+                              setPnfMallasOpen(true);
+                            }}
+                            className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                          >
+                            <BookOpen className="w-4 h-4 text-indigo-400" />
+                            <div className="text-left">
+                              <div className="font-semibold text-xs">PNF y Mallas</div>
+                              <div className="text-[10px] text-slate-500">Mallas SAGA y color por PNF</div>
+                            </div>
+                          </button>
                         </div>
                       </>
                     )}
@@ -353,7 +368,10 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <h3 className="text-lg font-bold text-white mb-1">PNFs & Mallas</h3>
                 <p className="text-xs text-slate-400 mb-4">Consulta de mallas curriculares e inscritos desde SAGA.</p>
-                <button className="w-full py-2.5 bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer">
+                <button
+                  onClick={() => setPnfMallasOpen(true)}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
                   <span>Consultar Pensums</span>
                 </button>
               </div>
@@ -376,6 +394,8 @@ export const DashboardPage: React.FC = () => {
         isOpen={configHorariosOpen}
         onClose={() => setConfigHorariosOpen(false)}
       />
+
+      <PnfMallasModal isOpen={pnfMallasOpen} onClose={() => setPnfMallasOpen(false)} />
     </div>
   );
 };

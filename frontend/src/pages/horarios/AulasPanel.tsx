@@ -8,6 +8,8 @@ const TIPOS = [
   { v: 'LABORATORIO', l: 'Laboratorio' },
   { v: 'TALLER', l: 'Taller' },
   { v: 'AUDITORIO', l: 'Auditorio' },
+  { v: 'INSTALACION_DEPORTIVA', l: 'Instalación deportiva' },
+  { v: 'SALA_LECTURA', l: 'Sala de lectura' },
 ];
 
 interface AulasPanelProps {

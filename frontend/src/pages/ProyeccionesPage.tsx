@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
+import { usePnfColors } from '../context/PnfColorContext.js';
 import { CrearProyeccionModal } from './CrearProyeccionModal.js';
 import { EditarProyeccionModal } from './EditarProyeccionModal.js';
 import {
@@ -38,7 +40,20 @@ interface ProyeccionItem {
   created_at: string;
 }
 
+// Orden de trayectos: Inicial primero, luego I, II, III, IV, V.
+// Fallback: trayecto_saga_id (los IDs de SAGA suelen seguir ese orden).
+const ordenTrayecto = (p: ProyeccionItem): number => {
+  const t = (p.trayecto_nombre || '').toLowerCase();
+  if (t.includes('inicial')) return 0;
+  const romanos: Record<string, number> = { v: 5, iv: 4, iii: 3, ii: 2, i: 1 };
+  const m = t.match(/\b(v|iv|iii|ii|i)\b/);
+  if (m) return romanos[m[1]] ?? 99;
+  return 50 + p.trayecto_saga_id; // desconocidos al final, por saga_id
+};
+
 export const ProyeccionesPage: React.FC = () => {
+  const { user } = useAuth();
+  const { pnfColors } = usePnfColors();
   const [proyecciones, setProyecciones] = useState<ProyeccionItem[]>([]);
   const [periodoActivo, setPeriodoActivo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,6 +144,29 @@ export const ProyeccionesPage: React.FC = () => {
       p.codigo.toLowerCase().includes(filterText.toLowerCase())
   );
 
+  // Agrupar por PNF: primero el PNF del usuario (si tiene), luego alfabético.
+  // Dentro de cada grupo: trayecto Inicial, I, II, III, IV, V.
+  const gruposPorPnf = useMemo(() => {
+    const mapa = new Map<number, ProyeccionItem[]>();
+    for (const p of filteredProyecciones) {
+      const arr = mapa.get(p.pnf_saga_id) || [];
+      arr.push(p);
+      mapa.set(p.pnf_saga_id, arr);
+    }
+    const grupos = [...mapa.entries()].map(([pnfSagaId, items]) => ({
+      pnfSagaId,
+      nombre: items[0].pnf_nombre,
+      items: items.sort((a, b) => ordenTrayecto(a) - ordenTrayecto(b) || a.nombre.localeCompare(b.nombre)),
+    }));
+    return grupos.sort((a, b) => {
+      if (user?.pnf_saga_id != null) {
+        if (a.pnfSagaId === user.pnf_saga_id) return -1;
+        if (b.pnfSagaId === user.pnf_saga_id) return 1;
+      }
+      return a.nombre.localeCompare(b.nombre);
+    });
+  }, [filteredProyecciones, user?.pnf_saga_id]);
+
   return (
     <div className="space-y-6">
       {/* Header Panel */}
@@ -210,13 +248,45 @@ export const ProyeccionesPage: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProyecciones.map((proy) => (
+        <div className="space-y-8">
+          {gruposPorPnf.map((grupo) => {
+            const colorPnf = pnfColors[grupo.pnfSagaId] || null;
+            const esMio = user?.pnf_saga_id === grupo.pnfSagaId;
+            return (
+              <section key={grupo.pnfSagaId}>
+                {/* Encabezado del grupo PNF */}
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/10"
+                    style={{ backgroundColor: colorPnf || '#475569' }}
+                  />
+                  <h3 className="text-sm font-bold text-white truncate">{grupo.nombre}</h3>
+                  {esMio && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-1.5 py-0.5 rounded">
+                      Tu PNF
+                    </span>
+                  )}
+                  <span className="text-[10px] text-slate-500">
+                    {grupo.items.length} proyección{grupo.items.length !== 1 ? 'es' : ''}
+                  </span>
+                  <div
+                    className="flex-1 h-px"
+                    style={{
+                      background: colorPnf
+                        ? `linear-gradient(to right, ${colorPnf}55, transparent)`
+                        : 'linear-gradient(to right, #1e293b, transparent)',
+                    }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {grupo.items.map((proy) => (
             <div
               key={proy.id}
               className={`bg-slate-900/90 border rounded-2xl p-5 flex flex-col justify-between transition-all hover:border-blue-500/40 shadow-lg ${
                 proy.activa ? 'border-blue-500/30' : 'border-slate-800'
               }`}
+              style={colorPnf ? { borderTop: `2px solid ${colorPnf}66` } : undefined}
             >
               <div>
                 {/* Header Card */}
@@ -242,7 +312,10 @@ export const ProyeccionesPage: React.FC = () => {
 
                 <div className="space-y-1.5 text-xs text-slate-300 mb-4">
                   <div className="flex items-center gap-2 text-slate-400">
-                    <Layers className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <Layers
+                      className="w-3.5 h-3.5 shrink-0"
+                      style={{ color: colorPnf || '#60a5fa' }}
+                    />
                     <span>{proy.pnf_nombre} — {proy.trayecto_nombre}</span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-400">
@@ -287,7 +360,11 @@ export const ProyeccionesPage: React.FC = () => {
                 </button>
               </div>
             </div>
-          ))}
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 

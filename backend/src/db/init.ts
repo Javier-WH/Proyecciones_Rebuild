@@ -52,6 +52,7 @@ export async function initializeDatabase() {
       saga_id INT UNIQUE NOT NULL,
       nombre VARCHAR(255) NOT NULL,
       codigo VARCHAR(50) NULL,
+      color VARCHAR(7) NULL,
       tipo ENUM('TRIMESTRAL', 'SEMESTRAL') DEFAULT 'TRIMESTRAL',
       activo TINYINT(1) DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -230,6 +231,7 @@ export async function initializeDatabase() {
     { tabla: 'proyeccion_materias', nombre: 'seccion_id', definicion: 'INT NULL AFTER proyeccion_id' },
     { tabla: 'proyeccion_materias', nombre: 'eliminada', definicion: 'TINYINT(1) DEFAULT 0 AFTER semestre2' },
     { tabla: 'turnos', nombre: 'dias_semana', definicion: "VARCHAR(20) NOT NULL DEFAULT '1,2,3,4,5' AFTER nombre" },
+    { tabla: 'pnf', nombre: 'color', definicion: 'VARCHAR(7) NULL AFTER codigo' },
     { tabla: 'turnos', nombre: 'activo', definicion: 'TINYINT(1) DEFAULT 1 AFTER dias_semana' },
     { tabla: 'aulas', nombre: 'pnf_saga_id', definicion: 'INT NULL AFTER tipo' },
     { tabla: 'aulas', nombre: 'pnf_nombre', definicion: 'VARCHAR(255) NULL AFTER pnf_saga_id' },
@@ -254,11 +256,17 @@ export async function initializeDatabase() {
       nombre VARCHAR(150) NOT NULL,
       capacidad INT DEFAULT 30,
       ubicacion VARCHAR(150) NULL,
-      tipo ENUM('AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO') DEFAULT 'AULA_REGULAR',
+      tipo ENUM('AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO', 'INSTALACION_DEPORTIVA', 'SALA_LECTURA') DEFAULT 'AULA_REGULAR',
       activa TINYINT(1) DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // Migración: CREATE IF NOT EXISTS no actualiza el ENUM en tablas ya creadas;
+  // el MODIFY es idempotente y agrega los tipos nuevos.
+  await db.query(
+    "ALTER TABLE aulas MODIFY COLUMN tipo ENUM('AULA_REGULAR','LABORATORIO','TALLER','AUDITORIO','INSTALACION_DEPORTIVA','SALA_LECTURA') DEFAULT 'AULA_REGULAR'"
+  );
 
   // 9a. Tabla de Tipos de Contrato (dedicación docente)
   // saga_id corresponde a dedicacion_id de SAGA; NULL = tipo creado localmente.
@@ -337,6 +345,45 @@ export async function initializeDatabase() {
       FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE CASCADE,
       INDEX idx_proyeccion (proyeccion_id),
       INDEX idx_profesor (profesor_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 9c-bis. Perfiles docentes: etiquetas que agrupan materias afines (por
+  // subject_saga_id, estable entre periodos). Un profesor puede tener varios
+  // perfiles; solo sugieren afinidad, no restringen la asignación.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS perfiles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      nombre VARCHAR(150) UNIQUE NOT NULL,
+      descripcion VARCHAR(255) NULL,
+      activo TINYINT(1) DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS perfil_materias (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      perfil_id INT NOT NULL,
+      subject_saga_id INT NOT NULL,
+      nombre VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_perfil_materia (perfil_id, subject_saga_id),
+      FOREIGN KEY (perfil_id) REFERENCES perfiles(id) ON DELETE CASCADE,
+      INDEX idx_subject (subject_saga_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS profesor_perfiles (
+      profesor_id INT NOT NULL,
+      perfil_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (profesor_id, perfil_id),
+      FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE CASCADE,
+      FOREIGN KEY (perfil_id) REFERENCES perfiles(id) ON DELETE CASCADE,
+      INDEX idx_perfil (perfil_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 

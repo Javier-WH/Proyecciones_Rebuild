@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
-import { Profesor } from './ProfesorModal.js';
+import { usePnfColors } from '../context/PnfColorContext.js';
+import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
 import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
@@ -41,7 +42,16 @@ interface ProfesorGrupo {
 
 export const CargaDocentePage: React.FC = () => {
   const { user } = useAuth();
+  const { pnfColors } = usePnfColors();
   const puedeAsignar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
+
+  // Punto discreto con el color identificativo del PNF (slate si no tiene)
+  const pnfDot = (sagaId: number | null | undefined) => (
+    <span
+      className="inline-block w-2 h-2 rounded-full shrink-0"
+      style={{ backgroundColor: (sagaId != null && pnfColors[sagaId]) || '#475569' }}
+    />
+  );
 
   const [rows, setRows] = useState<CargaRow[]>([]);
   const [periodo, setPeriodo] = useState<string | null>(null);
@@ -65,6 +75,10 @@ export const CargaDocentePage: React.FC = () => {
     profesor: null,
   });
   const [modalReporte, setModalReporte] = useState(false);
+  const [modalProfesor, setModalProfesor] = useState<{ open: boolean; profesor: Profesor | null }>({
+    open: false,
+    profesor: null,
+  });
 
   const fetchCarga = async () => {
     setLoading(true);
@@ -131,9 +145,16 @@ export const CargaDocentePage: React.FC = () => {
     () => [...new Map(rows.map((r) => [r.pnf_saga_id, r.pnf_nombre])).entries()],
     [rows]
   );
+  // Solo proyecciones del PNF seleccionado en el selector de PNF
   const proyOptions = useMemo(
-    () => [...new Map(rows.map((r) => [r.proyeccion_id, r.proyeccion_nombre])).entries()],
-    [rows]
+    () => [
+      ...new Map(
+        rows
+          .filter((r) => filterPnf === 'todos' || r.pnf_saga_id === Number(filterPnf))
+          .map((r) => [r.proyeccion_id, r.proyeccion_nombre])
+      ).entries(),
+    ],
+    [rows, filterPnf]
   );
 
   // 'Trimestre' o 'Semestre' si todas las filas son de un mismo régimen; 'Lapso' si se mezclan
@@ -239,7 +260,11 @@ export const CargaDocentePage: React.FC = () => {
 
   const profesorCell = (p: Profesor, span: number) => (
     <td rowSpan={span} className="py-3 px-4 align-top border-r border-slate-800/60">
-      <div className="flex items-center gap-2.5">
+      <div
+        className="flex items-center gap-2.5 cursor-pointer"
+        title="Doble click para editar los datos del profesor"
+        onDoubleClick={() => setModalProfesor({ open: true, profesor: p })}
+      >
         <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} />
         <div className="min-w-0">
           <div className="font-bold text-white text-sm leading-tight uppercase">
@@ -248,7 +273,12 @@ export const CargaDocentePage: React.FC = () => {
           <div className="text-[10px] text-slate-500 font-mono">
             {p.nacionalidad}-{p.cedula}
           </div>
-          {p.pnf_nombre && <div className="text-[10px] text-slate-500 truncate">{p.pnf_nombre}</div>}
+          {p.pnf_nombre && (
+            <div className="text-[10px] text-slate-500 truncate flex items-center gap-1.5">
+              {pnfDot(p.pnf_saga_id)}
+              {p.pnf_nombre}
+            </div>
+          )}
           {!p.activo && (
             <span className="inline-block mt-0.5 text-[9px] bg-red-500/15 border border-red-500/30 text-red-300 px-1.5 py-0.5 rounded font-bold">
               INACTIVO
@@ -291,7 +321,12 @@ export const CargaDocentePage: React.FC = () => {
           <tr key={`${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`} className="hover:bg-slate-800/40 transition-colors">
             {idx === 0 && profesorCell(p, span)}
             <td className="py-3 px-4 font-medium text-white">{r.materia_nombre}</td>
-            <td className="py-3 px-4 text-slate-400">{r.pnf_nombre}</td>
+            <td className="py-3 px-4 text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                {pnfDot(r.pnf_saga_id)}
+                {r.pnf_nombre}
+              </span>
+            </td>
             <td className="py-3 px-4 text-slate-400">{r.trayecto_nombre}</td>
             <td className="py-3 px-4 font-semibold text-slate-200">{r.seccion_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{r.turno_nombre}</td>
@@ -398,7 +433,12 @@ export const CargaDocentePage: React.FC = () => {
           >
             {idx === 0 && profesorCell(p, span)}
             <td className="py-3 px-3 font-medium text-white">{m.base.materia_nombre}</td>
-            <td className="py-3 px-3 text-slate-400">{m.base.pnf_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                {pnfDot(m.base.pnf_saga_id)}
+                {m.base.pnf_nombre}
+              </span>
+            </td>
             <td className="py-3 px-3 text-slate-400">{m.base.trayecto_nombre}</td>
             <td className="py-3 px-3 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
             <td className="py-3 px-3 text-slate-400">{m.base.turno_nombre}</td>
@@ -507,7 +547,12 @@ export const CargaDocentePage: React.FC = () => {
               </td>
             )}
             <td className="py-3 px-3 font-medium text-white">{m.base.materia_nombre}</td>
-            <td className="py-3 px-3 text-slate-400">{m.base.pnf_nombre}</td>
+            <td className="py-3 px-3 text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                {pnfDot(m.base.pnf_saga_id)}
+                {m.base.pnf_nombre}
+              </span>
+            </td>
             <td className="py-3 px-3 text-slate-400">{m.base.trayecto_nombre}</td>
             <td className="py-3 px-3 font-semibold text-slate-200">{m.base.seccion_nombre}</td>
             <td className="py-3 px-3 text-slate-400">{m.base.turno_nombre}</td>
@@ -612,7 +657,11 @@ export const CargaDocentePage: React.FC = () => {
 
         <select
           value={filterPnf}
-          onChange={(e) => setFilterPnf(e.target.value)}
+          onChange={(e) => {
+            setFilterPnf(e.target.value);
+            // La proyección elegida pertenece a otro PNF: se reinicia el filtro
+            setFilterProyeccion('todas');
+          }}
           className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[200px]"
         >
           <option value="todos">Todos los PNF</option>
@@ -785,7 +834,12 @@ export const CargaDocentePage: React.FC = () => {
                         </td>
                       )}
                       <td className="py-3 px-4 font-medium text-white">{r.materia_nombre}</td>
-                      <td className="py-3 px-4 text-slate-400">{r.pnf_nombre}</td>
+                      <td className="py-3 px-4 text-slate-400">
+                        <span className="inline-flex items-center gap-1.5">
+                          {pnfDot(r.pnf_saga_id)}
+                          {r.pnf_nombre}
+                        </span>
+                      </td>
                       <td className="py-3 px-4 text-slate-400">{r.trayecto_nombre}</td>
                       <td className="py-3 px-4 font-semibold text-slate-200">{r.seccion_nombre}</td>
                       <td className="py-3 px-4 text-slate-400">{r.turno_nombre}</td>
@@ -851,6 +905,16 @@ export const CargaDocentePage: React.FC = () => {
         profesores={profesores}
         periodo={periodo}
         onClose={() => setModalReporte(false)}
+      />
+
+      <ProfesorModal
+        isOpen={modalProfesor.open}
+        profesor={modalProfesor.profesor}
+        onClose={() => setModalProfesor({ open: false, profesor: null })}
+        onSuccess={() => {
+          fetchProfesores();
+          fetchCarga();
+        }}
       />
     </div>
   );

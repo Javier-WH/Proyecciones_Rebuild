@@ -13,6 +13,9 @@ import {
   updateTipoContratoHandler,
   deleteTipoContratoHandler,
   syncTiposContratoHandler,
+  getPerfilesProfesorHandler,
+  setPerfilesProfesorHandler,
+  getPerfilMateriasProfesorHandler,
 } from './profesores.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
@@ -36,6 +39,11 @@ export async function profesoresRoutes(fastify: FastifyInstance) {
   fastify.get('/:id', { preHandler: [authenticate] }, getProfesorHandler);
   fastify.put('/:id', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, updateProfesorHandler);
   fastify.put('/:id/toggle-activo', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, toggleActivoProfesorHandler);
+
+  // Perfiles docentes del profesor
+  fastify.get('/:id/perfiles', { preHandler: [authenticate] }, getPerfilesProfesorHandler);
+  fastify.put('/:id/perfiles', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, setPerfilesProfesorHandler);
+  fastify.get('/:id/perfiles-materias', { preHandler: [authenticate] }, getPerfilMateriasProfesorHandler);
 
   // Foto del profesor (base64, máx ~4.5 MB de payload ≈ 3 MB de imagen)
   fastify.put(

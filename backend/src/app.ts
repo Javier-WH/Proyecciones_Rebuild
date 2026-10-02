@@ -9,6 +9,7 @@ import { sagaRoutes } from './modules/saga/saga.routes.js';
 import { proyeccionesRoutes } from './modules/proyecciones/proyecciones.routes.js';
 import { periodosRoutes } from './modules/periodos/periodos.routes.js';
 import { profesoresRoutes } from './modules/profesores/profesores.routes.js';
+import { perfilesRoutes } from './modules/perfiles/perfiles.routes.js';
 import { usuariosRoutes } from './modules/usuarios/usuarios.routes.js';
 import { horariosRoutes } from './modules/horarios/horarios.routes.js';
 
@@ -49,6 +50,7 @@ export function buildApp() {
   app.register(proyeccionesRoutes, { prefix: '/api/proyecciones' });
   app.register(periodosRoutes, { prefix: '/api/periodos' });
   app.register(profesoresRoutes, { prefix: '/api/profesores' });
+  app.register(perfilesRoutes, { prefix: '/api/perfiles' });
   app.register(usuariosRoutes, { prefix: '/api/usuarios' });
   app.register(horariosRoutes, { prefix: '/api/horarios' });
 
