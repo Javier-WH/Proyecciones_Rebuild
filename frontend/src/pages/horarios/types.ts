@@ -39,6 +39,7 @@ export interface HorarioEntry {
   materia_id: number;
   materia_nombre: string;
   horas_semanales: number;
+  pnf_saga_id: number | null;
   seccion_id: number;
   seccion_nombre: string;
   turno_saga_id: number;

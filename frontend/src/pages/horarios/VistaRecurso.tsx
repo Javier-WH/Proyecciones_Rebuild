@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { HorarioEntry, Turno, DIAS_NOMBRES, DIAS_CORTOS, fmtHora, minutos, colorMateria } from './types.js';
+import { usePnfColors } from '../../context/PnfColorContext.js';
 import { Clock, Coffee } from 'lucide-react';
 
 interface ItemCelda {
@@ -12,30 +13,42 @@ const ChipClase: React.FC<{
   item: ItemCelda;
   renderLinea2: (e: HorarioEntry) => string;
   compacto?: boolean;
-}> = ({ item, renderLinea2, compacto }) => (
-  <div
-    className={`rounded-lg border px-2 py-1.5 flex flex-col justify-center ${colorMateria(item.e.materia_id)} ${
-      compacto ? 'flex-1 min-h-0 overflow-hidden' : 'h-full'
-    }`}
-  >
+}> = ({ item, renderLinea2, compacto }) => {
+  const { colorDePnf, catalogo } = usePnfColors();
+  const pnfColor = colorDePnf(item.e.pnf_saga_id);
+  const pnfNombre = catalogo.find((c) => c.id === item.e.pnf_saga_id)?.nombre;
+  return (
     <div
-      className={`${item.span > 1 ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight ${
-        compacto ? 'line-clamp-1' : 'line-clamp-2'
+      className={`rounded-lg border px-2 py-1.5 flex flex-col justify-center ${colorMateria(item.e.materia_id)} ${
+        compacto ? 'flex-1 min-h-0 overflow-hidden' : 'h-full'
       }`}
     >
-      {item.e.materia_nombre}
-    </div>
-    <div className="text-[9px] opacity-75 leading-tight mt-0.5 line-clamp-1">
-      {renderLinea2(item.e)}
-      {item.span > 1 && ` · ${fmtHora(item.e.hora_inicio)}–${fmtHora(item.fin)}`}
-    </div>
-    {!compacto && (
-      <div className="text-[8px] opacity-60 mt-0.5">
-        {item.e.seccion_nombre} · {item.e.turno_nombre}
+      <div
+        className={`${item.span > 1 ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight flex items-start gap-1`}
+      >
+        {pnfColor && (
+          <span
+            title={pnfNombre ?? 'PNF'}
+            className="w-2 h-2 rounded-full shrink-0 mt-0.5 ring-1 ring-white/20"
+            style={{ backgroundColor: pnfColor }}
+          />
+        )}
+        <span className={`${compacto ? 'line-clamp-1' : 'line-clamp-2'} min-w-0`}>
+          {item.e.materia_nombre}
+        </span>
       </div>
-    )}
-  </div>
-);
+      <div className="text-[9px] opacity-75 leading-tight mt-0.5 line-clamp-1">
+        {renderLinea2(item.e)}
+        {item.span > 1 && ` · ${fmtHora(item.e.hora_inicio)}–${fmtHora(item.fin)}`}
+      </div>
+      {!compacto && (
+        <div className="text-[8px] opacity-60 mt-0.5">
+          {item.e.seccion_nombre} · {item.e.turno_nombre}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Vista de solo lectura: grilla días × rangos horarios con las clases de un
 // recurso (aula o profesor). Las filas son rangos hora_inicio–hora_fin únicos.

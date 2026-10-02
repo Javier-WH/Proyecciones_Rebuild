@@ -26,14 +26,15 @@ const ENTRY_SELECT = `
          e.dia_semana, e.bloque_id, e.aula_id,
          a.codigo AS aula_codigo, a.nombre AS aula_nombre,
          b.orden AS bloque_orden, b.hora_inicio, b.hora_fin, b.es_receso, b.turno_id,
-         t.nombre AS turno_bloque_nombre
+         t.nombre AS turno_bloque_nombre, pr.pnf_saga_id
   FROM horario_entries e
   JOIN proyeccion_materias m ON m.id = e.materia_id
   JOIN proyeccion_secciones s ON s.id = e.seccion_id
   LEFT JOIN profesores pf ON pf.id = e.profesor_id
   JOIN aulas a ON a.id = e.aula_id
   JOIN turno_bloques b ON b.id = e.bloque_id
-  JOIN turnos t ON t.id = b.turno_id`;
+  JOIN turnos t ON t.id = b.turno_id
+  JOIN proyecciones pr ON pr.id = m.proyeccion_id`;
 
 // GET /api/horarios/entries?periodo=&tipo=&trimestre=
 // Devuelve las clases agendadas del lapso pedido y de los lapsos rivales
@@ -56,7 +57,6 @@ export async function listEntriesHandler(request: FastifyRequest, reply: Fastify
     const cond = rivales.map(() => '(e.tipo_proyeccion = ? AND e.trimestre = ?)').join(' OR ');
     const params: any[] = rivales.flatMap((l) => [l.tipo, l.n]);
     let sql = `${ENTRY_SELECT}
-      JOIN proyecciones pr ON pr.id = m.proyeccion_id
       WHERE e.periodo_academico = ? AND (${cond})`;
     params.unshift(periodoCodigo);
     if (user.role === 'REGULAR' && user.pnf_saga_id) {

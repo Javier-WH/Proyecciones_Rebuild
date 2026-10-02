@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
 import { apiFetch } from '../../api/client.js';
+import { usePnfColors } from '../../context/PnfColorContext.js';
 import { MateriaAsignableRow } from '../AgregarMateriaModal.js';
 import {
   Aula,
@@ -475,7 +476,9 @@ const Chip: React.FC<{
   overlay?: boolean;
   colorCls?: string;
   grande?: boolean;
-}> = ({ titulo, subtitulo, overlay, colorCls, grande }) => (
+  colorDot?: string | null;
+  dotTitle?: string;
+}> = ({ titulo, subtitulo, overlay, colorCls, grande, colorDot, dotTitle }) => (
   <div
     className={`rounded-lg border px-2 py-1.5 text-left select-none transition-colors ${
       overlay
@@ -483,8 +486,17 @@ const Chip: React.FC<{
         : `${colorCls ?? 'bg-blue-500/10 border-blue-500/40 text-blue-200'} hover:brightness-125`
     } h-full flex flex-col justify-center`}
   >
-    <div className={`${grande ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight line-clamp-2`}>
-      {titulo}
+    <div
+      className={`${grande ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight flex items-start gap-1`}
+    >
+      {colorDot && (
+        <span
+          title={dotTitle}
+          className="w-2 h-2 rounded-full shrink-0 mt-0.5 ring-1 ring-white/20"
+          style={{ backgroundColor: colorDot }}
+        />
+      )}
+      <span className="line-clamp-2 min-w-0">{titulo}</span>
     </div>
     {subtitulo && (
       <div className={`${grande ? 'text-[9px]' : 'text-[9px]'} opacity-75 leading-tight mt-0.5`}>
@@ -544,6 +556,9 @@ const PendienteChip: React.FC<{
     data,
     disabled: !puedeEditar || restantes <= 0,
   });
+  const { colorDePnf, catalogo } = usePnfColors();
+  const pnfColor = colorDePnf(p.row.pnf_saga_id ?? null);
+  const pnfNombre = catalogo.find((c) => c.id === p.row.pnf_saga_id)?.nombre;
 
   const color =
     restantes > 0
@@ -561,8 +576,15 @@ const PendienteChip: React.FC<{
       <div className="flex items-center gap-1.5">
         {puedeEditar && restantes > 0 && <GripVertical className="w-3 h-3 text-slate-500 shrink-0" />}
         <div className="min-w-0">
-          <div className="text-[10px] font-bold text-slate-100 leading-tight line-clamp-2">
-            {p.row.materia_nombre}
+          <div className="text-[10px] font-bold text-slate-100 leading-tight flex items-start gap-1">
+            {pnfColor && (
+              <span
+                title={pnfNombre ?? 'PNF'}
+                className="w-2 h-2 rounded-full shrink-0 mt-0.5 ring-1 ring-white/20"
+                style={{ backgroundColor: pnfColor }}
+              />
+            )}
+            <span className="line-clamp-2">{p.row.materia_nombre}</span>
           </div>
           <div className="text-[9px] text-slate-400 leading-tight mt-0.5 flex items-center gap-1 flex-wrap">
             {sinProfesor ? (
@@ -643,6 +665,8 @@ const EntryChip: React.FC<{
     data,
     disabled: !puedeEditar,
   });
+  const { colorDePnf, catalogo } = usePnfColors();
+  const pnfNombre = catalogo.find((c) => c.id === entry.pnf_saga_id)?.nombre;
   return (
     <div
       ref={setNodeRef}
@@ -655,6 +679,8 @@ const EntryChip: React.FC<{
     >
       <Chip
         titulo={entry.materia_nombre}
+        colorDot={colorDePnf(entry.pnf_saga_id)}
+        dotTitle={pnfNombre ?? 'PNF'}
         subtitulo={
           span > 1
             ? `${entry.prof_apellidos ?? 'Sin profesor'} · ${entry.aula_codigo} · ${fmtHora(entry.hora_inicio)}–${fmtHora(finHasta ?? entry.hora_fin)}`
