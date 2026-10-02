@@ -3,53 +3,81 @@ import { HorarioEntry, Turno, DIAS_NOMBRES, fmtHora, minutos } from './types.js'
 import { ClaseCard } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
-interface ItemCelda {
-  e: HorarioEntry;
-  span: number;
-  fin: string;
-}
-
-// Vista de solo lectura: grilla días × rangos horarios con las clases de un
-// recurso (aula o profesor). Las filas son rangos hora_inicio–hora_fin únicos.
+// Vista de solo lectura: grilla días × bloques con las clases de un recurso
+// (aula o profesor). Como un recurso puede tener clases en varios turnos con
+// horarios distintos, la grilla se divide en bandas por turno — cada banda usa
+// los bloques de su propio turno, igual que la vista por sección, así los
+// bloques contiguos de una misma clase se fusionan en una sola celda.
 interface VistaRecursoProps {
   titulo: string;
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos }) => {
-  // Filas: rangos horarios únicos (de bloques de turnos y de las propias entries)
-  const filas = useMemo(() => {
-    const map = new Map<string, { inicio: string; fin: string; esReceso: boolean }>();
-    for (const t of turnos) {
-      for (const b of t.bloques) {
-        const k = `${b.hora_inicio}-${b.hora_fin}`;
-        const prev = map.get(k);
-        map.set(k, {
-          inicio: b.hora_inicio,
-          fin: b.hora_fin,
-          esReceso: (prev?.esReceso ?? false) || !!b.es_receso,
-        });
-      }
-    }
-    for (const e of entries) {
-      const k = `${e.hora_inicio}-${e.hora_fin}`;
-      if (!map.has(k)) map.set(k, { inicio: e.hora_inicio, fin: e.hora_fin, esReceso: false });
-    }
-    return [...map.values()].sort((a, b) => minutos(a.inicio) - minutos(b.inicio));
-  }, [turnos, entries]);
+interface Banda {
+  turno: Turno | null;
+  bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
+}
 
-  // Columnas: unión de días habilitados por los turnos (mínimo Lun–Vie)
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos }) => {
+  // Bandas por turno: solo los turnos realmente usados por las clases
+  // mostradas (si no hay clases, todos), ordenadas por hora de inicio.
+  const bandas = useMemo<Banda[]>(() => {
+    const ids = new Set(entries.map((e) => e.turno_id));
+    const usados = turnos.filter((t) => ids.has(t.id));
+    const lista = (usados.length > 0 ? usados : turnos)
+      .map((t) => ({
+        turno: t,
+        bloques: [...t.bloques].sort((a, b) => a.orden - b.orden),
+      }))
+      .filter((b) => b.bloques.length > 0);
+    lista.sort(
+      (a, b) => minutos(a.bloques[0].hora_inicio) - minutos(b.bloques[0].hora_inicio)
+    );
+    return lista;
+  }, [entries, turnos]);
+
+  // Entries cuyo bloque no existe en las bandas (dato inconsistente):
+  // se muestran en una banda extra agrupadas por rango horario.
+  const huerfanas = useMemo(() => {
+    const bloqueIds = new Set(bandas.flatMap((b) => b.bloques.map((x) => x.id)));
+    const resto = entries.filter((e) => !bloqueIds.has(e.bloque_id));
+    if (resto.length === 0) return [];
+    const rangos = new Map<string, { inicio: string; fin: string }>();
+    for (const e of resto) rangos.set(`${e.hora_inicio}-${e.hora_fin}`, { inicio: e.hora_inicio, fin: e.hora_fin });
+    const bloques = [...rangos.values()]
+      .sort((a, b) => minutos(a.inicio) - minutos(b.inicio))
+      .map((r, i) => ({ id: -(i + 1), orden: i, hora_inicio: r.inicio, hora_fin: r.fin, es_receso: false }));
+    return [{ turno: null, bloques }] as Banda[];
+  }, [bandas, entries]);
+
+  const todasBandas = useMemo(() => [...bandas, ...huerfanas], [bandas, huerfanas]);
+
+  // Columnas: unión de días habilitados por los turnos usados y de días
+  // donde efectivamente hay clases (mínimo Lun–Vie)
   const dias = useMemo(() => {
     const set = new Set<number>();
-    for (const t of turnos) {
-      String(t.dias_semana).split(',').map(Number).filter(Boolean).forEach((d) => set.add(d));
+    for (const b of bandas) {
+      if (!b.turno) continue;
+      String(b.turno.dias_semana).split(',').map(Number).filter(Boolean).forEach((d) => set.add(d));
     }
+    for (const e of entries) set.add(e.dia_semana);
     const arr = [...set].sort((a, b) => a - b);
     return arr.length > 0 ? arr : [1, 2, 3, 4, 5];
-  }, [turnos]);
+  }, [bandas, entries]);
 
   const porCelda = useMemo(() => {
+    const map = new Map<string, HorarioEntry[]>();
+    for (const e of entries) {
+      const k = `${e.bloque_id}:${e.dia_semana}`;
+      const arr = map.get(k) || [];
+      arr.push(e);
+      map.set(k, arr);
+    }
+    return map;
+  }, [entries]);
+
+  const huerfanasPorCelda = useMemo(() => {
     const map = new Map<string, HorarioEntry[]>();
     for (const e of entries) {
       const k = `${e.hora_inicio}-${e.hora_fin}:${e.dia_semana}`;
@@ -60,49 +88,52 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
     return map;
   }, [entries]);
 
-  // Runs verticales por día: clases consecutivas (misma materia+sección+aula, en
-  // rangos contiguos sin receso) se fusionan en una sola celda (rowSpan).
-  // Solo se fusiona cuando cada celda del run contiene exactamente una clase.
-  const itemsPorCelda = useMemo(() => {
-    const items = new Map<string, ItemCelda[]>();
-    const cubiertas = new Set<number>();
-    for (const d of dias) {
-      for (let i = 0; i < filas.length; i++) {
-        const f = filas[i];
-        if (f.esReceso) continue;
-        const key = `${f.inicio}-${f.fin}:${d}`;
-        const cell = porCelda.get(key) || [];
-        const arr: ItemCelda[] = [];
-        for (const e of cell) {
-          if (cubiertas.has(e.id)) continue;
-          let span = 1;
-          let fin = f.fin;
-          if (cell.length === 1) {
-            let j = i + 1;
-            while (j < filas.length && !filas[j].esReceso && filas[j].inicio === fin) {
-              const nk = `${filas[j].inicio}-${filas[j].fin}:${d}`;
-              const nc = porCelda.get(nk) || [];
-              const nxt =
-                nc.length === 1 &&
-                nc[0].materia_id === e.materia_id &&
-                nc[0].seccion_id === e.seccion_id &&
-                nc[0].aula_id === e.aula_id
-                  ? nc[0]
-                  : null;
-              if (!nxt) break;
-              cubiertas.add(nxt.id);
-              span++;
-              fin = filas[j].fin;
-              j++;
-            }
+  // Runs verticales por día dentro de cada banda: bloques consecutivos (sin
+  // receso de por medio) con la misma materia+sección+aula se fusionan en una
+  // sola celda (rowSpan). Solo se fusiona si cada celda tiene una sola clase.
+  const { spans, cubiertas } = useMemo(() => {
+    const spans = new Map<string, { n: number; fin: string }>();
+    const cubiertas = new Set<string>();
+    for (const { bloques } of bandas) {
+      for (const d of dias) {
+        let i = 0;
+        while (i < bloques.length) {
+          const b = bloques[i];
+          if (b.es_receso) {
+            i++;
+            continue;
           }
-          arr.push({ e, span, fin });
+          const cell = porCelda.get(`${b.id}:${d}`) || [];
+          if (cell.length !== 1) {
+            i++;
+            continue;
+          }
+          const e = cell[0];
+          let n = 1;
+          let fin = b.hora_fin;
+          let j = i + 1;
+          while (j < bloques.length && !bloques[j].es_receso) {
+            const nc = porCelda.get(`${bloques[j].id}:${d}`) || [];
+            const nxt =
+              nc.length === 1 &&
+              nc[0].materia_id === e.materia_id &&
+              nc[0].seccion_id === e.seccion_id &&
+              nc[0].aula_id === e.aula_id
+                ? nc[0]
+                : null;
+            if (!nxt) break;
+            cubiertas.add(`${bloques[j].id}:${d}`);
+            n++;
+            fin = bloques[j].hora_fin;
+            j++;
+          }
+          if (n > 1) spans.set(`${b.id}:${d}`, { n, fin });
+          i = j;
         }
-        items.set(key, arr);
       }
     }
-    return items;
-  }, [filas, dias, porCelda]);
+    return { spans, cubiertas };
+  }, [bandas, dias, porCelda]);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-x-auto">
@@ -125,62 +156,94 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
           </tr>
         </thead>
         <tbody>
-          {filas.map((f) => {
-            const key = `${f.inicio}-${f.fin}`;
-            if (f.esReceso && ![...porCelda.keys()].some((k) => k.startsWith(key))) {
-              return (
-                <tr key={key} style={{ height: '1.75rem' }}>
-                  <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
-                    {fmtHora(f.inicio)}–{fmtHora(f.fin)}
-                  </td>
-                  <td
-                    colSpan={dias.length}
-                    className="h-6 rounded-lg bg-slate-800/50 border border-dashed border-slate-700/60 text-center"
-                  >
-                    <span className="text-[9px] font-bold tracking-[0.3em] text-slate-600 uppercase inline-flex items-center gap-1">
-                      <Coffee className="w-3 h-3" /> Receso
+          {todasBandas.map(({ turno, bloques }) => (
+            <React.Fragment key={turno ? turno.id : 'otras'}>
+              {todasBandas.length > 1 && (
+                <tr style={{ height: '1.5rem' }}>
+                  <td colSpan={dias.length + 1} className="align-middle">
+                    <span className="text-[9px] font-bold tracking-[0.3em] text-slate-500 uppercase">
+                      {turno ? turno.nombre : 'Otras horas'}
                     </span>
                   </td>
                 </tr>
-              );
-            }
-            return (
-              <tr key={key} style={{ height: '3.5rem' }}>
-                <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-2.5 h-2.5" />
-                    {fmtHora(f.inicio)}–{fmtHora(f.fin)}
-                  </span>
-                </td>
-                {dias.map((d) => {
-                  const items = itemsPorCelda.get(`${key}:${d}`) || [];
-                  const cell = porCelda.get(`${key}:${d}`) || [];
-                  if (cell.length > 0 && items.length === 0) return null; // cubierta por rowspan
-                  const unico = items.length === 1 ? items[0] : null;
-                  const fusion = unico !== null && unico.span > 1;
+              )}
+              {bloques.map((b) => {
+                const esReceso = !!b.es_receso;
+                const celdaKey = (d: number) => (b.id > 0 ? `${b.id}:${d}` : `${b.hora_inicio}-${b.hora_fin}:${d}`);
+                const ocupacion = (d: number) =>
+                  (b.id > 0 ? porCelda : huerfanasPorCelda).get(celdaKey(d)) || [];
+                if (esReceso) {
+                  const ocupada = dias.some((d) => ocupacion(d).length > 0);
                   return (
-                    <td
-                      key={d}
-                      rowSpan={fusion ? unico.span : undefined}
-                      className="relative p-0 align-top"
-                      style={{ height: '3.5rem' }}
-                    >
-                      <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
-                        {items.map((it) => (
-                          <ClaseCard
-                            key={it.e.id}
-                            entry={it.e}
-                            fin={it.fin}
-                            compacto={items.length > 1}
-                          />
-                        ))}
-                      </div>
-                    </td>
+                    <tr key={b.id} style={{ height: '1.75rem' }}>
+                      <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
+                        {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                      </td>
+                      {ocupada ? (
+                        dias.map((d) => {
+                          const items = ocupacion(d);
+                          return (
+                            <td key={d} className="relative p-0 align-top" style={{ height: '1.75rem' }}>
+                              <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
+                                {items.map((e) => (
+                                  <ClaseCard key={e.id} entry={e} compacto={items.length > 1} />
+                                ))}
+                              </div>
+                            </td>
+                          );
+                        })
+                      ) : (
+                        <td
+                          colSpan={dias.length}
+                          className="rounded-lg bg-slate-800/50 border border-dashed border-slate-700/60 text-center"
+                        >
+                          <span className="text-[9px] font-bold tracking-[0.3em] text-slate-600 uppercase inline-flex items-center gap-1">
+                            <Coffee className="w-3 h-3" /> Receso
+                          </span>
+                        </td>
+                      )}
+                    </tr>
                   );
-                })}
-              </tr>
-            );
-          })}
+                }
+                return (
+                  <tr key={b.id} style={{ height: '3.5rem' }}>
+                    <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                      </span>
+                    </td>
+                    {dias.map((d) => {
+                      const key = celdaKey(d);
+                      if (b.id > 0 && cubiertas.has(key)) return null;
+                      const items = ocupacion(d);
+                      const sp = b.id > 0 ? spans.get(key) : undefined;
+                      const fusion = items.length === 1 && sp && sp.n > 1;
+                      return (
+                        <td
+                          key={d}
+                          rowSpan={fusion ? sp.n : undefined}
+                          className="relative p-0 align-top"
+                          style={{ height: '3.5rem' }}
+                        >
+                          <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
+                            {items.map((e) => (
+                              <ClaseCard
+                                key={e.id}
+                                entry={e}
+                                fin={fusion ? sp.fin : undefined}
+                                compacto={items.length > 1}
+                              />
+                            ))}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </React.Fragment>
+          ))}
         </tbody>
       </table>
       {entries.length === 0 && (
