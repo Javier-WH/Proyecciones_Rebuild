@@ -20,8 +20,21 @@ interface Banda {
 }
 
 export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos }) => {
+  // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
+  // van al final, ordenados por su hora de inicio.
+  const ordenTurno = (nombre: string): number => {
+    const n = nombre
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toUpperCase();
+    if (n.includes('MANANA') || n.includes('MATUT')) return 0;
+    if (n.includes('TARDE') || n.includes('VESPERT')) return 1;
+    if (n.includes('NOCHE') || n.includes('NOCTURN')) return 2;
+    return 3;
+  };
+
   // Bandas por turno: solo los turnos realmente usados por las clases
-  // mostradas (si no hay clases, todos), ordenadas por hora de inicio.
+  // mostradas (si no hay clases, todos), en el orden fijo de turnos.
   const bandas = useMemo<Banda[]>(() => {
     const ids = new Set(entries.map((e) => e.turno_id));
     const usados = turnos.filter((t) => ids.has(t.id));
@@ -32,7 +45,9 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
       }))
       .filter((b) => b.bloques.length > 0);
     lista.sort(
-      (a, b) => minutos(a.bloques[0].hora_inicio) - minutos(b.bloques[0].hora_inicio)
+      (a, b) =>
+        ordenTurno(a.turno!.nombre) - ordenTurno(b.turno!.nombre) ||
+        minutos(a.bloques[0].hora_inicio) - minutos(b.bloques[0].hora_inicio)
     );
     return lista;
   }, [entries, turnos]);
