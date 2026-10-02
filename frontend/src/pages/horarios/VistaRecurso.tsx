@@ -8,25 +8,32 @@ interface ItemCelda {
   fin: string;
 }
 
-const ChipClase: React.FC<{ item: ItemCelda; renderLinea2: (e: HorarioEntry) => string }> = ({
-  item,
-  renderLinea2,
-}) => (
+const ChipClase: React.FC<{
+  item: ItemCelda;
+  renderLinea2: (e: HorarioEntry) => string;
+  compacto?: boolean;
+}> = ({ item, renderLinea2, compacto }) => (
   <div
-    className={`rounded-lg border px-2 py-1.5 mb-1 ${colorMateria(item.e.materia_id)} ${
-      item.span > 1 ? 'h-full flex flex-col justify-center mb-0' : ''
+    className={`rounded-lg border px-2 py-1.5 flex flex-col justify-center ${colorMateria(item.e.materia_id)} ${
+      compacto ? 'flex-1 min-h-0 overflow-hidden' : 'h-full'
     }`}
   >
-    <div className={`${item.span > 1 ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight line-clamp-2`}>
+    <div
+      className={`${item.span > 1 ? 'text-[11px]' : 'text-[10px]'} font-bold leading-tight ${
+        compacto ? 'line-clamp-1' : 'line-clamp-2'
+      }`}
+    >
       {item.e.materia_nombre}
     </div>
-    <div className="text-[9px] opacity-75 leading-tight mt-0.5">
+    <div className="text-[9px] opacity-75 leading-tight mt-0.5 line-clamp-1">
       {renderLinea2(item.e)}
       {item.span > 1 && ` · ${fmtHora(item.e.hora_inicio)}–${fmtHora(item.fin)}`}
     </div>
-    <div className="text-[8px] opacity-60 mt-0.5">
-      {item.e.seccion_nombre} · {item.e.turno_nombre}
-    </div>
+    {!compacto && (
+      <div className="text-[8px] opacity-60 mt-0.5">
+        {item.e.seccion_nombre} · {item.e.turno_nombre}
+      </div>
+    )}
   </div>
 );
 
@@ -151,7 +158,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
             const key = `${f.inicio}-${f.fin}`;
             if (f.esReceso && ![...porCelda.keys()].some((k) => k.startsWith(key))) {
               return (
-                <tr key={key}>
+                <tr key={key} style={{ height: '1.5rem' }}>
                   <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
                     {fmtHora(f.inicio)}–{fmtHora(f.fin)}
                   </td>
@@ -167,7 +174,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
               );
             }
             return (
-              <tr key={key}>
+              <tr key={key} style={{ height: '3rem' }}>
                 <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="w-2.5 h-2.5" />
@@ -184,16 +191,19 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                     <td
                       key={d}
                       rowSpan={fusion ? unico.span : undefined}
-                      className={`align-top ${fusion ? 'relative p-0' : ''}`}
+                      className="relative p-0 align-top"
                       style={{ height: '3rem' }}
                     >
-                      {fusion ? (
-                        <div className="absolute inset-0 p-0.5">
-                          <ChipClase item={unico} renderLinea2={renderLinea2} />
-                        </div>
-                      ) : (
-                        items.map((it) => <ChipClase key={it.e.id} item={it} renderLinea2={renderLinea2} />)
-                      )}
+                      <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
+                        {items.map((it) => (
+                          <ChipClase
+                            key={it.e.id}
+                            item={it}
+                            renderLinea2={renderLinea2}
+                            compacto={items.length > 1}
+                          />
+                        ))}
+                      </div>
                     </td>
                   );
                 })}

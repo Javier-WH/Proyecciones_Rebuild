@@ -340,7 +340,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
             <tbody>
               {bloques.map((b) =>
                 b.es_receso ? (
-                  <tr key={b.id}>
+                  <tr key={b.id} style={{ height: '1.75rem' }}>
                     <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
                       {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
                     </td>
@@ -354,7 +354,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  <tr key={b.id}>
+                  <tr key={b.id} style={{ height: '3.5rem' }}>
                     <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
