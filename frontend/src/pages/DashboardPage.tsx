@@ -7,6 +7,7 @@ import { ProfesoresPage } from './ProfesoresPage.js';
 import { CargaDocentePage } from './CargaDocentePage.js';
 import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
+import { ConfigHorariosModal } from './ConfigHorariosModal.js';
 import {
   GraduationCap,
   LogOut,
@@ -25,7 +26,8 @@ import {
   ClipboardList,
   Settings,
   UserCog,
-  CalendarClock
+  CalendarClock,
+  CalendarCog
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -36,6 +38,7 @@ export const DashboardPage: React.FC = () => {
   const [loadingSaga, setLoadingSaga] = useState(true);
   const [configMenuOpen, setConfigMenuOpen] = useState(false);
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
+  const [configHorariosOpen, setConfigHorariosOpen] = useState(false);
 
   useEffect(() => {
     const checkSagaStatus = async () => {
@@ -166,8 +169,8 @@ export const DashboardPage: React.FC = () => {
                   <div className="mt-0.5">{getRoleBadge(user?.role)}</div>
                 </div>
 
-                {/* Configuración (solo Master) */}
-                {user?.role === 'SUPER_USUARIO' && (
+                {/* Configuración (Master y Administrador) */}
+                {(user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR') && (
                   <div className="relative">
                     <button
                       onClick={() => setConfigMenuOpen((v) => !v)}
@@ -191,17 +194,32 @@ export const DashboardPage: React.FC = () => {
                           <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                             Configuración
                           </div>
+                          {user?.role === 'SUPER_USUARIO' && (
+                            <button
+                              onClick={() => {
+                                setConfigMenuOpen(false);
+                                setUsuariosModalOpen(true);
+                              }}
+                              className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <UserCog className="w-4 h-4 text-purple-400" />
+                              <div className="text-left">
+                                <div className="font-semibold text-xs">Usuarios del Sistema</div>
+                                <div className="text-[10px] text-slate-500">Crear y editar cuentas y permisos</div>
+                              </div>
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setConfigMenuOpen(false);
-                              setUsuariosModalOpen(true);
+                              setConfigHorariosOpen(true);
                             }}
                             className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
                           >
-                            <UserCog className="w-4 h-4 text-purple-400" />
+                            <CalendarCog className="w-4 h-4 text-blue-400" />
                             <div className="text-left">
-                              <div className="font-semibold text-xs">Usuarios del Sistema</div>
-                              <div className="text-[10px] text-slate-500">Crear y editar cuentas y permisos</div>
+                              <div className="font-semibold text-xs">Configuración de Horarios</div>
+                              <div className="text-[10px] text-slate-500">Reglas de generación automática</div>
                             </div>
                           </button>
                         </div>
@@ -353,6 +371,10 @@ export const DashboardPage: React.FC = () => {
         isOpen={usuariosModalOpen}
         onClose={() => setUsuariosModalOpen(false)}
         currentUserId={user?.id}
+      />
+      <ConfigHorariosModal
+        isOpen={configHorariosOpen}
+        onClose={() => setConfigHorariosOpen(false)}
       />
     </div>
   );

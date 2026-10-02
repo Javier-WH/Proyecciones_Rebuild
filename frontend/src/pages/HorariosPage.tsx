@@ -10,6 +10,7 @@ import { ReporteHorarioModal } from './ReporteHorarioModal.js';
 import {
   Aula,
   HorarioEntry,
+  HorarioConfig,
   SeccionRef,
   Turno,
   seccionesDe,
@@ -62,6 +63,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [entries, setEntries] = useState<HorarioEntry[]>([]);
   const [profesores, setProfesores] = useState<ProfesorLite[]>([]);
   const [pnfOptions, setPnfOptions] = useState<Array<[number, string]>>([]);
+  const [config, setConfig] = useState<HorarioConfig>({ min_horas_bloque: 2, max_horas_dia: 3 });
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ error: boolean; texto: string } | null>(null);
@@ -107,12 +109,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const fetchBase = async () => {
     setLoading(true);
     setErrorMsg(null);
-    const [rCarga, rTurnos, rAulas, rProf, rPnfs] = await Promise.all([
+    const [rCarga, rTurnos, rAulas, rProf, rPnfs, rConfig] = await Promise.all([
       apiFetch<{ periodo: string | null; rows: MateriaAsignableRow[] }>('/proyecciones/carga-docente'),
       apiFetch<Turno[]>('/horarios/turnos'),
       apiFetch<Aula[]>('/horarios/aulas'),
       apiFetch<ProfesorLite[]>('/profesores'),
       apiFetch<Array<{ id: number; nombre: string }>>('/horarios/pnfs'),
+      apiFetch<HorarioConfig>('/horarios/config'),
     ]);
     if (rCarga.success && rCarga.data) {
       setRows(rCarga.data.rows || []);
@@ -124,6 +127,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     if (rAulas.success && rAulas.data) setAulas(rAulas.data);
     if (rProf.success && rProf.data) setProfesores(rProf.data);
     if (rPnfs.success && rPnfs.data) setPnfOptions(rPnfs.data.map((p) => [p.id, p.nombre]));
+    if (rConfig.success && rConfig.data) setConfig(rConfig.data);
     setLoading(false);
   };
 
@@ -361,6 +365,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 materias={materiasSeccion}
                 entries={entries}
                 aulas={aulas}
+                config={config}
                 trimestre={lapso.n}
                 puedeEditar={puedeEditar}
                 onChanged={fetchEntries}

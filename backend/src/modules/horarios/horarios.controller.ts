@@ -378,3 +378,46 @@ export async function deleteTurnoEntriesHandler(request: FastifyRequest, reply: 
     return reply.status(500).send({ success: false, message: 'Error desagendando las clases.' });
   }
 }
+
+// GET /api/horarios/config — reglas de generación automática (cualquier usuario)
+export async function getConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const rows = await query<any[]>(
+      'SELECT min_horas_bloque, max_horas_dia FROM horario_config WHERE id = 1'
+    );
+    const c = rows[0] ?? { min_horas_bloque: 2, max_horas_dia: 3 };
+    return reply.send({ success: true, data: c });
+  } catch (e: any) {
+    request.log.error(e);
+    return reply.status(500).send({ success: false, message: 'Error cargando la configuración.' });
+  }
+}
+
+// PUT /api/horarios/config — actualiza las reglas de generación automática
+export async function updateConfigHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as { min_horas_bloque?: number; max_horas_dia?: number };
+  const min = Number(body.min_horas_bloque);
+  const max = Number(body.max_horas_dia);
+  if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max < 1) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Los valores deben ser enteros mayores o iguales a 1.',
+    });
+  }
+  if (min > max) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Las horas mínimas por bloque no pueden superar el máximo por día.',
+    });
+  }
+  try {
+    await query(
+      'INSERT INTO horario_config (id, min_horas_bloque, max_horas_dia) VALUES (1, ?, ?) ON DUPLICATE KEY UPDATE min_horas_bloque = VALUES(min_horas_bloque), max_horas_dia = VALUES(max_horas_dia)',
+      [min, max]
+    );
+    return reply.send({ success: true, message: 'Configuración de horarios actualizada.' });
+  } catch (e: any) {
+    request.log.error(e);
+    return reply.status(500).send({ success: false, message: 'Error guardando la configuración.' });
+  }
+}

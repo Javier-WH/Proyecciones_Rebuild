@@ -17,6 +17,7 @@ import {
   Aula,
   Bloque,
   HorarioEntry,
+  HorarioConfig,
   SeccionRef,
   Turno,
   DIAS_NOMBRES,
@@ -45,6 +46,7 @@ interface SeccionGridProps {
   materias: MateriaAsignableRow[];
   entries: HorarioEntry[];
   aulas: Aula[];
+  config: HorarioConfig;
   trimestre: number;
   puedeEditar: boolean;
   onChanged: () => void;
@@ -56,12 +58,13 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   materias,
   entries,
   aulas,
+  config,
   trimestre,
   puedeEditar,
   onChanged,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
-  const [aviso, setAviso] = useState<{ error: boolean; msg: string } | null>(null);
+  const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error' | 'warn'; msg: string } | null>(null);
   const [menuEntry, setMenuEntry] = useState<HorarioEntry | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -137,9 +140,40 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     [progreso]
   );
 
-  const mostrarAviso = (msg: string, error = false) => {
-    setAviso({ error, msg });
-    window.setTimeout(() => setAviso((a) => (a?.msg === msg ? null : a)), 5000);
+  const mostrarAviso = (msg: string, tipo: 'ok' | 'error' | 'warn' = 'ok') => {
+    setAviso({ tipo, msg });
+    window.setTimeout(() => setAviso((a) => (a?.msg === msg ? null : a)), 6000);
+  };
+
+  // Reglas de generación (min/max) evaluadas como advertencia tras un drop manual:
+  // devuelve el mensaje de advertencia o null si no se viola ninguna regla.
+  const evaluarReglas = (bloque: Bloque, dia: number, drag: DragData): string | null => {
+    const min = config.min_horas_bloque;
+    const max = config.max_horas_dia;
+    // Órdenes de bloques no-receso ocupados por esa materia ese día
+    // (excluyendo la entry que se está moviendo), + la celda destino.
+    const ocup = new Set<number>();
+    for (const b of bloques) {
+      if (b.es_receso) continue;
+      const e = porCelda.get(`${b.id}:${dia}`);
+      if (e && e.materia_id === drag.materia_id && e.id !== drag.entry_id) ocup.add(b.orden);
+    }
+    ocup.add(bloque.orden);
+    // Run consecutivo (por orden, sin receso intermedio) que contiene el nuevo bloque
+    let a = bloque.orden;
+    while (ocup.has(a - 1)) a--;
+    let z = bloque.orden;
+    while (ocup.has(z + 1)) z++;
+    const runLen = z - a + 1;
+    const totalDia = ocup.size;
+    const diaNombre = DIAS_NOMBRES[dia];
+    if (totalDia > max) {
+      return `⚠ Regla de horarios: '${drag.titulo}' queda con ${totalDia}h el ${diaNombre} (máximo ${max}h por día).`;
+    }
+    if (runLen < min) {
+      return `⚠ Regla de horarios: quedó una sesión suelta de ${runLen}h de '${drag.titulo}' el ${diaNombre} (mínimo ${min}h seguidas).`;
+    }
+    return null;
   };
 
   // Aulas ocupadas en un slot (día + rango horario) por clases de cualquier sección/lapso rival
@@ -182,10 +216,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       }),
     });
     if (res.success) {
-      mostrarAviso('Clase agendada.');
+      const regla = evaluarReglas(bloque, dia, drag);
+      mostrarAviso(regla ?? 'Clase agendada.', regla ? 'warn' : 'ok');
       onChanged();
     } else {
-      mostrarAviso(res.message || 'No se pudo agendar.', true);
+      mostrarAviso(res.message || 'No se pudo agendar.', 'error');
     }
   };
 
@@ -196,7 +231,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       setMenuEntry(null);
       onChanged();
     } else {
-      mostrarAviso(res.message || 'No se pudo quitar.', true);
+      mostrarAviso(res.message || 'No se pudo quitar.', 'error');
     }
   };
 
@@ -218,7 +253,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       setMenuEntry(null);
       onChanged();
     } else {
-      mostrarAviso(res.message || 'No se pudo cambiar el aula.', true);
+      mostrarAviso(res.message || 'No se pudo cambiar el aula.', 'error');
     }
   };
 
@@ -238,7 +273,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       const bloque = bloques.find((b) => b.id === Number(bloqueId));
       if (!bloque) return;
       if (!celdaValida(bloque, Number(dia), drag)) {
-        mostrarAviso('Esa celda no es válida para la clase (ocupada, receso o sin aula libre).', true);
+        mostrarAviso('Esa celda no es válida para la clase (ocupada, receso o sin aula libre).', 'error');
         return;
       }
       await handleDropEnCelda(bloque, Number(dia), drag);
@@ -268,9 +303,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       {aviso && (
         <div
           className={`mb-3 px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
-            aviso.error
+            aviso.tipo === 'error'
               ? 'bg-red-500/10 border-red-500/40 text-red-300'
-              : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+              : aviso.tipo === 'warn'
+                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
           }`}
         >
           {aviso.msg}

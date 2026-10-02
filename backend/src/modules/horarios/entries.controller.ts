@@ -392,6 +392,13 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
 
     const rivales = lapsosRivales(tipo, trimestre);
     const entries = await cargarEntries(periodo, rivales);
+
+    // Reglas de generación automática configurables
+    const cfgRows = await query<any[]>(
+      'SELECT min_horas_bloque, max_horas_dia FROM horario_config WHERE id = 1'
+    );
+    const minBloque = Math.max(1, Number(cfgRows[0]?.min_horas_bloque) || 2);
+    const maxDia = Math.max(minBloque, Number(cfgRows[0]?.max_horas_dia) || 3);
     const aulas = await query<any[]>('SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1');
     if (aulas.length === 0) {
       return reply.status(400).send({
@@ -501,53 +508,97 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
     let agendadas = 0;
     const aInsertar: any[] = [];
     for (const u of unidades) {
-      const diasUsados = new Set<number>(
-        (agendaPorUnidad.get(`${u.materia_id}:${u.seccion_id}`) || []).map((e) => e.dia_semana)
-      );
+      // Horas ya agendadas por día (para respetar max_horas_dia en modo completar)
+      const usadasPorDia = new Map<number, number>();
+      const diasUsados = new Set<number>();
+      for (const e of agendaPorUnidad.get(`${u.materia_id}:${u.seccion_id}`) || []) {
+        usadasPorDia.set(e.dia_semana, (usadasPorDia.get(e.dia_semana) ?? 0) + 1);
+        diasUsados.add(e.dia_semana);
+      }
+
+      // Divide las horas faltantes en sesiones de tamaño [minBloque, maxDia]
+      const sesiones: number[] = [];
       let restantes = u.faltan;
-      // Dos pasadas: primero días nuevos para la materia, luego cualquiera
-      for (const soloDiasNuevos of [true, false]) {
-        if (restantes <= 0) break;
-        for (const dia of u.dias) {
-          if (restantes <= 0) break;
-          if (soloDiasNuevos && diasUsados.has(dia)) continue;
-          for (const b of u.bloques) {
-            if (restantes <= 0) break;
-            // La sección y el profesor deben estar libres; y debe existir aula libre
-            const choque = conflictoEn(entries, dia, b.hora_inicio, b.hora_fin, {
-              seccion_id: u.seccion_id,
-              profesor_id: u.profesor_id,
-            });
-            if (choque) continue;
-            const ocupadas = aulasOcupadas(entries, dia, b.hora_inicio, b.hora_fin);
-            const aulaId = elegirAula(aulas, ocupadas, usoPorAula, u.pnf_saga_id);
-            if (aulaId === null) continue;
-            const nueva: EntryRow = {
-              id: -(aInsertar.length + 1), // id temporal en memoria
-              materia_id: u.materia_id,
-              seccion_id: u.seccion_id,
-              profesor_id: u.profesor_id,
-              dia_semana: dia,
-              bloque_id: b.id,
-              aula_id: aulaId,
-              hora_inicio: b.hora_inicio,
-              hora_fin: b.hora_fin,
-            };
-            entries.push(nueva);
-            usoPorAula.set(aulaId, (usoPorAula.get(aulaId) ?? 0) + 1);
-            diasUsados.add(dia);
-            aInsertar.push(nueva);
-            restantes--;
-            agendadas++;
+      while (restantes > 0) {
+        let s = Math.min(maxDia, restantes);
+        if (restantes - s > 0 && restantes - s < minBloque) s = restantes - minBloque;
+        if (s < minBloque) break; // remanente imposible según las reglas
+        sesiones.push(s);
+        restantes -= s;
+      }
+      sesiones.sort((a, b) => b - a); // runs grandes primero (más difíciles de encajar)
+
+      let sinEncajar = restantes; // horas que no pudieron formar sesión válida
+
+      // Coloca cada sesión como un run de bloques consecutivos en un mismo día,
+      // mismo aula. Dos pasadas: primero días nuevos para la materia, luego cualquiera.
+      for (const s of sesiones) {
+        let colocada = false;
+        for (const soloDiasNuevos of [true, false]) {
+          if (colocada) break;
+          for (const dia of u.dias) {
+            if (colocada) break;
+            if (soloDiasNuevos && diasUsados.has(dia)) continue;
+            if ((usadasPorDia.get(dia) ?? 0) + s > maxDia) continue;
+            // Ventanas de s bloques consecutivos (por orden, sin receso intermedio)
+            for (let k = 0; k + s <= u.bloques.length && !colocada; k++) {
+              const ventana = u.bloques.slice(k, k + s);
+              if (!ventana.every((b, j) => b.orden === ventana[0].orden + j)) continue;
+              // Sección y profesor libres en toda la ventana
+              let choque = false;
+              const ocupadasRun = new Set<number>();
+              for (const b of ventana) {
+                if (
+                  conflictoEn(entries, dia, b.hora_inicio, b.hora_fin, {
+                    seccion_id: u.seccion_id,
+                    profesor_id: u.profesor_id,
+                  })
+                ) {
+                  choque = true;
+                  break;
+                }
+                for (const a of aulasOcupadas(entries, dia, b.hora_inicio, b.hora_fin)) {
+                  ocupadasRun.add(a);
+                }
+              }
+              if (choque) continue;
+              const aulaId = elegirAula(aulas, ocupadasRun, usoPorAula, u.pnf_saga_id);
+              if (aulaId === null) continue;
+              for (const b of ventana) {
+                const nueva: EntryRow = {
+                  id: -(aInsertar.length + 1), // id temporal en memoria
+                  materia_id: u.materia_id,
+                  seccion_id: u.seccion_id,
+                  profesor_id: u.profesor_id,
+                  dia_semana: dia,
+                  bloque_id: b.id,
+                  aula_id: aulaId,
+                  hora_inicio: b.hora_inicio,
+                  hora_fin: b.hora_fin,
+                };
+                entries.push(nueva);
+                aInsertar.push(nueva);
+              }
+              usoPorAula.set(aulaId, (usoPorAula.get(aulaId) ?? 0) + s);
+              usadasPorDia.set(dia, (usadasPorDia.get(dia) ?? 0) + s);
+              diasUsados.add(dia);
+              agendadas += s;
+              colocada = true;
+            }
           }
         }
+        if (!colocada) sinEncajar += s;
       }
-      if (restantes > 0) {
+
+      if (sinEncajar > 0) {
         pendientes.push({
           materia_nombre: u.materia_nombre,
           seccion_nombre: u.seccion_nombre,
-          faltan: restantes,
-          motivo: 'Sin slots libres (choque de aula, sección o profesor)',
+          faltan: sinEncajar,
+          motivo:
+            sinEncajar < minBloque
+              ? `Resto de ${sinEncajar}h menor al mínimo por bloque (${minBloque}h)`
+              : `Sin run de ${minBloque}-${maxDia} bloques libres (choque de aula, sección o profesor)`,
         });
       }
     }

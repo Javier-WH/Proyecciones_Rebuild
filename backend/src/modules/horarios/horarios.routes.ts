@@ -10,6 +10,8 @@ import {
   deleteTurnoHandler,
   replaceBloquesHandler,
   deleteTurnoEntriesHandler,
+  getConfigHandler,
+  updateConfigHandler,
   listPnfsHandler,
 } from './horarios.controller.js';
 import {
@@ -48,6 +50,10 @@ export async function horariosRoutes(fastify: FastifyInstance) {
     { preHandler: [authenticate, authorizeRoles(...GESTORES)] },
     deleteTurnoEntriesHandler
   );
+
+  // Reglas de generación automática
+  fastify.get('/config', { preHandler: [authenticate] }, getConfigHandler);
+  fastify.put('/config', { preHandler: [authenticate, authorizeRoles(...ADMINS)] }, updateConfigHandler);
 
   // Entries del horario (una clase en un bloque/día/aula)
   fastify.get('/entries', { preHandler: [authenticate] }, listEntriesHandler);

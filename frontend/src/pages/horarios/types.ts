@@ -59,6 +59,12 @@ export interface HorarioEntry {
   turno_bloque_nombre: string;
 }
 
+// Reglas configurables de generación automática
+export interface HorarioConfig {
+  min_horas_bloque: number;
+  max_horas_dia: number;
+}
+
 export interface SeccionRef {
   seccion_id: number;
   seccion_nombre: string;

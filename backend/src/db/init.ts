@@ -375,6 +375,17 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // 9e. Configuración de reglas de generación automática de horarios (fila única id=1)
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS horario_config (
+      id TINYINT PRIMARY KEY,
+      min_horas_bloque INT NOT NULL DEFAULT 2,
+      max_horas_dia INT NOT NULL DEFAULT 3,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+  await db.query('INSERT IGNORE INTO horario_config (id) VALUES (1)');
+
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
   const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);
   if (existingUsers.length === 0) {
