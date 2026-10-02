@@ -158,7 +158,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
             const key = `${f.inicio}-${f.fin}`;
             if (f.esReceso && ![...porCelda.keys()].some((k) => k.startsWith(key))) {
               return (
-                <tr key={key} style={{ height: '1.5rem' }}>
+                <tr key={key} style={{ height: '1.75rem' }}>
                   <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
                     {fmtHora(f.inicio)}–{fmtHora(f.fin)}
                   </td>
@@ -174,7 +174,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
               );
             }
             return (
-              <tr key={key} style={{ height: '3rem' }}>
+              <tr key={key} style={{ height: '3.5rem' }}>
                 <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="w-2.5 h-2.5" />
@@ -192,7 +192,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       key={d}
                       rowSpan={fusion ? unico.span : undefined}
                       className="relative p-0 align-top"
-                      style={{ height: '3rem' }}
+                      style={{ height: '3.5rem' }}
                     >
                       <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
                         {items.map((it) => (
