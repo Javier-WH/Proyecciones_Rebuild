@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { Perfil } from './PerfilesModal.js';
+import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
 import {
   X,
   Loader2,
@@ -11,7 +12,8 @@ import {
   Trash2,
   GraduationCap,
   Search,
-  HelpCircle
+  HelpCircle,
+  CalendarCheck
 } from 'lucide-react';
 
 export interface Profesor {
@@ -79,6 +81,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [dispOpen, setDispOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -473,6 +476,16 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
           </div>
 
           <div className="pt-2 border-t border-slate-800 flex items-center justify-end gap-3">
+            {editingId && (
+              <button
+                type="button"
+                onClick={() => setDispOpen(true)}
+                className="mr-auto px-4 py-2.5 border border-emerald-700/60 text-emerald-300 rounded-xl hover:bg-emerald-500/10 font-semibold flex items-center gap-2 cursor-pointer"
+              >
+                <CalendarCheck className="w-4 h-4" />
+                <span>Disponibilidad</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -491,6 +504,12 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
           </div>
         </form>
       </div>
+
+      <DisponibilidadProfesorModal
+        isOpen={dispOpen}
+        profesor={profesor}
+        onClose={() => setDispOpen(false)}
+      />
     </div>
   );
 };

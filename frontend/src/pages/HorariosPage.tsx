@@ -7,6 +7,7 @@ import { AulasPanel } from './horarios/AulasPanel.js';
 import { TurnosPanel } from './horarios/TurnosPanel.js';
 import { VistaRecurso } from './horarios/VistaRecurso.js';
 import { ReporteHorarioModal } from './ReporteHorarioModal.js';
+import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import {
   Aula,
   HorarioEntry,
@@ -33,6 +34,7 @@ import {
   Crosshair,
   CheckCircle2,
   Search,
+  Pencil,
 } from 'lucide-react';
 
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
@@ -91,6 +93,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [reporteOpen, setReporteOpen] = useState(false);
   const [erroresOpen, setErroresOpen] = useState(false);
   const [resaltar, setResaltar] = useState<Set<string> | null>(null);
+  const [profEdit, setProfEdit] = useState<Profesor | null>(null);
 
   const lapsos = useMemo(() => {
     const set = new Set<string>();
@@ -249,6 +252,15 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     setErroresOpen(false);
     setResaltar(new Set(v.bloques.map((b) => `${b}:${v.dia}`)));
     window.setTimeout(() => setResaltar(null), 8000);
+  };
+
+  // Abre el modal de edición del profesor actualmente seleccionado en la vista
+  const editarProfesorSel = async () => {
+    const id = profesorId ?? profesores[0]?.id;
+    if (!id) return;
+    const res = await apiFetch<Profesor>(`/profesores/${id}`);
+    if (res.success && res.data) setProfEdit(res.data);
+    else mostrarAviso(res.message || 'No se pudo cargar el profesor.', true);
   };
 
   const mostrarAviso = (texto: string, error = false) => {
@@ -559,11 +571,22 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               </select>
             )}
             {vista === 'profesor' && (
-              <ProfesorSearchSelect
-                profesores={profesores}
-                value={profesorId ?? profesores[0]?.id ?? null}
-                onChange={setProfesorId}
-              />
+              <>
+                <ProfesorSearchSelect
+                  profesores={profesores}
+                  value={profesorId ?? profesores[0]?.id ?? null}
+                  onChange={setProfesorId}
+                />
+                {puedeEditar && (
+                  <button
+                    onClick={editarProfesorSel}
+                    title="Editar profesor"
+                    className="p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
             )}
           </div>
 
@@ -618,6 +641,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         secciones={secciones}
         turnos={turnos}
         entries={entries}
+      />
+
+      <ProfesorModal
+        isOpen={profEdit !== null}
+        profesor={profEdit}
+        onClose={() => setProfEdit(null)}
+        onSuccess={fetchBase}
       />
     </div>
   );

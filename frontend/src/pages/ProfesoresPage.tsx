@@ -5,6 +5,7 @@ import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import { TiposContratoModal } from './TiposContratoModal.js';
 import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
+import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
 import {
   Users,
   Plus,
@@ -20,7 +21,8 @@ import {
   Power,
   PowerOff,
   Mail,
-  GraduationCap
+  GraduationCap,
+  CalendarCheck
 } from 'lucide-react';
 
 export const ProfesoresPage: React.FC = () => {
@@ -42,6 +44,10 @@ export const ProfesoresPage: React.FC = () => {
   });
   const [modalTipos, setModalTipos] = useState(false);
   const [modalPerfiles, setModalPerfiles] = useState(false);
+  const [modalDisp, setModalDisp] = useState<{ open: boolean; profesor: Profesor | null }>({
+    open: false,
+    profesor: null,
+  });
 
   const fetchProfesores = async () => {
     setLoading(true);
@@ -322,6 +328,13 @@ export const ProfesoresPage: React.FC = () => {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => setModalDisp({ open: true, profesor: p })}
+                          className="p-2 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Disponibilidad horaria"
+                        >
+                          <CalendarCheck className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleToggleActivo(p)}
                           className={`p-2 rounded-lg transition-colors cursor-pointer ${
                             p.activo
@@ -352,6 +365,12 @@ export const ProfesoresPage: React.FC = () => {
       <TiposContratoModal isOpen={modalTipos} onClose={() => setModalTipos(false)} />
 
       <PerfilesModal isOpen={modalPerfiles} onClose={() => setModalPerfiles(false)} />
+
+      <DisponibilidadProfesorModal
+        isOpen={modalDisp.open}
+        profesor={modalDisp.profesor}
+        onClose={() => setModalDisp({ open: false, profesor: null })}
+      />
     </div>
   );
 };

@@ -709,3 +709,93 @@ export async function syncTiposContratoHandler(request: FastifyRequest, reply: F
     return reply.status(500).send({ success: false, message: 'Error sincronizando tipos de contrato.' });
   }
 }
+
+// ---------------------------------------------------------------------------
+// DISPONIBILIDAD HORARIA DEL PROFESOR
+// Solo se persisten los slots BLOQUEADOS: la ausencia de fila = disponible.
+// El slot se identifica por (dia_semana, hora_inicio, hora_fin), no por
+// bloque_id, porque la grilla fusiona bloques de varios turnos que pueden
+// compartir horas.
+// ---------------------------------------------------------------------------
+
+const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+const normHora = (h: string) => (h.length === 5 ? `${h}:00` : h);
+
+// true si el profesor PUEDE dar clases en ese slot. Reusa esto desde el
+// generador de horarios y el reporte de violaciones (solape, no igualdad,
+// para tolerar bloques redefinidos).
+export async function profesorDisponibleEn(
+  profesorId: number,
+  diaSemana: number,
+  horaInicio: string,
+  horaFin: string
+): Promise<boolean> {
+  const rows = await query<any[]>(
+    `SELECT id FROM profesor_disponibilidad
+     WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio < ? AND hora_fin > ?
+     LIMIT 1`,
+    [profesorId, diaSemana, normHora(horaFin), normHora(horaInicio)]
+  );
+  return rows.length === 0;
+}
+
+// GET /api/profesores/:id/disponibilidad — slots bloqueados del profesor
+export async function getDisponibilidadHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  try {
+    const rows = await query<any[]>(
+      `SELECT dia_semana, TIME_FORMAT(hora_inicio, '%H:%i') AS hora_inicio,
+              TIME_FORMAT(hora_fin, '%H:%i') AS hora_fin
+       FROM profesor_disponibilidad WHERE profesor_id = ?
+       ORDER BY dia_semana, hora_inicio`,
+      [id]
+    );
+    return reply.send({ success: true, data: rows });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error obteniendo la disponibilidad.' });
+  }
+}
+
+// PUT /api/profesores/:id/disponibilidad — marca o libera un slot
+// body: { dia_semana, hora_inicio, hora_fin, disponible }
+export async function setDisponibilidadSlotHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const body = request.body as {
+    dia_semana?: number;
+    hora_inicio?: string;
+    hora_fin?: string;
+    disponible?: boolean;
+  };
+  const dia = Number(body.dia_semana);
+  const ini = String(body.hora_inicio ?? '').trim();
+  const fin = String(body.hora_fin ?? '').trim();
+  if (!Number.isInteger(dia) || dia < 1 || dia > 7) {
+    return reply.status(400).send({ success: false, message: 'dia_semana debe ser un entero entre 1 y 7.' });
+  }
+  if (!HORA_RE.test(ini) || !HORA_RE.test(fin) || normHora(ini) >= normHora(fin)) {
+    return reply.status(400).send({ success: false, message: 'Rango horario inválido (HH:MM, inicio < fin).' });
+  }
+
+  try {
+    const prof = await query<any[]>('SELECT id FROM profesores WHERE id = ? LIMIT 1', [id]);
+    if (prof.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (body.disponible === false) {
+      await query(
+        'INSERT IGNORE INTO profesor_disponibilidad (profesor_id, dia_semana, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)',
+        [id, dia, normHora(ini), normHora(fin)]
+      );
+    } else {
+      await query(
+        'DELETE FROM profesor_disponibilidad WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?',
+        [id, dia, normHora(ini), normHora(fin)]
+      );
+    }
+    return reply.send({ success: true, message: 'Disponibilidad actualizada.' });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error actualizando la disponibilidad.' });
+  }
+}
