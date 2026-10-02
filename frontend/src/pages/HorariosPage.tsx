@@ -15,11 +15,14 @@ import {
   Turno,
   seccionesDe,
   fmtHora,
+  traslapan,
+  DIAS_NOMBRES,
 } from './horarios/types.js';
 import {
   CalendarClock,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Sparkles,
   Eraser,
@@ -27,6 +30,8 @@ import {
   Clock,
   Printer,
   Users,
+  Crosshair,
+  CheckCircle2,
 } from 'lucide-react';
 
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
@@ -41,6 +46,14 @@ interface ProfesorLite {
   id: number;
   nombres: string;
   apellidos: string;
+}
+
+interface Violacion {
+  seccion_id: number;
+  dia: number;
+  bloques: number[]; // bloque_ids a resaltar en la grilla de la sección
+  detalle: string;
+  error: string;
 }
 
 export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange }) => {
@@ -75,6 +88,8 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [profesorId, setProfesorId] = useState<number | null>(null);
   const [generando, setGenerando] = useState(false);
   const [reporteOpen, setReporteOpen] = useState(false);
+  const [erroresOpen, setErroresOpen] = useState(false);
+  const [resaltar, setResaltar] = useState<Set<string> | null>(null);
 
   const lapsos = useMemo(() => {
     const set = new Set<string>();
@@ -100,6 +115,140 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     () => (seccion ? rowsLapso.filter((r) => r.seccion_id === seccion.seccion_id) : []),
     [rowsLapso, seccion]
   );
+
+  // Auditoría del lapso: choques de sección/profesor/aula, clases en receso o
+  // fuera de los días del turno, y violaciones de las reglas de generación
+  // (mínimo de horas seguidas por sesión / máximo de horas por día).
+  const violaciones = useMemo<Violacion[]>(() => {
+    const out: Violacion[] = [];
+    const secById = new Map(secciones.map((s) => [s.seccion_id, s]));
+    const turnoBySaga = new Map<number, Turno>(
+      turnos.filter((t) => t.saga_id != null).map((t) => [t.saga_id as number, t])
+    );
+    const profDe = (e: HorarioEntry) =>
+      e.profesor_id
+        ? `${e.prof_apellidos ?? ''}, ${e.prof_nombres ?? ''}`.replace(/^,\s*/, '')
+        : 'sin profesor asignado';
+    const detalle = (e: HorarioEntry) => {
+      const s = secById.get(e.seccion_id);
+      return `La materia '${e.materia_nombre}' del PNF ${s?.pnf_nombre ?? '—'}, ` +
+        `sección ${e.seccion_nombre} (${s?.proyeccion_nombre ?? '—'}), ` +
+        `turno ${e.turno_nombre}, ${profDe(e)},`;
+    };
+    const cuando = (e: HorarioEntry) =>
+      `el ${DIAS_NOMBRES[e.dia_semana]} ${fmtHora(e.hora_inicio)}–${fmtHora(e.hora_fin)}`;
+
+    // Clase en bloque de receso o en día no habilitado para el turno
+    for (const e of entries) {
+      if (e.es_receso) {
+        out.push({
+          seccion_id: e.seccion_id,
+          dia: e.dia_semana,
+          bloques: [e.bloque_id],
+          detalle: detalle(e),
+          error: `está agendada ${cuando(e)}, un bloque de receso.`,
+        });
+        continue;
+      }
+      const t = turnoBySaga.get(e.turno_saga_id);
+      if (t && !String(t.dias_semana).split(',').map(Number).includes(e.dia_semana)) {
+        out.push({
+          seccion_id: e.seccion_id,
+          dia: e.dia_semana,
+          bloques: [e.bloque_id],
+          detalle: detalle(e),
+          error: `el ${DIAS_NOMBRES[e.dia_semana]} no es un día habilitado del turno '${t.nombre}'.`,
+        });
+      }
+    }
+
+    // Choques: dos clases traslapadas compartiendo sección, profesor o aula
+    const choques: [string, (e: HorarioEntry) => string | null][] = [
+      ['la misma sección', (e) => `s:${e.seccion_id}:${e.dia_semana}`],
+      ['el mismo profesor', (e) => (e.profesor_id ? `p:${e.profesor_id}:${e.dia_semana}` : null)],
+      ['el mismo aula', (e) => `a:${e.aula_id}:${e.dia_semana}`],
+    ];
+    for (const [recurso, keyFn] of choques) {
+      const grupos = new Map<string, HorarioEntry[]>();
+      for (const e of entries) {
+        const k = keyFn(e);
+        if (!k) continue;
+        const g = grupos.get(k);
+        if (g) g.push(e);
+        else grupos.set(k, [e]);
+      }
+      for (const g of grupos.values()) {
+        for (let i = 0; i < g.length; i++) {
+          for (let j = i + 1; j < g.length; j++) {
+            const [a, b] = [g[i], g[j]];
+            if (!traslapan(a.hora_inicio, a.hora_fin, b.hora_inicio, b.hora_fin)) continue;
+            out.push({
+              seccion_id: b.seccion_id,
+              dia: b.dia_semana,
+              bloques: [b.bloque_id],
+              detalle: detalle(b),
+              error: `choca ${cuando(b)} con '${a.materia_nombre}' (sección ${a.seccion_nombre}, aula ${a.aula_codigo}) por ${recurso}.`,
+            });
+          }
+        }
+      }
+    }
+
+    // Reglas de generación por materia+sección+día
+    const porDia = new Map<string, HorarioEntry[]>();
+    for (const e of entries) {
+      if (e.es_receso) continue;
+      const k = `${e.seccion_id}:${e.materia_id}:${e.dia_semana}`;
+      const g = porDia.get(k);
+      if (g) g.push(e);
+      else porDia.set(k, [e]);
+    }
+    for (const g of porDia.values()) {
+      const ord = [...g].sort((a, b) => a.bloque_orden - b.bloque_orden);
+      const dia = ord[0].dia_semana;
+      if (ord.length > config.max_horas_dia) {
+        out.push({
+          seccion_id: ord[0].seccion_id,
+          dia,
+          bloques: ord.map((e) => e.bloque_id),
+          detalle: detalle(ord[0]),
+          error: `tiene ${ord.length}h el ${DIAS_NOMBRES[dia]} (máximo ${config.max_horas_dia}h por día).`,
+        });
+      }
+      // Sesiones = runs de bloques consecutivos por orden (un receso corta el run)
+      let run: HorarioEntry[] = [ord[0]];
+      const cerrarRun = () => {
+        if (run.length < config.min_horas_bloque) {
+          out.push({
+            seccion_id: run[0].seccion_id,
+            dia,
+            bloques: run.map((e) => e.bloque_id),
+            detalle: detalle(run[0]),
+            error: `tiene una sesión suelta de ${run.length}h el ${DIAS_NOMBRES[dia]} ` +
+              `${fmtHora(run[0].hora_inicio)}–${fmtHora(run[run.length - 1].hora_fin)} ` +
+              `(mínimo ${config.min_horas_bloque}h seguidas).`,
+          });
+        }
+      };
+      for (let i = 1; i < ord.length; i++) {
+        if (ord[i].bloque_orden === ord[i - 1].bloque_orden + 1) run.push(ord[i]);
+        else {
+          cerrarRun();
+          run = [ord[i]];
+        }
+      }
+      cerrarRun();
+    }
+    return out;
+  }, [entries, secciones, turnos, config]);
+
+  const irAViolacion = (v: Violacion) => {
+    setVista('seccion');
+    setSeccionId(v.seccion_id);
+    setErroresOpen(false);
+    setResaltar(new Set(v.bloques.map((b) => `${b}:${v.dia}`)));
+    window.setTimeout(() => setResaltar(null), 8000);
+  };
 
   const mostrarAviso = (texto: string, error = false) => {
     setAviso({ error, texto });
@@ -215,6 +364,73 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 <Eraser className="w-3.5 h-3.5" /> Regenerar
               </button>
             </>
+          )}
+          {tab === 'horario' && (
+            <div className="relative">
+              <button
+                onClick={() => setErroresOpen((v) => !v)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border transition-colors ${
+                  violaciones.length > 0
+                    ? 'bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/40'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                }`}
+                title="Errores y violaciones del horario"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" /> Errores
+                {violaciones.length > 0 && (
+                  <span className="min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                    {violaciones.length}
+                  </span>
+                )}
+              </button>
+              {erroresOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setErroresOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-[30rem] max-w-[90vw] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                      <span>Violaciones del lapso</span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded-md text-[10px] ${
+                          violaciones.length > 0
+                            ? 'bg-red-500/20 text-red-300'
+                            : 'bg-emerald-500/20 text-emerald-300'
+                        }`}
+                      >
+                        {violaciones.length}
+                      </span>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto p-2 space-y-2">
+                      {violaciones.length === 0 && (
+                        <div className="flex items-center gap-2 px-3 py-4 text-[11px] text-emerald-300">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          Sin errores: no hay choques ni violaciones de las reglas en este lapso.
+                        </div>
+                      )}
+                      {violaciones.map((v, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl border border-red-500/25 bg-red-500/5 px-3 py-2.5 flex items-start gap-3"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] text-slate-300 leading-snug">
+                              {v.detalle}{' '}
+                              <span className="text-red-300 font-semibold">{v.error}</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => irAViolacion(v)}
+                            title="Ver en el horario de la sección"
+                            className="shrink-0 px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-red-500/20 hover:text-red-200 border border-slate-700 text-slate-300 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Crosshair className="w-3 h-3" /> Ir
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
           {tab === 'horario' && (
             <button
@@ -368,6 +584,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 config={config}
                 trimestre={lapso.n}
                 puedeEditar={puedeEditar}
+                resaltar={resaltar}
                 onChanged={fetchEntries}
               />
             ) : (

@@ -49,6 +49,7 @@ interface SeccionGridProps {
   config: HorarioConfig;
   trimestre: number;
   puedeEditar: boolean;
+  resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
   onChanged: () => void;
 }
 
@@ -61,6 +62,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   config,
   trimestre,
   puedeEditar,
+  resaltar,
   onChanged,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
@@ -377,6 +379,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           valida={valida}
                           activo={!!activo}
                           puedeEditar={puedeEditar}
+                          resaltada={resaltar?.has(key) ?? false}
                           onAbrirMenu={setMenuEntry}
                         />
                       );
@@ -591,12 +594,14 @@ const Celda: React.FC<{
   valida: boolean | null;
   activo: boolean;
   puedeEditar: boolean;
+  resaltada: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, span, finHasta, valida, activo, puedeEditar, onAbrirMenu }) => {
+}> = ({ id, entry, span, finHasta, valida, activo, puedeEditar, resaltada, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
     'relative rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
+  if (resaltada) cls += 'ring-2 ring-red-400 animate-pulse ';
   if (activo) {
     cls += valida
       ? 'border-emerald-400/60 bg-emerald-500/10 '
