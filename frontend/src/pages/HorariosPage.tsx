@@ -23,6 +23,7 @@ import {
   DIAS_NOMBRES,
   ErrorClase,
   pnfLabel,
+  normMateria,
 } from './horarios/types.js';
 import {
   CalendarClock,
@@ -376,6 +377,58 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     }
     return m;
   }, [violaciones]);
+
+  // Advertencias (triángulo amarillo) por entry: no son errores, son avisos.
+  //  - La materia tiene aulas preferidas y quedó en otra distinta.
+  //  - Clase en instalación deportiva que no es la última del día de la
+  //    sección (los estudiantes llegarían sudados a la siguiente clase).
+  const advertenciasPorEntry = useMemo(() => {
+    const m = new Map<number, string[]>();
+    const add = (id: number, txt: string) => {
+      const arr = m.get(id) ?? [];
+      arr.push(txt);
+      m.set(id, arr);
+    };
+    const prefPorMateria = new Map<string, Set<number>>();
+    for (const a of aulas) {
+      for (const nm of a.materias ?? []) {
+        const k = normMateria(nm);
+        const s = prefPorMateria.get(k) ?? new Set<number>();
+        s.add(a.id);
+        prefPorMateria.set(k, s);
+      }
+    }
+    const deportivas = new Set(
+      aulas.filter((a) => a.tipo === 'INSTALACION_DEPORTIVA').map((a) => a.id)
+    );
+    for (const e of entries) {
+      const pref = prefPorMateria.get(normMateria(e.materia_nombre));
+      if (pref?.size && !pref.has(e.aula_id)) {
+        add(e.id, `'${e.materia_nombre}' no está en su aula preferida.`);
+      }
+      if (deportivas.has(e.aula_id) && !e.es_receso) {
+        const despues = entries
+          .filter(
+            (o) =>
+              o.id !== e.id &&
+              o.seccion_id === e.seccion_id &&
+              o.dia_semana === e.dia_semana &&
+              minutos(o.hora_inicio) >= minutos(e.hora_fin)
+          )
+          .sort((a, b) => minutos(a.hora_inicio) - minutos(b.hora_inicio));
+        if (despues.length > 0) {
+          const nxt = despues[0];
+          add(
+            e.id,
+            `'${e.materia_nombre}' es en una instalación deportiva pero no es la última ` +
+              `clase del día: después tiene '${nxt.materia_nombre}' a las ` +
+              `${fmtHoraCfg(nxt.hora_inicio, usa12)}.`
+          );
+        }
+      }
+    }
+    return m;
+  }, [entries, aulas, usa12]);
 
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
@@ -837,6 +890,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 forzar={forzar}
                 resaltar={resaltar}
                 enError={celdasEnError}
+                advertencias={advertenciasPorEntry}
                 onChanged={fetchEntries}
               />
             ) : (
@@ -852,7 +906,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               turnos={turnos}
               formato12={usa12}
               enError={celdasEnError}
-              aulas={aulas}
+              advertencias={advertenciasPorEntry}
             />
           )}
 
@@ -863,7 +917,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               turnos={turnos}
               formato12={usa12}
               enError={celdasEnError}
-              aulas={aulas}
+              advertencias={advertenciasPorEntry}
             />
           )}
         </>

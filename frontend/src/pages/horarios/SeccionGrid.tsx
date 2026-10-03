@@ -61,6 +61,7 @@ interface SeccionGridProps {
   forzar?: boolean; // permite guardar movimientos con conflictos por solape
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
+  advertencias?: Map<number, string[]>; // entry.id → avisos (triángulo amarillo)
   onChanged: () => void;
 }
 
@@ -76,6 +77,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   forzar,
   resaltar,
   enError,
+  advertencias,
   onChanged,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
@@ -199,23 +201,10 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     [progreso]
   );
 
-  // Advertencia: la MATERIA tiene aulas preferidas configuradas y la clase
-  // quedó en otra distinta (triángulo amarillo bajo el bloque).
-  const aulasPrefPorMateria = useMemo(() => {
-    const m = new Map<string, Set<number>>(); // materia normalizada → aula_ids preferidas
-    for (const a of aulas) {
-      for (const mat of a.materias ?? []) {
-        const k = normMateria(mat);
-        const s = m.get(k) ?? new Set<number>();
-        s.add(a.id);
-        m.set(k, s);
-      }
-    }
-    return m;
-  }, [aulas]);
-  const fueraDeAulaPref = (e: HorarioEntry) => {
-    const pref = aulasPrefPorMateria.get(normMateria(e.materia_nombre));
-    return !!pref?.size && !pref.has(e.aula_id);
+  // Advertencias (triángulo amarillo) de una celda: union de las de todo el run
+  const advertenciasDe = (run: HorarioEntry[], entry?: HorarioEntry) => {
+    const lista = run.length > 0 ? run : entry ? [entry] : [];
+    return [...new Set(lista.flatMap((r) => advertencias?.get(r.id) ?? []))];
   };
 
   const mostrarAviso = (msg: string, tipo: 'ok' | 'error' | 'warn' = 'ok') => {
@@ -702,7 +691,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           resaltada={resaltar?.has(key) ?? false}
                           usa12h={usa12}
                           errores={celdaEnError(bIdx, d, sp?.n ?? 1)}
-                          aulaNoPreferida={entry ? fueraDeAulaPref(entry) : false}
+                          advertencias={advertenciasDe(runEntriesDe(bIdx, d, sp?.n ?? 1), entry)}
                           onAbrirMenu={setMenuEntry}
                         />
                       );
@@ -1017,9 +1006,9 @@ const Celda: React.FC<{
   resaltada: boolean;
   usa12h: boolean;
   errores: ErrorClase[];
-  aulaNoPreferida?: boolean;
+  advertencias?: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, aulaNoPreferida, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   let cls =
@@ -1042,7 +1031,7 @@ const Celda: React.FC<{
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} aulaNoPreferida={aulaNoPreferida} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
       {dropRango && (
@@ -1070,9 +1059,9 @@ const EntryChip: React.FC<{
   puedeEditar: boolean;
   usa12h: boolean;
   errores: ErrorClase[];
-  aulaNoPreferida?: boolean;
+  advertencias?: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, aulaNoPreferida, onAbrirMenu }) => {
+}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, advertencias, onAbrirMenu }) => {
   const esGrupo = run.length > 1;
   const singleData: DragData = {
     tipo: 'entry',
@@ -1119,7 +1108,7 @@ const EntryChip: React.FC<{
           fin={span > 1 ? finHasta : undefined}
           usa12h={usa12h}
           errores={errores}
-          aulaNoPreferida={aulaNoPreferida}
+          advertencias={advertencias}
           className="hover:brightness-125 transition-colors"
         />
       </div>
@@ -1145,7 +1134,7 @@ const EntryChip: React.FC<{
           fin={finHasta}
           usa12h={usa12h}
           errores={errores}
-          aulaNoPreferida={aulaNoPreferida}
+          advertencias={advertencias}
           className="hover:brightness-125 transition-colors"
         />
       </div>

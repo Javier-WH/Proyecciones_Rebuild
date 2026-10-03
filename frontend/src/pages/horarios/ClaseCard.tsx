@@ -16,9 +16,9 @@ export const ClaseCard: React.FC<{
   compacto?: boolean;
   usa12h?: boolean;
   errores?: ErrorClase[];
-  aulaNoPreferida?: boolean; // advertencia: la materia no está en su aula preferida
+  advertencias?: string[]; // avisos (no errores): triángulo amarillo bajo la tarjeta
   className?: string;
-}> = ({ entry, fin, compacto, usa12h, errores, aulaNoPreferida, className = '' }) => {
+}> = ({ entry, fin, compacto, usa12h, errores, advertencias, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
@@ -83,9 +83,9 @@ export const ClaseCard: React.FC<{
           </div>,
           document.body
         )}
-      {aulaNoPreferida && (
+      {advertencias && advertencias.length > 0 && (
         <span
-          title={`'${entry.materia_nombre}' no está en su aula preferida`}
+          title={advertencias.join('\n')}
           className="absolute bottom-0.5 left-1/2 -translate-x-1/2 cursor-help"
         >
           <AlertTriangle className="w-3 h-3 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]" />
