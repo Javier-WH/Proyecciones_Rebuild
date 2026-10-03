@@ -442,7 +442,6 @@ export async function initializeDatabase() {
       aula_id INT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uq_aula (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, aula_id),
       UNIQUE KEY uq_seccion (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, seccion_id),
       FOREIGN KEY (materia_id) REFERENCES proyeccion_materias(id) ON DELETE CASCADE,
       FOREIGN KEY (seccion_id) REFERENCES proyeccion_secciones(id) ON DELETE CASCADE,
@@ -479,17 +478,19 @@ export async function initializeDatabase() {
     console.log("✅ Columna 'formato_12h' agregada a la tabla horario_config");
   }
 
-  // Migración idempotente: la clave única de profesor impedía guardar
-  // movimientos forzados con solape exacto; ahora se valida en código y la
-  // auditoría marca el conflicto (uq_aula y uq_seccion se conservan).
-  const [tieneUqProf] = await db.query<any[]>(
-    `SELECT COUNT(*) AS total FROM information_schema.STATISTICS
-     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'horario_entries' AND INDEX_NAME = 'uq_profesor'`,
-    [env.DB_NAME]
-  );
-  if (Number(tieneUqProf[0].total) > 0) {
-    await db.query('ALTER TABLE horario_entries DROP INDEX uq_profesor');
-    console.log("✅ Índice único 'uq_profesor' eliminado de horario_entries");
+  // Migración idempotente: las claves únicas de profesor y aula impedían
+  // guardar movimientos forzados con solape exacto; ahora se validan en
+  // código y la auditoría marca el conflicto (uq_seccion se conserva).
+  for (const idx of ['uq_profesor', 'uq_aula']) {
+    const [tiene] = await db.query<any[]>(
+      `SELECT COUNT(*) AS total FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'horario_entries' AND INDEX_NAME = ?`,
+      [env.DB_NAME, idx]
+    );
+    if (Number(tiene[0].total) > 0) {
+      await db.query(`ALTER TABLE horario_entries DROP INDEX ${idx}`);
+      console.log(`✅ Índice único '${idx}' eliminado de horario_entries`);
+    }
   }
 
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)

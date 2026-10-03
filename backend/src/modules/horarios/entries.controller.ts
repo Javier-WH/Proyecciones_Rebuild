@@ -373,11 +373,11 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
         choque.bloque_id === Number(body.bloque_id) &&
         choque.tipo_proyeccion === tipo &&
         Number(choque.trimestre) === trimestre;
-      // Choque exacto de aula o sección: físicamente imposible (sus claves
-      // únicas siguen activas). El de profesor ya no tiene clave única: con
-      // `forzar` se guarda y la auditoría lo marca; sin `forzar` se rechaza.
-      const exactoImposible =
-        choqueExacto && (choque.aula_id === aulaId || choque.seccion_id === seccionId);
+      // Choque exacto de sección: físicamente imposible (uq_seccion sigue
+      // activa). Los de aula y profesor ya no tienen clave única — se
+      // validan aquí: con `forzar` se guardan y la auditoría los marca;
+      // sin `forzar` se rechazan.
+      const exactoImposible = choqueExacto && choque.seccion_id === seccionId;
       const permitido =
         !exactoImposible && (forzar || (aulaHeredada && soloChoqueAula && !choqueExacto));
       if (!permitido) {
@@ -508,6 +508,27 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
         );
         return p.length > 0;
       };
+      // Choque exacto de aula: uq_aula ya no existe — se valida en código.
+      const aulaOcupada = async (e: (typeof rows)[number], dest: (typeof rows)[number]) => {
+        const [p] = await conn.execute<any[]>(
+          `SELECT id FROM horario_entries
+           WHERE periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
+             AND dia_semana = ? AND bloque_id = ? AND aula_id = ?
+             AND id NOT IN (?, ?)
+           LIMIT 1`,
+          [
+            e.periodo_academico, e.tipo_proyeccion, e.trimestre,
+            dest.dia_semana, dest.bloque_id, dest.aula_id, idA, idB,
+          ]
+        );
+        return p.length > 0;
+      };
+      if (await aulaOcupada(a, b) || await aulaOcupada(b, a)) {
+        return reply.status(409).send({
+          success: false,
+          message: 'Conflicto de Aula\nEl aula del bloque destino ya está ocupada por otra clase.',
+        });
+      }
       if (await profOcupado(a.profesor_id, a, b)) {
         return reply.status(409).send({
           success: false,
@@ -761,8 +782,9 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     const usoPorAula = new Map<number, number>();
     for (const e of resto) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
 
-    // Aulas ocupadas en el slot EXACTO (mismo lapso, día y bloque): esas no
-    // se pueden reutilizar ni con `forzar` porque la clave única lo impide.
+    // Aulas ocupadas en el slot EXACTO (mismo lapso, día y bloque): se
+    // prefieren otras para no crear duplicados exactos (uq_aula ya no
+    // existe; cualquier solape restante lo marca la auditoría).
     const exactOcup = (diaN: number, bloqueIdN: number) =>
       new Set(
         resto
@@ -805,9 +827,10 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
           });
         }
       }
-      // Ni con `forzar` puede repetirse el aula en el mismo bloque del mismo
-      // lapso: en ese caso se toma otra (idealmente libre; si no, la menos
-      // usada — el solape lo marca la auditoría).
+      // Evita crear duplicados exactos de aula (uq_aula ya no existe): si el
+      // aula elegida está ocupada en ese mismo bloque del mismo lapso se
+      // toma otra (idealmente libre; si no, la menos usada — el solape lo
+      // marca la auditoría).
       const exactas = exactOcup(dia, Number(dest.id));
       if (exactas.has(aulaId)) {
         aulaId = elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id) ?? aulaId;
