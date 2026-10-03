@@ -15,6 +15,7 @@ interface VistaRecursoProps {
   formato12?: boolean; // vista 12h; la BD siempre guarda 24h
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
   advertencias?: Map<number, string[]>; // entry.id → avisos (triángulo amarillo)
+  avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
 }
 
 interface Banda {
@@ -22,7 +23,7 @@ interface Banda {
   bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales }) => {
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -211,6 +212,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     usa12h={formato12}
                                     errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
                                     advertencias={advertencias?.get(e.id)}
+                                    avisosParciales={avisosParciales?.get(e.id)}
                                   />
                                 ))}
                               </div>
@@ -262,6 +264,27 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                         }
                         return acc;
                       };
+                      // Choques parciales T2 de la tarjeta, incluidos los de las
+                      // celdas que absorbe el rowspan (cada bloque es un entry).
+                      const parDe = (e?: HorarioEntry): string[] => {
+                        if (!avisosParciales) return [];
+                        const acc: string[] = [];
+                        const pushE = (x: HorarioEntry) => {
+                          for (const t of avisosParciales.get(x.id) ?? []) {
+                            if (!acc.includes(t)) acc.push(t);
+                          }
+                        };
+                        if (e) {
+                          pushE(e);
+                        } else {
+                          for (const x of items) pushE(x);
+                          for (let k = 0; k < (sp?.n ?? 1); k++) {
+                            const bl = bloques[bIdx + k];
+                            if (bl) for (const x of porCelda.get(`${bl.id}:${d}`) ?? []) pushE(x);
+                          }
+                        }
+                        return acc;
+                      };
                       return (
                         <td
                           key={d}
@@ -279,6 +302,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                 usa12h={formato12}
                                 errores={items.length > 1 ? errsDe(e) : errsDe()}
                                 advertencias={advertencias?.get(e.id)}
+                                avisosParciales={parDe(items.length > 1 ? e : undefined)}
                               />
                             ))}
                           </div>

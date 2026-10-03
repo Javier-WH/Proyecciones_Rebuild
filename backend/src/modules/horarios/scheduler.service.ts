@@ -6,25 +6,57 @@ export interface LapsoRef {
   n: number;
 }
 
-// Lapsos que coexisten en el tiempo con (tipo, n), incluyéndose a sí mismo.
-// Supuesto: SEMESTRAL S1 abarca los trimestres 1-2 y S2 el trimestre 3.
-export function lapsosRivales(tipo: TipoProyeccion, n: number): LapsoRef[] {
+// Modelo de traslape lapso↔lapso:
+//   S1 = inicio de T1 → mitad de T2   |   S2 = mitad de T2 → fin de T3
+//   Traslape TOTAL (conflicto real): T1↔S1, T3↔S2, y el mismo lapso.
+//   Traslape PARCIAL (solo advertencia, se permite): T2↔S1 (primera mitad),
+//   T2↔S2 (segunda mitad). Sin relación: T1↔S2, T3↔S1, S1↔S2.
+
+// Lapsos de traslape TOTAL con (tipo, n), incluyéndose a sí mismo: los choques
+// con estos se validan como conflictos reales.
+export function lapsosTotales(tipo: TipoProyeccion, n: number): LapsoRef[] {
   if (tipo === 'TRIMESTRAL') {
     if (n === 1) return [{ tipo, n: 1 }, { tipo: 'SEMESTRAL', n: 1 }];
-    if (n === 2) return [{ tipo, n: 2 }, { tipo: 'SEMESTRAL', n: 1 }];
-    return [{ tipo, n: 3 }, { tipo: 'SEMESTRAL', n: 2 }];
+    if (n === 3) return [{ tipo, n: 3 }, { tipo: 'SEMESTRAL', n: 2 }];
+    return [{ tipo, n: 2 }];
   }
   if (n === 1) {
-    return [
-      { tipo, n: 1 },
-      { tipo: 'TRIMESTRAL', n: 1 },
-      { tipo: 'TRIMESTRAL', n: 2 },
-    ];
+    return [{ tipo, n: 1 }, { tipo: 'TRIMESTRAL', n: 1 }];
   }
-  return [
-    { tipo, n: 2 },
-    { tipo: 'TRIMESTRAL', n: 3 },
-  ];
+  return [{ tipo, n: 2 }, { tipo: 'TRIMESTRAL', n: 3 }];
+}
+
+// Lapsos de traslape PARCIAL con (tipo, n): sus choques solo se advierten.
+export function lapsosParciales(tipo: TipoProyeccion, n: number): LapsoRef[] {
+  if (tipo === 'TRIMESTRAL') {
+    if (n === 2) {
+      return [
+        { tipo: 'SEMESTRAL', n: 1 },
+        { tipo: 'SEMESTRAL', n: 2 },
+      ];
+    }
+    return [];
+  }
+  return [{ tipo: 'TRIMESTRAL', n: 2 }];
+}
+
+// Lapsos que coexisten en el tiempo con (tipo, n), incluyéndose a sí mismo
+// (totales + parciales). Lo usa el GET de entries para que el cliente pueda
+// advertir los choques parciales.
+export function lapsosRivales(tipo: TipoProyeccion, n: number): LapsoRef[] {
+  return [...lapsosTotales(tipo, n), ...lapsosParciales(tipo, n)];
+}
+
+// ¿(tipoB, nB) es rival PARCIAL de (tipoA, nA)?
+export function esRivalParcial(
+  tipoA: TipoProyeccion | string,
+  nA: number,
+  tipoB: TipoProyeccion | string,
+  nB: number
+): boolean {
+  return lapsosParciales(tipoA as TipoProyeccion, nA).some(
+    (l) => l.tipo === tipoB && l.n === nB
+  );
 }
 
 export function horaMin(hora: string): number {

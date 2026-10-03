@@ -29,6 +29,7 @@ import {
   fmtHoraCfg,
   formatearHorasEnTexto,
   traslapan,
+  esRivalParcial,
   colorMateria,
   normMateria,
   ErrorClase,
@@ -57,11 +58,13 @@ interface SeccionGridProps {
   aulas: Aula[];
   config: HorarioConfig;
   trimestre: number;
+  tipoProyeccion: string; // 'TRIMESTRAL' | 'SEMESTRAL'
   puedeEditar: boolean;
   forzar?: boolean; // permite guardar movimientos con conflictos por solape
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
   advertencias?: Map<number, string[]>; // entry.id → avisos (triángulo amarillo)
+  avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
   onChanged: () => void;
 }
 
@@ -73,11 +76,13 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   aulas,
   config,
   trimestre,
+  tipoProyeccion,
   puedeEditar,
   forzar,
   resaltar,
   enError,
   advertencias,
+  avisosParciales,
   onChanged,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
@@ -168,11 +173,13 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   }, [menuEntry, bloques, porCelda]);
 
   // ¿El aula está ocupada (por algo fuera del run) en algún bloque del run?
+  // Los rivales parciales (T2↔semestre) no ocupan: se permiten y solo se avisan.
   const aulaOcupadaEnRun = (aulaIdCk: number) => {
     const runIds = new Set(runMenu.map((r) => r.id));
     return entries.some(
       (o) =>
         o.aula_id === aulaIdCk &&
+        !esRivalParcial(tipoProyeccion, trimestre, o) &&
         !runIds.has(o.id) &&
         runMenu.some(
           (r) =>
@@ -205,6 +212,12 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   const advertenciasDe = (run: HorarioEntry[], entry?: HorarioEntry) => {
     const lista = run.length > 0 ? run : entry ? [entry] : [];
     return [...new Set(lista.flatMap((r) => advertencias?.get(r.id) ?? []))];
+  };
+
+  // Choques parciales T2 (icono verde) de una celda: unión de los del run
+  const avisosParcialesDe = (run: HorarioEntry[], entry?: HorarioEntry) => {
+    const lista = run.length > 0 ? run : entry ? [entry] : [];
+    return [...new Set(lista.flatMap((r) => avisosParciales?.get(r.id) ?? []))];
   };
 
   const mostrarAviso = (msg: string, tipo: 'ok' | 'error' | 'warn' = 'ok') => {
@@ -243,11 +256,14 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return null;
   };
 
-  // Aulas ocupadas en un slot (día + rango horario) por clases de cualquier sección/lapso rival
+  // Aulas ocupadas en un slot (día + rango horario) por clases de cualquier
+  // sección/lapso rival de traslape total. Las clases de lapsos parciales
+  // (T2↔semestre) NO bloquean el aula: se permiten y se marcan con el icono verde.
   const aulasOcupadasEn = (dia: number, inicio: string, fin: string, excluir?: number): Set<number> => {
     const ocup = new Set<number>();
     for (const e of entries) {
       if (excluir && e.id === excluir) continue;
+      if (esRivalParcial(tipoProyeccion, trimestre, e)) continue;
       if (e.dia_semana !== dia) continue;
       if (traslapan(inicio, fin, e.hora_inicio, e.hora_fin)) ocup.add(e.aula_id);
     }
@@ -314,6 +330,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     const excl = drag.entry_id;
     for (const e of entries) {
       if (excl && e.id === excl) continue;
+      if (esRivalParcial(tipoProyeccion, trimestre, e)) continue;
       if (e.dia_semana !== dia) continue;
       if (!traslapan(bloque.hora_inicio, bloque.hora_fin, e.hora_inicio, e.hora_fin)) continue;
       if (drag.profesor_id && e.profesor_id === drag.profesor_id) return false;
@@ -692,6 +709,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           usa12h={usa12}
                           errores={celdaEnError(bIdx, d, sp?.n ?? 1)}
                           advertencias={advertenciasDe(runEntriesDe(bIdx, d, sp?.n ?? 1), entry)}
+                          avisosParciales={avisosParcialesDe(runEntriesDe(bIdx, d, sp?.n ?? 1), entry)}
                           onAbrirMenu={setMenuEntry}
                         />
                       );
@@ -1007,8 +1025,9 @@ const Celda: React.FC<{
   usa12h: boolean;
   errores: ErrorClase[];
   advertencias?: string[];
+  avisosParciales?: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   let cls =
@@ -1031,7 +1050,7 @@ const Celda: React.FC<{
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} avisosParciales={avisosParciales} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
       {dropRango && (
@@ -1060,8 +1079,9 @@ const EntryChip: React.FC<{
   usa12h: boolean;
   errores: ErrorClase[];
   advertencias?: string[];
+  avisosParciales?: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, advertencias, onAbrirMenu }) => {
+}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, advertencias, avisosParciales, onAbrirMenu }) => {
   const esGrupo = run.length > 1;
   const singleData: DragData = {
     tipo: 'entry',
@@ -1109,6 +1129,7 @@ const EntryChip: React.FC<{
           usa12h={usa12h}
           errores={errores}
           advertencias={advertencias}
+          avisosParciales={avisosParciales}
           className="hover:brightness-125 transition-colors"
         />
       </div>
@@ -1135,6 +1156,7 @@ const EntryChip: React.FC<{
           usa12h={usa12h}
           errores={errores}
           advertencias={advertencias}
+          avisosParciales={avisosParciales}
           className="hover:brightness-125 transition-colors"
         />
       </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePnfColors } from '../../context/PnfColorContext.js';
 import { HorarioEntry, ErrorClase, colorMateria, fmtHoraCfg } from './types.js';
-import { User, MapPin, Clock, AlertTriangle } from 'lucide-react';
+import { User, MapPin, Clock, AlertTriangle, AlertOctagon } from 'lucide-react';
 
 // Tarjeta de una clase agendada, común a las vistas por sección, aula y
 // profesor: materia (grande) + profesor, aula y hora (pequeños).
@@ -17,10 +17,12 @@ export const ClaseCard: React.FC<{
   usa12h?: boolean;
   errores?: ErrorClase[];
   advertencias?: string[]; // avisos (no errores): triángulo amarillo bajo la tarjeta
+  avisosParciales?: string[]; // choques parciales T2↔semestre: icono verde abajo a la derecha
   className?: string;
-}> = ({ entry, fin, compacto, usa12h, errores, advertencias, className = '' }) => {
+}> = ({ entry, fin, compacto, usa12h, errores, advertencias, avisosParciales, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const [tipAdv, setTipAdv] = useState<{ x: number; y: number; flip: boolean } | null>(null);
+  const [tipPar, setTipPar] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
   const pnfNombre = catalogo.find((c) => c.id === entry.pnf_saga_id)?.nombre;
@@ -110,6 +112,46 @@ export const ClaseCard: React.FC<{
                 {advertencias.map((t, i) => (
                   <li key={i} className="flex items-start gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-[4px]" />
+                    <span className="text-[10px] text-slate-300 leading-snug">{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>,
+          document.body
+        )}
+      {avisosParciales && avisosParciales.length > 0 && (
+        <span
+          onMouseEnter={(ev) => {
+            const r = ev.currentTarget.getBoundingClientRect();
+            setTipPar({ x: r.left + r.width / 2, y: r.top, flip: r.top < 210 });
+          }}
+          onMouseLeave={() => setTipPar(null)}
+          className="absolute bottom-0 right-0 p-1.5 z-10 cursor-help"
+        >
+          <AlertOctagon className="w-4 h-4 text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.9)]" />
+        </span>
+      )}
+      {tipPar && avisosParciales && avisosParciales.length > 0 &&
+        createPortal(
+          <div
+            className="fixed z-[100] pointer-events-none"
+            style={{
+              left: tipPar.x,
+              top: tipPar.y,
+              transform: tipPar.flip
+                ? 'translate(-50%, 12px)'
+                : 'translate(-50%, calc(-100% - 10px))',
+            }}
+          >
+            <div className="w-72 rounded-xl border border-emerald-500/40 bg-slate-900/95 backdrop-blur-sm shadow-2xl shadow-black/60 px-3 py-2.5">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-emerald-300 mb-1.5">
+                Conflicto potencial — trimestre 2
+              </div>
+              <ul className="space-y-2">
+                {avisosParciales.map((t, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 mt-[4px]" />
                     <span className="text-[10px] text-slate-300 leading-snug">{t}</span>
                   </li>
                 ))}

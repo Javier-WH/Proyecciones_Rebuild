@@ -122,6 +122,48 @@ export const minutos = (h: string): number => {
 export const traslapan = (i1: string, f1: string, i2: string, f2: string): boolean =>
   minutos(i1) < minutos(f2) && minutos(i2) < minutos(f1);
 
+// ── Traslape lapso↔lapso ────────────────────────────────────────────────────
+//   Total (conflicto real): T1↔S1, T3↔S2 y el mismo lapso.
+//   Parcial (solo advertencia verde, se permite): T2↔S1, T2↔S2.
+//   Sin relación: T1↔S2, T3↔S1, S1↔S2.
+
+// ¿`e` es rival PARCIAL del lapso (tipo, n) que se está viendo?
+export const esRivalParcial = (
+  tipo: 'TRIMESTRAL' | 'SEMESTRAL' | string,
+  n: number,
+  e: { tipo_proyeccion: string; trimestre: number }
+): boolean =>
+  tipo === 'TRIMESTRAL'
+    ? n === 2 && e.tipo_proyeccion === 'SEMESTRAL'
+    : e.tipo_proyeccion === 'TRIMESTRAL' && e.trimestre === 2;
+
+// ¿El par (a, b) cruza lapsos de traslape parcial? (T2 ↔ cualquier semestre)
+export const esParParcial = (
+  a: { tipo_proyeccion: string; trimestre: number },
+  b: { tipo_proyeccion: string; trimestre: number }
+): boolean =>
+  (a.tipo_proyeccion === 'SEMESTRAL' && b.tipo_proyeccion === 'TRIMESTRAL' && b.trimestre === 2) ||
+  (b.tipo_proyeccion === 'SEMESTRAL' && a.tipo_proyeccion === 'TRIMESTRAL' && a.trimestre === 2);
+
+// Relación temporal entre los lapsos de dos entries:
+//   'total'   — coexisten por completo: mismo lapso, T1↔S1, T3↔S2 → conflicto real.
+//   'parcial' — T2↔S1 o T2↔S2 → se permite, solo advertencia verde.
+//   'ninguna' — nunca coinciden en el tiempo (T1↔T2, T1↔T3, T2↔T3, T1↔S2,
+//               T3↔S1, S1↔S2): no pueden chocar.
+export const relacionLapsos = (
+  a: { tipo_proyeccion: string; trimestre: number },
+  b: { tipo_proyeccion: string; trimestre: number }
+): 'total' | 'parcial' | 'ninguna' => {
+  if (a.tipo_proyeccion === b.tipo_proyeccion)
+    return a.trimestre === b.trimestre ? 'total' : 'ninguna';
+  const s = a.tipo_proyeccion === 'SEMESTRAL' ? a : b;
+  const t = a.tipo_proyeccion === 'TRIMESTRAL' ? a : b;
+  if (t.trimestre === 2) return 'parcial';
+  if (t.trimestre === 1 && s.trimestre === 1) return 'total';
+  if (t.trimestre === 3 && s.trimestre === 2) return 'total';
+  return 'ninguna';
+};
+
 // ── Formato de hora 12h/24h (la BD siempre guarda 24h) ──────────────────────
 // 'HH:MM' 24h → 'h:MM AM/PM'
 export const fmtHora12 = (h: string): string => {

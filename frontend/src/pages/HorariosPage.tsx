@@ -20,6 +20,7 @@ import {
   formatearHorasEnTexto,
   minutos,
   traslapan,
+  relacionLapsos,
   DIAS_NOMBRES,
   ErrorClase,
   pnfLabel,
@@ -182,21 +183,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     [rowsLapso, seccion]
   );
 
-  // Opciones del selector de lapso: en la vista por sección solo se ofrecen
-  // los lapsos donde ESA sección tiene materias — una sección de proyección
-  // semestral no muestra "Trimestre 1/2/3" (esos lapsos pertenecen a otras
-  // proyecciones). En las vistas por aula/profesor se muestran todos.
+  // Opciones del selector de lapso: en la vista por sección se destacan los
+  // lapsos donde ESA sección tiene materias (una sección semestral muestra
+  // "Semestre 1/2"); el resto de lapsos de otras proyecciones queda debajo de
+  // un separador para poder navegar a ellas. En aula/profesor: todos.
   const lapsosOpciones = useMemo(() => {
-    const actual = lapsoSel || `${lapso.tipo}:${lapso.n}`;
-    if (vista !== 'seccion' || !seccion) return lapsos;
+    if (vista !== 'seccion' || !seccion) return { propios: lapsos, otros: [] as string[] };
     const set = new Set<string>();
     for (const r of rows) {
       if (r.seccion_id === seccion.seccion_id) set.add(`${r.tipo_proyeccion}:${r.trimestre}`);
     }
     const propios = [...set].sort();
-    const base = propios.length > 0 ? propios : lapsos;
-    return base.includes(actual) ? base : [actual, ...base];
-  }, [rows, seccion, lapsos, lapsoSel, lapso, vista]);
+    const otros = lapsos.filter((l) => !set.has(l));
+    return { propios: propios.length > 0 ? propios : lapsos, otros: propios.length > 0 ? otros : [] };
+  }, [rows, seccion, lapsos, vista]);
 
   // Auditoría del lapso: choques de sección/profesor/aula, clases en receso o
   // fuera de los días del turno, y violaciones de las reglas de generación
@@ -220,9 +220,16 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     const cuando = (e: HorarioEntry) =>
       `el ${DIAS_NOMBRES[e.dia_semana]} ${fmtHoraCfg(e.hora_inicio, usa12)}–${fmtHoraCfg(e.hora_fin, usa12)}`;
 
+    // `entries` incluye los lapsos rivales (totales y parciales). Las
+    // auditorías por clase (receso, día del turno, disponibilidad) aplican
+    // solo a las del lapso actual.
+    const esLocal = (e: HorarioEntry) =>
+      e.tipo_proyeccion === lapso.tipo && e.trimestre === lapso.n;
+
     // Clase en bloque de receso o en día no habilitado para el turno.
     // Los recesos de 10 min o menos se ignoran (son pausas entre horas).
     for (const e of entries) {
+      if (!esLocal(e)) continue;
       if (e.es_receso) {
         if (minutos(e.hora_fin) - minutos(e.hora_inicio) <= 10) continue;
         out.push({
@@ -275,8 +282,11 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // Choques: dos clases traslapadas compartiendo sección, profesor o aula.
     // Mensaje en dos líneas: título del conflicto + descripción con ambas materias.
     const pnfDe = (e: HorarioEntry) => secById.get(e.seccion_id)?.pnf_nombre ?? '—';
+    const lapsoTag = (e: HorarioEntry) =>
+      e.tipo_proyeccion === 'SEMESTRAL' ? `semestre ${e.trimestre}` : `trimestre ${e.trimestre}`;
     const lado = (e: HorarioEntry) =>
-      `'${e.materia_nombre}' del ${pnfLabel(pnfDe(e))} del turno ${e.turno_nombre}`;
+      `'${e.materia_nombre}' del ${pnfLabel(pnfDe(e))} del turno ${e.turno_nombre}` +
+      (esLocal(e) ? '' : ` (${lapsoTag(e)})`);
     const choques: [
       string,
       (b: HorarioEntry, a: HorarioEntry) => string,
@@ -318,10 +328,17 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           for (let j = i + 1; j < g.length; j++) {
             const [a, b] = [g[i], g[j]];
             if (!traslapan(a.hora_inicio, a.hora_fin, b.hora_inicio, b.hora_fin)) continue;
+            // Solo chocan lapsos que coexisten por completo: mismo lapso,
+            // T1↔S1 o T3↔S2. Los parciales (T2↔semestre) solo se avisan con
+            // el icono verde; los sin relación (T1↔T2, S1↔S2…) no pueden chocar.
+            if (relacionLapsos(a, b) !== 'total') continue;
+            // Se marcan las celdas de AMBAS clases (los bloque_id son únicos
+            // por turno, así no hay colisiones entre lapsos).
+            const local = esLocal(b) ? b : esLocal(a) ? a : b;
             out.push({
-              seccion_id: b.seccion_id,
-              dia: b.dia_semana,
-              bloques: [b.bloque_id],
+              seccion_id: local.seccion_id,
+              dia: a.dia_semana,
+              bloques: [...new Set([a.bloque_id, b.bloque_id])],
               detalle: '',
               titulo,
               error: descFn(b, a),
@@ -334,7 +351,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // Reglas de generación por materia+sección+día
     const porDia = new Map<string, HorarioEntry[]>();
     for (const e of entries) {
-      if (e.es_receso) continue;
+      if (e.es_receso || !esLocal(e)) continue;
       const k = `${e.seccion_id}:${e.materia_id}:${e.dia_semana}`;
       const g = porDia.get(k);
       if (g) g.push(e);
@@ -377,7 +394,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       cerrarRun();
     }
     return out;
-  }, [entries, secciones, turnos, config, dispProfs]);
+  }, [entries, secciones, turnos, config, dispProfs, lapso]);
 
   // Celdas (bloque:día) involucradas en alguna violación, con sus mensajes:
   // las tarjetas las marcan con un punto rojo cuyo tooltip lista los errores.
@@ -453,8 +470,69 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         }
       }
     }
+
     return m;
   }, [entries, aulas, usa12]);
+
+  // Choques PARCIALES con el trimestre 2 (solo vistas semestrales): T2 solapa
+  // la primera mitad con S1 y la segunda con S2. Se permiten — se muestran con
+  // el icono verde de la tarjeta, nunca como error ni impedimento.
+  const avisosParciales = useMemo(() => {
+    const m = new Map<number, string[]>();
+    if (lapso.tipo !== 'SEMESTRAL') return m;
+    const t2 = entries.filter(
+      (e) => e.tipo_proyeccion === 'TRIMESTRAL' && e.trimestre === 2
+    );
+    if (t2.length === 0) return m;
+    const add = (id: number, txt: string) => {
+      const arr = m.get(id) ?? [];
+      if (!arr.includes(txt)) arr.push(txt);
+      m.set(id, arr);
+    };
+    const pnfDe = (e: HorarioEntry) =>
+      pnfLabel(pnfOptions.find(([id]) => id === e.pnf_saga_id)?.[1]);
+    const mitad =
+      lapso.n === 1 ? 'primera mitad del trimestre 2' : 'segunda mitad del trimestre 2';
+    for (const e of entries) {
+      if (e.tipo_proyeccion !== 'SEMESTRAL' || e.trimestre !== lapso.n) continue;
+      for (const o of t2) {
+        if (o.dia_semana !== e.dia_semana) continue;
+        if (!traslapan(e.hora_inicio, e.hora_fin, o.hora_inicio, o.hora_fin)) continue;
+        // La misma materia de la misma sección en T2 ES la misma clase
+        // (registrada en ambos lapsos), no un conflicto.
+        if (
+          normMateria(o.materia_nombre) === normMateria(e.materia_nombre) &&
+          o.seccion_nombre === e.seccion_nombre
+        ) {
+          continue;
+        }
+        const donde = `${DIAS_NOMBRES[o.dia_semana]} ${fmtHoraCfg(o.hora_inicio, usa12)}–${fmtHoraCfg(o.hora_fin, usa12)}`;
+        const quien =
+          `'${o.materia_nombre}' de la sección ${o.seccion_nombre} (${pnfDe(o)}), ` +
+          `trimestre 2 — solapa solo la ${mitad}`;
+        if (o.aula_id === e.aula_id) {
+          const txt =
+            `Posible conflicto de aula: comparte el aula ` +
+            `${e.aula_nombre || e.aula_codigo} con ${quien}, el ${donde}.`;
+          add(e.id, txt);
+          add(o.id, `Posible conflicto de aula: comparte el aula ${e.aula_nombre || e.aula_codigo} ` +
+            `con '${e.materia_nombre}' de la sección ${e.seccion_nombre}, semestre ${e.trimestre}, el ${donde}.`);
+        }
+        if (o.profesor_id && o.profesor_id === e.profesor_id) {
+          const prof = `${o.prof_apellidos ?? ''}, ${o.prof_nombres ?? ''}`.replace(/^,\s*/, '');
+          add(e.id, `Posible conflicto de profesor: ${prof} también da ${quien}, el ${donde}.`);
+          add(o.id, `Posible conflicto de profesor: ${prof} también da '${e.materia_nombre}' ` +
+            `de la sección ${e.seccion_nombre}, semestre ${e.trimestre}, el ${donde}.`);
+        }
+        if (o.seccion_id === e.seccion_id) {
+          add(e.id, `Posible conflicto de sección: ${quien} es de esta misma sección, el ${donde}.`);
+          add(o.id, `Posible conflicto de sección: '${e.materia_nombre}' del semestre ${e.trimestre} ` +
+            `es de esta misma sección, el ${donde}.`);
+        }
+      }
+    }
+    return m;
+  }, [entries, lapso, usa12, pnfOptions]);
 
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
@@ -786,7 +864,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 }}
                 className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
               >
-                {lapsosOpciones.map((l) => {
+                {lapsosOpciones.propios.map((l) => {
                   const [t, n] = l.split(':');
                   return (
                     <option key={l} value={l}>
@@ -794,6 +872,18 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                     </option>
                   );
                 })}
+                {lapsosOpciones.otros.length > 0 && (
+                  <optgroup label="Otras proyecciones">
+                    {lapsosOpciones.otros.map((l) => {
+                      const [t, n] = l.split(':');
+                      return (
+                        <option key={l} value={l}>
+                          {labelLapso(Number(n), t)}
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                )}
               </select>
             </div>
             <div className="h-5 w-px bg-slate-700" />
@@ -912,11 +1002,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 aulas={aulas}
                 config={config}
                 trimestre={lapso.n}
+                tipoProyeccion={lapso.tipo}
                 puedeEditar={puedeEditar}
                 forzar={forzar}
                 resaltar={resaltar}
                 enError={celdasEnError}
                 advertencias={advertenciasPorEntry}
+                avisosParciales={avisosParciales}
                 onChanged={fetchEntries}
               />
             ) : (
@@ -933,6 +1025,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               formato12={usa12}
               enError={celdasEnError}
               advertencias={advertenciasPorEntry}
+              avisosParciales={avisosParciales}
             />
           )}
 
@@ -944,6 +1037,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               formato12={usa12}
               enError={celdasEnError}
               advertencias={advertenciasPorEntry}
+              avisosParciales={avisosParciales}
             />
           )}
         </>

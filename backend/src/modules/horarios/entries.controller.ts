@@ -8,6 +8,7 @@ import {
   aulasOcupadas,
   elegirAula,
   lapsosRivales,
+  lapsosTotales,
   LapsoRef,
   TipoProyeccion,
   EntryRow,
@@ -244,7 +245,9 @@ async function resolverSlot(
   );
   const profesorId = asig[0]?.profesor_id ?? null;
 
-  const rivales = lapsosRivales(m.tipo_proyeccion, trimestre);
+  // Solo lapsos de traslape TOTAL: los parciales (T2↔semestres) se permiten —
+  // el cliente los muestra como advertencia verde, no como conflicto.
+  const rivales = lapsosTotales(m.tipo_proyeccion, trimestre);
   const entries = await cargarEntries(
     m.periodo_academico,
     rivales,
@@ -753,8 +756,8 @@ export async function cambiarAulaGrupoHandler(request: FastifyRequest, reply: Fa
     }
 
     // Conflicto: el aula ocupada en el rango horario de algún bloque del run
-    // por una clase fuera del run (lapso y lapsos rivales).
-    const rivales = lapsosRivales(base.tipo_proyeccion, base.trimestre);
+    // por una clase fuera del run (lapso y lapsos de traslape total).
+    const rivales = lapsosTotales(base.tipo_proyeccion, base.trimestre);
     const todas = (await cargarEntries(base.periodo_academico, rivales)).filter(
       (e) => !runIds.has(Number(e.id))
     );
@@ -912,8 +915,9 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
       });
     }
 
-    // Aulas ocupadas por rango horario (lapso + rivales), excluyendo lo movido
-    const rivales = lapsosRivales(tipo, trimestre);
+    // Aulas ocupadas por rango horario (lapso + rivales de traslape total),
+    // excluyendo lo movido
+    const rivales = lapsosTotales(tipo, trimestre);
     const todas = await cargarEntries(periodo, rivales);
     const movidos = new Set([...runIds, ...foraneos.map((f) => Number(f.id))]);
     const resto = todas.filter((e) => !movidos.has(Number(e.id)));
@@ -1562,7 +1566,9 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
       });
     }
 
-    const rivales = lapsosRivales(tipo, trimestre);
+    // El generador evita solo traslapes totales; los parciales (T2↔semestre)
+    // quedan permitidos y se avisan en la UI.
+    const rivales = lapsosTotales(tipo, trimestre);
     const entries = await cargarEntries(periodo, rivales);
 
     // Slots en que cada profesor NO está disponible (tabla = bloqueos).
