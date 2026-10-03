@@ -88,6 +88,9 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [lapsoSel, setLapsoSel] = useState<string>(''); // 'TRIMESTRAL:1'
   const [vista, setVista] = useState<Vista>('seccion');
   const [seccionId, setSeccionId] = useState<number | null>(null);
+  const [pnfSel, setPnfSel] = useState('');
+  const [trayectoSel, setTrayectoSel] = useState('');
+  const [turnoSel, setTurnoSel] = useState('');
   const [aulaId, setAulaId] = useState<number | null>(null);
   const [profesorId, setProfesorId] = useState<number | null>(null);
   const [generando, setGenerando] = useState(false);
@@ -113,7 +116,45 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   );
 
   const secciones = useMemo(() => seccionesDe(rowsLapso), [rowsLapso]);
-  const seccion = secciones.find((s) => s.seccion_id === seccionId) ?? secciones[0] ?? null;
+
+  // Selectores en cascada: PNF → Trayecto → Turno → Sección. Si el valor
+  // elegido deja de existir en las opciones, se usa la primera disponible.
+  const pnfOpts = useMemo(
+    () => [...new Set(secciones.map((s) => s.pnf_nombre))].sort(),
+    [secciones]
+  );
+  const pnfEff = pnfOpts.includes(pnfSel) ? pnfSel : pnfOpts[0];
+  const trayectoOpts = useMemo(
+    () =>
+      [...new Set(secciones.filter((s) => s.pnf_nombre === pnfEff).map((s) => s.trayecto_nombre))].sort(),
+    [secciones, pnfEff]
+  );
+  const trayectoEff = trayectoOpts.includes(trayectoSel) ? trayectoSel : trayectoOpts[0];
+  const turnoOpts = useMemo(
+    () =>
+      [
+        ...new Set(
+          secciones
+            .filter((s) => s.pnf_nombre === pnfEff && s.trayecto_nombre === trayectoEff)
+            .map((s) => s.turno_nombre)
+        ),
+      ].sort(),
+    [secciones, pnfEff, trayectoEff]
+  );
+  const turnoEff = turnoOpts.includes(turnoSel) ? turnoSel : turnoOpts[0];
+  const seccionesFiltradas = useMemo(
+    () =>
+      secciones.filter(
+        (s) =>
+          s.pnf_nombre === pnfEff && s.trayecto_nombre === trayectoEff && s.turno_nombre === turnoEff
+      ),
+    [secciones, pnfEff, trayectoEff, turnoEff]
+  );
+  const seccion =
+    seccionesFiltradas.find((s) => s.seccion_id === seccionId) ??
+    seccionesFiltradas[0] ??
+    secciones[0] ??
+    null;
   const turnoSeccion = seccion ? turnos.find((t) => t.saga_id === seccion.turno_saga_id) : undefined;
 
   const materiasSeccion = useMemo(
@@ -256,7 +297,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   }, [violaciones]);
 
   const irAViolacion = (v: Violacion) => {
+    const s = secciones.find((x) => x.seccion_id === v.seccion_id);
     setVista('seccion');
+    if (s) {
+      setPnfSel(s.pnf_nombre);
+      setTrayectoSel(s.trayecto_nombre);
+      setTurnoSel(s.turno_nombre);
+    }
     setSeccionId(v.seccion_id);
     setErroresOpen(false);
     setResaltar(new Set(v.bloques.map((b) => `${b}:${v.dia}`)));
@@ -563,17 +610,56 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               ))}
             </div>
             {vista === 'seccion' && (
-              <select
-                value={seccion?.seccion_id ?? ''}
-                onChange={(e) => setSeccionId(Number(e.target.value))}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white max-w-[320px]"
-              >
-                {secciones.map((s) => (
-                  <option key={s.seccion_id} value={s.seccion_id}>
-                    {s.seccion_nombre} · {s.proyeccion_nombre} ({s.turno_nombre})
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={pnfEff ?? ''}
+                  onChange={(e) => setPnfSel(e.target.value)}
+                  title="PNF"
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white max-w-[180px]"
+                >
+                  {pnfOpts.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={trayectoEff ?? ''}
+                  onChange={(e) => setTrayectoSel(e.target.value)}
+                  title="Trayecto"
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white max-w-[140px]"
+                >
+                  {trayectoOpts.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={turnoEff ?? ''}
+                  onChange={(e) => setTurnoSel(e.target.value)}
+                  title="Turno"
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white max-w-[120px]"
+                >
+                  {turnoOpts.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={seccion?.seccion_id ?? ''}
+                  onChange={(e) => setSeccionId(Number(e.target.value))}
+                  title="Sección"
+                  className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white max-w-[160px]"
+                >
+                  {seccionesFiltradas.map((s) => (
+                    <option key={s.seccion_id} value={s.seccion_id}>
+                      {s.seccion_nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
             {vista === 'aula' && (
               <select
