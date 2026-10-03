@@ -31,13 +31,14 @@ import {
 import { Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
 
 interface DragData {
-  tipo: 'pendiente' | 'entry';
+  tipo: 'pendiente' | 'entry' | 'grupo';
   materia_id: number;
   seccion_id: number;
   profesor_id: number | null;
   titulo: string;
   subtitulo: string;
   entry_id?: number;
+  entry_ids?: number[]; // 'grupo': run completo de horas seguidas, en orden
 }
 
 
@@ -205,9 +206,30 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return false;
   };
 
+  // Entries del run que empieza en (bloqueIdx, dia): las n clases seguidas de
+  // la misma materia que la tarjeta fusionada representa.
+  const runEntriesDe = (bloqueIdx: number, dia: number, n: number): HorarioEntry[] => {
+    const out: HorarioEntry[] = [];
+    for (let i = bloqueIdx; i < bloques.length && out.length < n; i++) {
+      if (bloques[i].es_receso) break;
+      const e = porCelda.get(`${bloques[i].id}:${dia}`);
+      if (e) out.push(e);
+    }
+    return out;
+  };
+
   // ¿Es válido soltar el drag en esta celda?
   const celdaValida = (bloque: Bloque, dia: number, drag: DragData): boolean => {
     if (bloque.es_receso) return false;
+    // Un grupo (bloque de varias horas) cabe si hay n bloques seguidos sin
+    // receso desde aquí; las celdas ocupadas las reubica el backend.
+    if (drag.tipo === 'grupo') {
+      const n = drag.entry_ids?.length ?? 0;
+      if (n === 0) return false;
+      const bIdx = bloques.findIndex((x) => x.id === bloque.id);
+      const tramos = bIdx < 0 ? [] : bloques.slice(bIdx, bIdx + n);
+      return tramos.length === n && tramos.every((x) => !x.es_receso);
+    }
     const ocupada = porCelda.get(`${bloque.id}:${dia}`);
     // Celda ocupada por otra clase: solo es destino válido para intercambio
     // (arrastrar una clase agendada sobre otra las intercambia de lugar)
@@ -224,6 +246,24 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   };
 
   const handleDropEnCelda = async (bloque: Bloque, dia: number, drag: DragData) => {
+    // Grupo: mover el run completo a partir de esta celda
+    if (drag.tipo === 'grupo' && drag.entry_ids?.length) {
+      const res = await apiFetch('/horarios/entries/move-group', {
+        method: 'POST',
+        body: JSON.stringify({
+          entry_ids: drag.entry_ids,
+          dia_semana: dia,
+          bloque_id: bloque.id,
+        }),
+      });
+      if (res.success) {
+        mostrarAviso(res.message || 'Bloque movido.', 'ok');
+        onChanged();
+      } else {
+        mostrarAviso(res.message || 'No se pudo mover el bloque.', 'error');
+      }
+      return;
+    }
     // Soltar una clase sobre otra ocupada = intercambio de día/bloque/aula
     // (cada una conserva su profesor y demás datos)
     const destino = porCelda.get(`${bloque.id}:${dia}`);
@@ -409,14 +449,16 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           key={d}
                           id={`cell:${b.id}:${d}`}
                           entry={entry}
+                          run={entry ? runEntriesDe(bIdx, d, sp?.n ?? 1) : []}
                           span={sp?.n ?? 1}
                           finHasta={sp?.fin}
                           valida={valida}
                           esSwap={
                             !!activo &&
-                            activo.tipo === 'entry' &&
                             !!entry &&
-                            entry.id !== activo.entry_id
+                            ((activo.tipo === 'entry' && entry.id !== activo.entry_id) ||
+                              (activo.tipo === 'grupo' &&
+                                !(activo.entry_ids ?? []).includes(entry.id)))
                           }
                           activo={!!activo}
                           puedeEditar={puedeEditar}
@@ -652,6 +694,7 @@ const PendienteChip: React.FC<{
 const Celda: React.FC<{
   id: string;
   entry?: HorarioEntry;
+  run: HorarioEntry[];
   span: number;
   finHasta?: string;
   valida: boolean | null;
@@ -661,7 +704,7 @@ const Celda: React.FC<{
   resaltada: boolean;
   enError: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, enError, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, enError, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
@@ -684,7 +727,7 @@ const Celda: React.FC<{
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} span={span} finHasta={finHasta} puedeEditar={puedeEditar} enError={enError} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} enError={enError} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
     </td>
@@ -693,13 +736,15 @@ const Celda: React.FC<{
 
 const EntryChip: React.FC<{
   entry: HorarioEntry;
+  run: HorarioEntry[]; // entries del run fusionado (1 si la tarjeta es de una hora)
   span: number;
   finHasta?: string;
   puedeEditar: boolean;
   enError: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, span, finHasta, puedeEditar, enError, onAbrirMenu }) => {
-  const data: DragData = {
+}> = ({ entry, run, span, finHasta, puedeEditar, enError, onAbrirMenu }) => {
+  const esGrupo = run.length > 1;
+  const singleData: DragData = {
     tipo: 'entry',
     entry_id: entry.id,
     materia_id: entry.materia_id,
@@ -708,27 +753,106 @@ const EntryChip: React.FC<{
     titulo: entry.materia_nombre,
     subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHora(entry.hora_inicio)} · ${entry.aula_codigo}`,
   };
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const groupData: DragData = {
+    tipo: 'grupo',
+    entry_ids: run.map((e) => e.id),
+    materia_id: entry.materia_id,
+    seccion_id: entry.seccion_id,
+    profesor_id: entry.profesor_id,
+    titulo: entry.materia_nombre,
+    subtitulo: `${run.length}h seguidas · ${entry.aula_codigo}`,
+  };
+  const single = useDraggable({
     id: `entry:${entry.id}`,
+    data: singleData,
+    disabled: !puedeEditar || esGrupo,
+  });
+  const group = useDraggable({
+    id: `group:${entry.id}`,
+    data: groupData,
+    disabled: !puedeEditar || !esGrupo,
+  });
+
+  if (!esGrupo) {
+    return (
+      <div
+        ref={single.setNodeRef}
+        {...single.listeners}
+        {...single.attributes}
+        onClick={() => onAbrirMenu(entry)}
+        className={`h-full w-full ${puedeEditar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
+          single.isDragging ? 'opacity-30' : ''
+        }`}
+      >
+        <ClaseCard
+          entry={entry}
+          fin={span > 1 ? finHasta : undefined}
+          error={enError}
+          className="hover:brightness-125 transition-colors"
+        />
+      </div>
+    );
+  }
+
+  // Tarjeta fusionada (varias horas): cualquier parte de la tarjeta arrastra el
+  // bloque completo; al pasar el mouse aparece un handler por hora a la
+  // izquierda para arrastrar cada hora por separado.
+  return (
+    <div className="relative h-full w-full group/card">
+      <div
+        ref={group.setNodeRef}
+        {...group.listeners}
+        {...group.attributes}
+        onClick={() => onAbrirMenu(entry)}
+        className={`absolute inset-0 ${puedeEditar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
+          group.isDragging ? 'opacity-30' : ''
+        }`}
+      >
+        <ClaseCard
+          entry={entry}
+          fin={finHasta}
+          error={enError}
+          className="hover:brightness-125 transition-colors"
+        />
+      </div>
+      {puedeEditar && (
+        <div className="absolute left-0 top-0 bottom-0 w-5 flex flex-col gap-px z-10 pr-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
+          {run.map((e) => (
+            <HourHandle key={e.id} entry={e} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Handler para arrastrar una sola hora de un bloque fusionado: visible solo al
+// pasar el mouse sobre la tarjeta, uno por cada hora del run.
+const HourHandle: React.FC<{ entry: HorarioEntry }> = ({ entry }) => {
+  const data: DragData = {
+    tipo: 'entry',
+    entry_id: entry.id,
+    materia_id: entry.materia_id,
+    seccion_id: entry.seccion_id,
+    profesor_id: entry.profesor_id,
+    titulo: entry.materia_nombre,
+    subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHora(entry.hora_inicio)}–${fmtHora(entry.hora_fin)} · ${entry.aula_codigo}`,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `hour:${entry.id}`,
     data,
-    disabled: !puedeEditar,
   });
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      onClick={() => onAbrirMenu(entry)}
-      className={`h-full w-full ${puedeEditar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
+      title={`Mover solo esta hora (${fmtHora(entry.hora_inicio)}–${fmtHora(entry.hora_fin)})`}
+      className={`flex-1 min-h-0 flex items-center justify-center rounded-md bg-slate-950/90 border border-slate-600 text-slate-300 hover:bg-indigo-600 hover:border-indigo-400 hover:text-white shadow-md cursor-grab active:cursor-grabbing transition-colors ${
         isDragging ? 'opacity-30' : ''
       }`}
     >
-      <ClaseCard
-        entry={entry}
-        fin={span > 1 ? finHasta : undefined}
-        error={enError}
-        className="hover:brightness-125 transition-colors"
-      />
+      <GripVertical className="w-3 h-3" />
     </div>
   );
 };

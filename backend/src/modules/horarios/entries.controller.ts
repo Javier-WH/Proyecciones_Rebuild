@@ -368,6 +368,196 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
   }
 }
 
+// POST /api/horarios/entries/move-group — mueve un bloque de varias horas
+// seguidas (misma sección y turno) al bloque destino indicado. Las clases de la
+// sección que ocupen los slots destino se reubican en los slots que deja libre
+// el grupo (intercambio por desplazamiento, conservando el aula de cada slot).
+export async function moveGroupHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as { entry_ids?: number[]; dia_semana?: number; bloque_id?: number };
+  const ids = [...new Set((body.entry_ids ?? []).map(Number))].filter(
+    (n) => Number.isInteger(n) && n > 0
+  );
+  const dia = Number(body.dia_semana);
+  const bloqueId = Number(body.bloque_id);
+  if (ids.length === 0 || !Number.isInteger(dia) || !Number.isInteger(bloqueId) || bloqueId <= 0) {
+    return reply
+      .status(400)
+      .send({ success: false, message: 'Parámetros inválidos para mover el bloque.' });
+  }
+
+  const conn = await getDbPool().getConnection();
+  try {
+    const [rows] = await conn.execute<any[]>(
+      `SELECT en.id, en.seccion_id, en.dia_semana, en.bloque_id, en.aula_id, en.profesor_id,
+              en.periodo_academico, en.tipo_proyeccion, en.trimestre,
+              b.orden, b.turno_id, pr.pnf_saga_id
+       FROM horario_entries en
+       JOIN turno_bloques b ON b.id = en.bloque_id
+       JOIN proyeccion_materias m ON m.id = en.materia_id
+       JOIN proyecciones pr ON pr.id = m.proyeccion_id
+       WHERE en.id IN (${ids.map(() => '?').join(',')})
+       ORDER BY b.orden`,
+      ids
+    );
+    if (rows.length !== ids.length) {
+      return reply
+        .status(404)
+        .send({ success: false, message: 'Alguna de las clases ya no existe. Recarga el horario.' });
+    }
+    const user = request.userPayload!;
+    if (
+      user.role === 'REGULAR' &&
+      user.pnf_saga_id &&
+      rows.some((r) => Number(r.pnf_saga_id) !== Number(user.pnf_saga_id))
+    ) {
+      return reply
+        .status(403)
+        .send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
+    }
+    const run = rows;
+    if (run.some((r) => r.seccion_id !== run[0].seccion_id || r.turno_id !== run[0].turno_id)) {
+      return reply.status(400).send({
+        success: false,
+        message: 'Solo se pueden mover juntas clases de la misma sección y turno.',
+      });
+    }
+    const turnoId = run[0].turno_id;
+    const { periodo_academico: periodo, tipo_proyeccion: tipo, trimestre } = run[0];
+
+    const [turnoRows] = await conn.execute<any[]>(
+      'SELECT dias_semana FROM turnos WHERE id = ? LIMIT 1',
+      [turnoId]
+    );
+    if (!String(turnoRows[0]?.dias_semana ?? '').split(',').map(Number).includes(dia)) {
+      return reply
+        .status(400)
+        .send({ success: false, message: 'Ese día no está habilitado para el turno.' });
+    }
+
+    // N bloques consecutivos sin receso a partir del destino
+    const [todos] = await conn.execute<any[]>(
+      'SELECT id, orden, es_receso, hora_inicio, hora_fin FROM turno_bloques WHERE turno_id = ? ORDER BY orden',
+      [turnoId]
+    );
+    const idx = todos.findIndex((b) => Number(b.id) === bloqueId);
+    const destinos = idx < 0 ? [] : todos.slice(idx, idx + run.length);
+    if (destinos.length < run.length || destinos.some((b) => b.es_receso)) {
+      return reply.status(400).send({
+        success: false,
+        message: `No cabe: se necesitan ${run.length} bloques seguidos sin receso desde ahí.`,
+      });
+    }
+    const runIds = new Set(run.map((r) => Number(r.id)));
+    const destinoIds = destinos.map((b) => Number(b.id));
+    const destSet = new Set(destinoIds.map((bid) => `${dia}:${bid}`));
+
+    // Ocupantes del destino del mismo lapso y sección: se desplazan al origen.
+    // (Entradas de otras secciones o lapsos rivales pueden coexistir en la
+    // celda; no se tocan, pero cuentan para la ocupación de aulas.)
+    const [ocupantes] = await conn.execute<any[]>(
+      `SELECT id, dia_semana, bloque_id, aula_id, seccion_id
+       FROM horario_entries
+       WHERE periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
+         AND dia_semana = ? AND bloque_id IN (${destinoIds.map(() => '?').join(',')})`,
+      [periodo, tipo, trimestre, dia, ...destinoIds]
+    );
+    const foraneos = ocupantes.filter(
+      (o) => !runIds.has(Number(o.id)) && Number(o.seccion_id) === Number(run[0].seccion_id)
+    );
+
+    // Slots de origen que no forman parte del destino: ahí se reubican los foráneos
+    const origenLibres = run.filter((r) => !destSet.has(`${r.dia_semana}:${r.bloque_id}`));
+    if (foraneos.length > origenLibres.length) {
+      return reply.status(409).send({
+        success: false,
+        message: 'No hay espacio para reubicar las clases que ocupan el destino.',
+      });
+    }
+
+    // Aulas ocupadas por rango horario (lapso + rivales), excluyendo lo movido
+    const rivales = lapsosRivales(tipo, trimestre);
+    const todas = await cargarEntries(periodo, rivales);
+    const movidos = new Set([...runIds, ...foraneos.map((f) => Number(f.id))]);
+    const resto = todas.filter((e) => !movidos.has(Number(e.id)));
+    const aulas = await query<any[]>(
+      'SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1'
+    );
+    const usoPorAula = new Map<number, number>();
+    for (const e of resto) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
+
+    const foraneoPorSlot = new Map<number, any>(foraneos.map((f) => [Number(f.bloque_id), f]));
+    const asignRun: { id: number; aula: number }[] = [];
+    for (const [i, r] of run.entries()) {
+      const dest = destinos[i];
+      const fora = foraneoPorSlot.get(Number(dest.id));
+      const ocupadas = aulasOcupadas(resto, dia, dest.hora_inicio, dest.hora_fin);
+      // En slot ocupado: el aula del foráneo (intercambio). En slot vacío:
+      // conservar la propia si sigue libre, si no, auto-asignar la menos usada.
+      let aulaId: number | null = fora ? Number(fora.aula_id) : null;
+      if (aulaId !== null && ocupadas.has(aulaId)) aulaId = null;
+      if (aulaId === null && !ocupadas.has(Number(r.aula_id))) aulaId = Number(r.aula_id);
+      if (aulaId === null) {
+        aulaId = elegirAula(aulas, ocupadas, usoPorAula, run[0].pnf_saga_id);
+        if (aulaId === null) {
+          return reply.status(409).send({
+            success: false,
+            message: `No hay aula libre para el bloque ${i + 1} del grupo.`,
+          });
+        }
+      }
+      asignRun.push({ id: Number(r.id), aula: aulaId });
+      usoPorAula.set(aulaId, (usoPorAula.get(aulaId) ?? 0) + 1);
+    }
+
+    // Las claves únicas por (día, bloque) impiden mover en dos pasos: todo lo
+    // afectado se estaciona en dia_semana = 0 dentro de una transacción.
+    await conn.beginTransaction();
+    const todosIds = [...runIds, ...foraneos.map((f) => Number(f.id))];
+    await conn.execute(
+      `UPDATE horario_entries SET dia_semana = 0 WHERE id IN (${todosIds.map(() => '?').join(',')})`,
+      todosIds
+    );
+    for (const [i, r] of run.entries()) {
+      await conn.execute(
+        'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
+        [dia, destinoIds[i], asignRun[i].aula, r.id]
+      );
+    }
+    for (const [j, f] of foraneos.entries()) {
+      const s = origenLibres[j];
+      await conn.execute(
+        'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
+        [s.dia_semana, s.bloque_id, s.aula_id, f.id]
+      );
+    }
+    await conn.commit();
+    return reply.send({
+      success: true,
+      message:
+        foraneos.length > 0
+          ? `Bloque movido; ${foraneos.length} clase${foraneos.length === 1 ? '' : 's'} reubicada${foraneos.length === 1 ? '' : 's'}.`
+          : 'Bloque movido.',
+    });
+  } catch (error: any) {
+    try {
+      await conn.rollback();
+    } catch {
+      // no había transacción activa
+    }
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return reply.status(409).send({
+        success: false,
+        message:
+          'No se puede mover: el profesor, el aula o la sección ya tiene otra clase en el bloque destino.',
+      });
+    }
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error moviendo el bloque.' });
+  } finally {
+    conn.release();
+  }
+}
+
 // DELETE /api/horarios/entries/:id
 export async function deleteEntryHandler(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
