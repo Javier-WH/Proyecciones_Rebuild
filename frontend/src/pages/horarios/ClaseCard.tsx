@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePnfColors } from '../../context/PnfColorContext.js';
-import { HorarioEntry, colorMateria, fmtHora } from './types.js';
+import { HorarioEntry, ErrorClase, colorMateria, fmtHora } from './types.js';
 import { User, MapPin, Clock } from 'lucide-react';
 
 // Tarjeta de una clase agendada, común a las vistas por sección, aula y
 // profesor: materia (grande) + profesor, aula y hora (pequeños).
 // `fin` = hora de fin efectiva cuando la tarjeta abarca varios bloques fusionados.
 // `compacto` = varias clases comparten la celda: materia + una línea resumida.
-// `errores` = violaciones de la clase: dibuja un punto rojo con tooltip flotante.
+// `errores` = violaciones de la clase: dibuja un punto rojo con tooltip flotante
+// que lista cada conflicto con su título (grande) y descripción (pequeña).
 export const ClaseCard: React.FC<{
   entry: HorarioEntry;
   fin?: string;
   compacto?: boolean;
-  errores?: string[];
+  errores?: ErrorClase[];
   className?: string;
 }> = ({ entry, fin, compacto, errores, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
@@ -59,14 +60,20 @@ export const ClaseCard: React.FC<{
               <div className="text-[9px] font-bold uppercase tracking-wider text-red-300 mb-1.5">
                 {errores.length} conflicto{errores.length === 1 ? '' : 's'}
               </div>
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {errores.map((t, i) => (
-                  <li
-                    key={i}
-                    className="text-[10px] text-slate-200 leading-snug flex items-start gap-1.5"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 mt-[3px]" />
-                    <span>{t}</span>
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 mt-[4px]" />
+                    <span className="min-w-0">
+                      {t.titulo && (
+                        <span className="block text-[11px] font-bold text-red-300 leading-tight">
+                          {t.titulo}
+                        </span>
+                      )}
+                      <span className="block text-[10px] text-slate-300 leading-snug">
+                        {t.texto}
+                      </span>
+                    </span>
                   </li>
                 ))}
               </ul>

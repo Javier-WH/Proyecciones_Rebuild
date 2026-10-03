@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { HorarioEntry, Turno, DIAS_NOMBRES, fmtHora, minutos } from './types.js';
+import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHora, minutos } from './types.js';
 import { ClaseCard } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
@@ -12,7 +12,7 @@ interface VistaRecursoProps {
   titulo: string;
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
-  enError?: Map<string, string[]> | null; // 'bloque_id:dia' → mensajes de violación (punto rojo + tooltip)
+  enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
 }
 
 interface Banda {
@@ -241,13 +241,14 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       const sp = b.id > 0 ? spans.get(key) : undefined;
                       const fusion = items.length === 1 && sp && sp.n > 1;
                       // Errores de la tarjeta o de alguna celda que absorbe por rowspan
-                      const errsDe = (e?: HorarioEntry): string[] => {
+                      const errsDe = (e?: HorarioEntry): ErrorClase[] => {
                         if (!enError) return [];
                         if (e) return enError.get(`${e.bloque_id}:${e.dia_semana}`) ?? [];
-                        const acc: string[] = [];
+                        const acc: ErrorClase[] = [];
                         const push = (k: string) => {
                           for (const t of enError.get(k) ?? []) {
-                            if (!acc.includes(t)) acc.push(t);
+                            if (!acc.some((m) => m.titulo === t.titulo && m.texto === t.texto))
+                              acc.push(t);
                           }
                         };
                         for (const x of items) push(`${x.bloque_id}:${x.dia_semana}`);

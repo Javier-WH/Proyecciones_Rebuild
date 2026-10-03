@@ -77,6 +77,13 @@ export interface SeccionRef {
   trayecto_nombre: string;
 }
 
+// Mensaje de conflicto para el punto rojo / panel de errores:
+// `titulo` opcional se muestra en línea más grande, `texto` es la descripción.
+export interface ErrorClase {
+  titulo?: string;
+  texto: string;
+}
+
 export const DIAS_NOMBRES = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 export const DIAS_CORTOS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 

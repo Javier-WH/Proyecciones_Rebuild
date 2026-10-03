@@ -16,8 +16,10 @@ import {
   Turno,
   seccionesDe,
   fmtHora,
+  minutos,
   traslapan,
   DIAS_NOMBRES,
+  ErrorClase,
 } from './horarios/types.js';
 import {
   CalendarClock,
@@ -58,6 +60,7 @@ interface Violacion {
   bloques: number[]; // bloque_ids a resaltar en la grilla de la sección
   detalle: string;
   error: string;
+  titulo?: string; // línea destacada en el panel/tooltip (choques)
 }
 
 export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick }) => {
@@ -184,15 +187,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     const cuando = (e: HorarioEntry) =>
       `el ${DIAS_NOMBRES[e.dia_semana]} ${fmtHora(e.hora_inicio)}–${fmtHora(e.hora_fin)}`;
 
-    // Clase en bloque de receso o en día no habilitado para el turno
+    // Clase en bloque de receso o en día no habilitado para el turno.
+    // Los recesos de 10 min o menos se ignoran (son pausas entre horas).
     for (const e of entries) {
       if (e.es_receso) {
+        if (minutos(e.hora_fin) - minutos(e.hora_inicio) <= 10) continue;
         out.push({
           seccion_id: e.seccion_id,
           dia: e.dia_semana,
           bloques: [e.bloque_id],
           detalle: detalle(e),
-          error: `está agendada ${cuando(e)}, un bloque de receso.`,
+          titulo: 'Clase en receso',
+          error:
+            `Se está colocando la Materia '${e.materia_nombre}' en un bloque de receso ` +
+            `superior a 10 minutos, el ${DIAS_NOMBRES[e.dia_semana]} a las ${fmtHora(e.hora_inicio)}.`,
         });
         continue;
       }
@@ -208,13 +216,39 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       }
     }
 
-    // Choques: dos clases traslapadas compartiendo sección, profesor o aula
-    const choques: [string, (e: HorarioEntry) => string | null][] = [
-      ['la misma sección', (e) => `s:${e.seccion_id}:${e.dia_semana}`],
-      ['el mismo profesor', (e) => (e.profesor_id ? `p:${e.profesor_id}:${e.dia_semana}` : null)],
-      ['el mismo aula', (e) => `a:${e.aula_id}:${e.dia_semana}`],
+    // Choques: dos clases traslapadas compartiendo sección, profesor o aula.
+    // Mensaje en dos líneas: título del conflicto + descripción con ambas materias.
+    const pnfDe = (e: HorarioEntry) => secById.get(e.seccion_id)?.pnf_nombre ?? '—';
+    const lado = (e: HorarioEntry) =>
+      `'${e.materia_nombre}' del PNF ${pnfDe(e)} del turno ${e.turno_nombre}`;
+    const choques: [
+      string,
+      (b: HorarioEntry, a: HorarioEntry) => string,
+      (e: HorarioEntry) => string | null,
+    ][] = [
+      [
+        'Conflicto de Sección',
+        (b, a) =>
+          `La materia ${lado(b)} está agendada a la misma hora que la materia ${lado(a)} ` +
+          `en la sección ${b.seccion_nombre}, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHora(b.hora_inicio)}.`,
+        (e) => `s:${e.seccion_id}:${e.dia_semana}`,
+      ],
+      [
+        'Conflicto de Profesor',
+        (b, a) =>
+          `La materia ${lado(b)} tiene un profesor que ya está dando la materia ${lado(a)} ` +
+          `a la misma hora, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHora(b.hora_inicio)}.`,
+        (e) => (e.profesor_id ? `p:${e.profesor_id}:${e.dia_semana}` : null),
+      ],
+      [
+        'Conflicto de Aula',
+        (b, a) =>
+          `La materia ${lado(b)} tiene asignada un aula que ya está ocupando la materia ${lado(a)}, ` +
+          `el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHora(b.hora_inicio)}.`,
+        (e) => `a:${e.aula_id}:${e.dia_semana}`,
+      ],
     ];
-    for (const [recurso, keyFn] of choques) {
+    for (const [titulo, descFn, keyFn] of choques) {
       const grupos = new Map<string, HorarioEntry[]>();
       for (const e of entries) {
         const k = keyFn(e);
@@ -232,8 +266,9 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               seccion_id: b.seccion_id,
               dia: b.dia_semana,
               bloques: [b.bloque_id],
-              detalle: detalle(b),
-              error: `choca ${cuando(b)} con '${a.materia_nombre}' (sección ${a.seccion_nombre}, aula ${a.aula_codigo}) por ${recurso}.`,
+              detalle: '',
+              titulo,
+              error: descFn(b, a),
             });
           }
         }
@@ -291,12 +326,12 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   // Celdas (bloque:día) involucradas en alguna violación, con sus mensajes:
   // las tarjetas las marcan con un punto rojo cuyo tooltip lista los errores.
   const celdasEnError = useMemo(() => {
-    const m = new Map<string, string[]>();
+    const m = new Map<string, ErrorClase[]>();
     for (const v of violaciones) {
       for (const b of v.bloques) {
         const k = `${b}:${v.dia}`;
         const arr = m.get(k) ?? [];
-        arr.push(v.error);
+        arr.push({ titulo: v.titulo, texto: v.error });
         m.set(k, arr);
       }
     }
@@ -497,8 +532,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                           className="rounded-xl border border-red-500/25 bg-red-500/5 px-3 py-2.5 flex items-start gap-3"
                         >
                           <div className="min-w-0 flex-1">
+                            {v.titulo && (
+                              <div className="text-xs font-bold text-red-300 mb-0.5">
+                                {v.titulo}
+                              </div>
+                            )}
                             <div className="text-[11px] text-slate-300 leading-snug">
-                              {v.detalle}{' '}
+                              {v.detalle && <>{v.detalle} </>}
                               <span className="text-red-300 font-semibold">{v.error}</span>
                             </div>
                           </div>
@@ -558,7 +598,14 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
           }`}
         >
-          {aviso.texto}
+          {aviso.texto.includes('\n') ? (
+            <>
+              <div className="text-[13px] font-bold mb-0.5">{aviso.texto.split('\n')[0]}</div>
+              <div className="font-medium">{aviso.texto.split('\n').slice(1).join('\n')}</div>
+            </>
+          ) : (
+            aviso.texto
+          )}
         </div>
       )}
       {errorMsg && (

@@ -27,6 +27,7 @@ import {
   fmtHora,
   traslapan,
   colorMateria,
+  ErrorClase,
 } from './types.js';
 import { Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
 
@@ -54,7 +55,7 @@ interface SeccionGridProps {
   trimestre: number;
   puedeEditar: boolean;
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
-  enError?: Map<string, string[]> | null; // 'bloque_id:dia' → mensajes de violación (punto rojo + tooltip)
+  enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
   onChanged: () => void;
 }
 
@@ -196,14 +197,14 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   };
 
   // Mensajes de error de esta tarjeta (incluye celdas que absorbe por rowspan)
-  const celdaEnError = (bloqueIdx: number, dia: number, n: number): string[] => {
+  const celdaEnError = (bloqueIdx: number, dia: number, n: number): ErrorClase[] => {
     if (!enError) return [];
-    const msgs: string[] = [];
+    const msgs: ErrorClase[] = [];
     let restantes = n;
     for (let i = bloqueIdx; i < bloques.length && restantes > 0; i++) {
       if (bloques[i].es_receso) break;
       for (const t of enError.get(`${bloques[i].id}:${dia}`) ?? []) {
-        if (!msgs.includes(t)) msgs.push(t);
+        if (!msgs.some((m) => m.titulo === t.titulo && m.texto === t.texto)) msgs.push(t);
       }
       restantes--;
     }
@@ -432,7 +433,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       {aviso && (
         <div
-          className={`fixed bottom-6 right-6 z-50 max-w-md px-4 py-2.5 rounded-xl text-xs font-semibold border shadow-2xl shadow-black/50 backdrop-blur-sm transition-all ${
+          className={`fixed bottom-6 right-6 z-50 max-w-md px-4 py-2.5 rounded-xl text-xs font-semibold border shadow-2xl shadow-black/50 backdrop-blur-sm whitespace-pre-line transition-all ${
             aviso.tipo === 'error'
               ? 'bg-red-950/90 border-red-500/40 text-red-300'
               : aviso.tipo === 'warn'
@@ -440,7 +441,14 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                 : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
           }`}
         >
-          {aviso.msg}
+          {aviso.msg.includes('\n') ? (
+            <>
+              <div className="text-[13px] font-bold mb-0.5">{aviso.msg.split('\n')[0]}</div>
+              <div className="font-medium">{aviso.msg.split('\n').slice(1).join('\n')}</div>
+            </>
+          ) : (
+            aviso.msg
+          )}
         </div>
       )}
 
@@ -787,7 +795,7 @@ const Celda: React.FC<{
   activo: boolean;
   puedeEditar: boolean;
   resaltada: boolean;
-  errores: string[];
+  errores: ErrorClase[];
   onAbrirMenu: (e: HorarioEntry) => void;
 }> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, errores, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -825,7 +833,7 @@ const EntryChip: React.FC<{
   span: number;
   finHasta?: string;
   puedeEditar: boolean;
-  errores: string[];
+  errores: ErrorClase[];
   onAbrirMenu: (e: HorarioEntry) => void;
 }> = ({ entry, run, span, finHasta, puedeEditar, errores, onAbrirMenu }) => {
   const esGrupo = run.length > 1;

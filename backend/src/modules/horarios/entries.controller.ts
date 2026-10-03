@@ -18,6 +18,24 @@ async function periodoActivo(): Promise<string | null> {
   return rows[0]?.codigo ?? null;
 }
 
+const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const hhmm = (h: any) => String(h ?? '').slice(0, 5);
+
+// ER_DUP_ENTRY trae en sqlMessage el nombre de la clave única que falló
+// (uq_aula / uq_seccion / uq_profesor): lo usamos para titular el conflicto.
+const TITULOS_DUP = {
+  aula: 'Conflicto de Aula',
+  seccion: 'Conflicto de Sección',
+  profesor: 'Conflicto de Profesor',
+} as const;
+function msgDupEntry(e: any, descripcion: string): string {
+  const m = /uq_(aula|seccion|profesor)/i.exec(String(e?.sqlMessage ?? e?.message ?? ''));
+  const titulo = m
+    ? TITULOS_DUP[m[1].toLowerCase() as keyof typeof TITULOS_DUP]
+    : 'Conflicto de horario';
+  return `${titulo}\n${descripcion}`;
+}
+
 const ENTRY_SELECT = `
   SELECT e.id, e.periodo_academico, e.tipo_proyeccion, e.trimestre,
          e.materia_id, m.nombre AS materia_nombre, m.horas_semanales,
@@ -68,7 +86,9 @@ export async function listEntriesHandler(request: FastifyRequest, reply: Fastify
     return reply.send({ success: true, data: { periodo: periodoCodigo, rivales, entries } });
   } catch (error: any) {
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error cargando el horario.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo cargar el horario.' });
   }
 }
 
@@ -94,6 +114,10 @@ async function resolverSlot(
   trimestre: number;
   pnfSagaId: number;
   profesorId: number | null;
+  materiaNombre: string;
+  pnfNombre: string;
+  seccionNombre: string;
+  turnoNombre: string;
   bloque: any;
   turno: any;
   rivales: LapsoRef[];
@@ -107,8 +131,8 @@ async function resolverSlot(
   const bloqueId = Number(body.bloque_id);
 
   const mat = await query<any[]>(
-    `SELECT m.id, m.proyeccion_id, m.seccion_id AS materia_seccion, m.eliminada,
-            pr.tipo_proyeccion, pr.periodo_academico, pr.pnf_saga_id, pr.activa
+    `SELECT m.id, m.proyeccion_id, m.seccion_id AS materia_seccion, m.eliminada, m.nombre AS materia_nombre,
+            pr.tipo_proyeccion, pr.periodo_academico, pr.pnf_saga_id, pr.pnf_nombre, pr.activa
      FROM proyeccion_materias m JOIN proyecciones pr ON pr.id = m.proyeccion_id
      WHERE m.id = ? LIMIT 1`,
     [materiaId]
@@ -203,6 +227,10 @@ async function resolverSlot(
     trimestre,
     pnfSagaId: m.pnf_saga_id,
     profesorId,
+    materiaNombre: m.materia_nombre ?? 'materia',
+    pnfNombre: m.pnf_nombre ?? '—',
+    seccionNombre: s.nombre,
+    turnoNombre: s.turno_nombre,
     bloque,
     turno,
     rivales,
@@ -219,9 +247,13 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
   try {
     const ctx = await resolverSlot(request, reply, body);
     if (!ctx) return;
-    const { bloque, entries, profesorId, periodo, tipo, trimestre, pnfSagaId } = ctx;
+    const {
+      bloque, entries, profesorId, periodo, tipo, trimestre, pnfSagaId,
+      materiaNombre, pnfNombre, seccionNombre, turnoNombre,
+    } = ctx;
     const dia = Number(body.dia_semana);
     const seccionId = Number(body.seccion_id);
+    const cuandoTxt = `el ${DIAS[dia] || dia} a las ${hhmm(bloque.hora_inicio)}`;
 
     // Aula: la pedida, la existente (si sigue libre) o auto-asignación
     const aulas = await query<any[]>('SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1');
@@ -284,7 +316,9 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
       if (aulaId === null) {
         return reply.status(409).send({
           success: false,
-          message: 'No hay aulas libres en ese bloque y día.',
+          message:
+            `Sin aulas libres\nNo se encuentran aulas libres para la materia '${materiaNombre}', ` +
+            `del PNF ${pnfNombre}, de la sección ${seccionNombre}, del turno ${turnoNombre}, ${cuandoTxt}.`,
         });
       }
     }
@@ -313,13 +347,17 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
       // auditoría marque el choque con el punto rojo. Un choque exacto no se
       // puede guardar por la clave única de la tabla.
       if (!(aulaHeredada && soloChoqueAula && !choqueExacto)) {
-        let msg = 'Conflicto de horario.';
+        const otra = choque.materia_nombre ?? 'otra clase';
+        let msg = `Conflicto de horario\nNo se puede agendar '${materiaNombre}' ${cuandoTxt}.`;
         if (choque.aula_id === aulaId) {
-          msg = `El aula ${choque.aula_codigo ?? aulaId} ya está ocupada por '${choque.materia_nombre ?? 'otra clase'}' (${choque.seccion_nombre ?? ''}) a esa hora.`;
+          msg = `Conflicto de Aula\nLa materia '${materiaNombre}' del PNF ${pnfNombre} del turno ${turnoNombre} ` +
+            `tiene asignada el aula ${choque.aula_codigo ?? aulaId}, que ya está ocupando la materia ` +
+            `'${otra}' (sección ${choque.seccion_nombre ?? '—'}) ${cuandoTxt}.`;
         } else if (choque.seccion_id === seccionId) {
-          msg = `La sección ya tiene '${choque.materia_nombre ?? 'otra clase'}' agendada a esa hora.`;
+          msg = `Conflicto de Sección\nLa sección ${seccionNombre} ya tiene '${otra}' agendada ${cuandoTxt}.`;
         } else if (profesorId && choque.profesor_id === profesorId) {
-          msg = `El profesor ya tiene '${choque.materia_nombre ?? 'otra clase'}' (${choque.seccion_nombre ?? ''}) a esa hora.`;
+          msg = `Conflicto de Profesor\nLa materia '${materiaNombre}' del PNF ${pnfNombre} del turno ${turnoNombre} ` +
+            `tiene un profesor que ya está dando '${otra}' (sección ${choque.seccion_nombre ?? '—'}) ${cuandoTxt}.`;
         }
         return reply.status(409).send({ success: false, message: msg });
       }
@@ -347,10 +385,15 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     if (error?.code === 'ER_DUP_ENTRY') {
       return reply.status(409).send({
         success: false,
-        message: 'Ya existe una clase con esa aula, sección o profesor en el mismo bloque.',
+        message: msgDupEntry(
+          error,
+          'Ya existe una clase con esa aula, sección o profesor en el mismo bloque.'
+        ),
       });
     }
-    return reply.status(500).send({ success: false, message: 'Error agendando la clase.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo agendar la clase.' });
   }
 }
 
@@ -418,12 +461,16 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
     if (error?.code === 'ER_DUP_ENTRY') {
       return reply.status(409).send({
         success: false,
-        message:
-          'No se puede intercambiar: el profesor, el aula o la sección ya tiene otra clase en el bloque destino.',
+        message: msgDupEntry(
+          error,
+          'No se puede intercambiar: el profesor, el aula o la sección ya tiene otra clase en el bloque destino.'
+        ),
       });
     }
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error intercambiando las clases.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo intercambiar las clases.' });
   } finally {
     conn.release();
   }
@@ -608,12 +655,16 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     if (error?.code === 'ER_DUP_ENTRY') {
       return reply.status(409).send({
         success: false,
-        message:
-          'No se puede mover: el profesor, el aula o la sección ya tiene otra clase en el bloque destino.',
+        message: msgDupEntry(
+          error,
+          'No se puede mover: el profesor, el aula o la sección ya tiene otra clase en el bloque destino.'
+        ),
       });
     }
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error moviendo el bloque.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo mover el bloque.' });
   } finally {
     conn.release();
   }
@@ -688,9 +739,21 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
         Number(e.trimestre) === trimestre
     );
     if (ocupadaSeccion) {
+      const ocupantes = entries.filter(
+        (e) =>
+          e.seccion_id === seccionId &&
+          e.dia_semana === dia &&
+          destinoIds.has(e.bloque_id) &&
+          e.tipo_proyeccion === tipo &&
+          Number(e.trimestre) === trimestre
+      );
+      const lista = ocupantes
+        .map((o: any) => `'${o.materia_nombre ?? 'una clase'}' a las ${hhmm(o.hora_inicio)}`)
+        .join(', ');
       return reply.status(409).send({
         success: false,
-        message: 'La sección ya tiene una clase en alguno de esos bloques.',
+        message:
+          `Destino ocupado\nLa sección ${ctx.seccionNombre} ya tiene ${lista} el ${DIAS[dia] || dia}.`,
       });
     }
 
@@ -764,7 +827,11 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
       if (e?.code === 'ER_DUP_ENTRY') {
         return reply.status(409).send({
           success: false,
-          message: 'El aula, la sección o el profesor ya tiene una clase en alguno de esos bloques.',
+          message: msgDupEntry(
+            e,
+            `La materia '${ctx.materiaNombre}' choca con otra clase el ${DIAS[dia] || dia}: ` +
+              'el aula, la sección o el profesor ya está ocupado en alguno de esos bloques.'
+          ),
         });
       }
       throw e;
@@ -779,7 +846,9 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
     });
   } catch (error: any) {
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error agendando el bloque.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo agendar el bloque.' });
   }
 }
 
@@ -823,7 +892,9 @@ export async function unscheduleEntriesHandler(request: FastifyRequest, reply: F
     });
   } catch (error: any) {
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error desagendando las clases.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo desagendar las clases.' });
   }
 }
 
@@ -846,7 +917,9 @@ export async function deleteEntryHandler(request: FastifyRequest, reply: Fastify
     return reply.send({ success: true, message: 'Clase desagendada.' });
   } catch (error: any) {
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error eliminando la clase.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo eliminar la clase.' });
   }
 }
 
@@ -1153,6 +1226,8 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
     });
   } catch (error: any) {
     request.log.error(error);
-    return reply.status(500).send({ success: false, message: 'Error generando el horario.' });
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo generar el horario.' });
   }
 }
