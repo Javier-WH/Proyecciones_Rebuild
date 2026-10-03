@@ -719,7 +719,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       {menuEntry && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuEntry(null)} />
-          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-80 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-4">
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[30rem] max-w-[94vw] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="text-sm font-bold text-white">{menuEntry.materia_nombre}</div>
@@ -742,7 +742,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                 <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
                   Cambiar aula
                 </label>
-                <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 divide-y divide-slate-800/60">
+                <div className="mt-1 max-h-80 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 divide-y divide-slate-800/60">
                   {aulasActivas
                     .filter(
                       (a) =>
@@ -752,6 +752,10 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                       const ocupada =
                         a.id !== menuEntry.aula_id && aulaOcupadaEnRun(a.id);
                       const actual = a.id === menuEntry.aula_id;
+                      // El aula declara esta materia como preferida
+                      const esPref = !!a.materias?.some(
+                        (m) => normMateria(m) === normMateria(menuEntry.materia_nombre)
+                      );
                       return (
                         <button
                           key={a.id}
@@ -761,26 +765,44 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           }`}
                         >
                           <span
-                            className={
+                            className={`min-w-0 truncate ${
                               actual ? 'text-emerald-200 font-semibold' : 'text-slate-200'
-                            }
+                            }`}
                           >
                             {a.nombre}
                             {actual && (
                               <span className="text-slate-500 font-normal"> · actual</span>
                             )}
                           </span>
-                          {forzar && (
-                            <span
-                              className={`shrink-0 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide ${
-                                ocupada
-                                  ? 'text-red-300 bg-red-500/10 border-red-500/40'
-                                  : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/40'
-                              }`}
-                            >
-                              {ocupada ? 'Ocupada' : 'Disponible'}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1 shrink-0">
+                            {esPref && (
+                              <span
+                                title="Aula preferida para esta materia"
+                                className="px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide text-amber-300 bg-amber-500/10 border-amber-500/40"
+                              >
+                                Preferida
+                              </span>
+                            )}
+                            {a.pnf_nombre && (
+                              <span
+                                title="PNF preferido del aula"
+                                className="px-1.5 py-0.5 rounded border text-[9px] font-semibold text-purple-300 bg-purple-500/10 border-purple-500/30 max-w-28 truncate"
+                              >
+                                {a.pnf_nombre}
+                              </span>
+                            )}
+                            {forzar && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide ${
+                                  ocupada
+                                    ? 'text-red-300 bg-red-500/10 border-red-500/40'
+                                    : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/40'
+                                }`}
+                              >
+                                {ocupada ? 'Ocupada' : 'Disponible'}
+                              </span>
+                            )}
+                          </span>
                         </button>
                       );
                     })}
