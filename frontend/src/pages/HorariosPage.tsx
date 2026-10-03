@@ -490,10 +490,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
 
       {aviso && (
         <div
-          className={`px-4 py-2.5 rounded-xl text-xs font-semibold border whitespace-pre-line ${
+          className={`fixed bottom-6 right-6 z-50 max-w-md max-h-64 overflow-y-auto px-4 py-2.5 rounded-xl text-xs font-semibold border shadow-2xl shadow-black/50 backdrop-blur-sm whitespace-pre-line ${
             aviso.error
-              ? 'bg-red-500/10 border-red-500/40 text-red-300'
-              : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+              ? 'bg-red-950/90 border-red-500/40 text-red-300'
+              : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
           }`}
         >
           {aviso.texto}

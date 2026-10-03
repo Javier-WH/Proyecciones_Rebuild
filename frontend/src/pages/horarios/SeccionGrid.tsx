@@ -306,12 +306,12 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       {aviso && (
         <div
-          className={`mb-3 px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+          className={`fixed bottom-6 right-6 z-50 max-w-md px-4 py-2.5 rounded-xl text-xs font-semibold border shadow-2xl shadow-black/50 backdrop-blur-sm transition-all ${
             aviso.tipo === 'error'
-              ? 'bg-red-500/10 border-red-500/40 text-red-300'
+              ? 'bg-red-950/90 border-red-500/40 text-red-300'
               : aviso.tipo === 'warn'
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                ? 'bg-amber-950/90 border-amber-500/40 text-amber-300'
+                : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
           }`}
         >
           {aviso.msg}
