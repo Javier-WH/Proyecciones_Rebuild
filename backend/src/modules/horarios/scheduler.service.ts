@@ -110,19 +110,46 @@ export function aulasOcupadas(
   return ocupadas;
 }
 
-// Elige el aula libre "más adecuada": primero las aulas con preferencia del PNF
-// de la sección (si el aula tiene pnf_saga_id asignado), luego AULA_REGULAR y
-// finalmente balancea el uso. La preferencia es informativa: cualquier aula
-// libre puede usarse si las del PNF están ocupadas.
+// Normaliza el nombre de materia para compararlo con aula_materias
+export const normMateria = (s: any) => String(s ?? '').trim().toUpperCase();
+
+// Aulas activas con su set de materias preferidas (aula_materias)
+export async function cargarAulasActivas(): Promise<any[]> {
+  const aulas = await query<any[]>(
+    'SELECT id, codigo, nombre, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1'
+  );
+  const prefs = await query<any[]>(
+    'SELECT aula_id, materia_nombre FROM aula_materias'
+  );
+  const porAula = new Map<number, Set<string>>();
+  for (const p of prefs) {
+    const s = porAula.get(Number(p.aula_id)) ?? new Set<string>();
+    s.add(normMateria(p.materia_nombre));
+    porAula.set(Number(p.aula_id), s);
+  }
+  for (const a of aulas) a.materias_pref = porAula.get(Number(a.id)) ?? new Set<string>();
+  return aulas;
+}
+
+// Elige el aula libre "más adecuada": primero las que tienen la materia como
+// preferida (ej. laboratorio para química), luego preferencia de PNF, luego
+// AULA_REGULAR y finalmente balancea el uso. Las preferencias son
+// informativas: cualquier aula libre puede usarse si las preferidas están
+// ocupadas.
 export function elegirAula(
   aulas: any[],
   ocupadas: Set<number>,
   usoPorAula: Map<number, number>,
-  pnfPreferido?: number | null
+  pnfPreferido?: number | null,
+  materiaNombre?: string | null
 ): number | null {
   const libres = aulas.filter((a) => a.activa && !ocupadas.has(a.id));
   if (libres.length === 0) return null;
+  const mat = materiaNombre ? normMateria(materiaNombre) : null;
   libres.sort((a, b) => {
+    const matA = mat && a.materias_pref?.has(mat) ? 0 : 1;
+    const matB = mat && b.materias_pref?.has(mat) ? 0 : 1;
+    if (matA !== matB) return matA - matB;
     const pnfA = pnfPreferido && a.pnf_saga_id === pnfPreferido ? 0 : 1;
     const pnfB = pnfPreferido && b.pnf_saga_id === pnfPreferido ? 0 : 1;
     if (pnfA !== pnfB) return pnfA - pnfB;

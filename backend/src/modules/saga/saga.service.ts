@@ -26,7 +26,14 @@ export interface TurnoEstimacion {
   seccionesEstimadas: number;
 }
 
+// Token en caché 10 min: evita un login por cada petición cuando el catálogo
+// hace decenas de consultas seguidas (ej. materias de todas las mallas).
+let tokenCache: { token: string; ts: number } | null = null;
+
 export async function getApiToken(): Promise<string | null> {
+  if (tokenCache && Date.now() - tokenCache.ts < 10 * 60 * 1000) {
+    return tokenCache.token;
+  }
   try {
     const response = await fetch(`${env.API_URL}/login`, {
       method: 'POST',
@@ -44,6 +51,7 @@ export async function getApiToken(): Promise<string | null> {
 
     const result = (await response.json()) as SagaResponse<{ token: string }>;
     if (result && result.data && result.data.token) {
+      tokenCache = { token: result.data.token, ts: Date.now() };
       return result.data.token;
     }
 
@@ -73,6 +81,8 @@ async function fetchFromSaga<T = any>(endpoint: string): Promise<T | null> {
     });
 
     if (!response.ok) {
+      // Si el token cacheado expiró, la próxima petición vuelve a loguear
+      tokenCache = null;
       console.error(`[SAGA API] Error en GET ${endpoint}. Status: ${response.status}`);
       return null;
     }

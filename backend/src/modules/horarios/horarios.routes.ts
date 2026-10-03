@@ -12,6 +12,7 @@ import {
   deleteTurnoEntriesHandler,
   getConfigHandler,
   updateConfigHandler,
+  listMateriasHandler,
   listPnfsHandler,
   updatePnfColorHandler,
 } from './horarios.controller.js';
@@ -37,6 +38,7 @@ export async function horariosRoutes(fastify: FastifyInstance) {
   fastify.post('/aulas', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, createAulaHandler);
   fastify.put('/aulas/:id', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, updateAulaHandler);
   fastify.delete('/aulas/:id', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, deleteAulaHandler);
+  fastify.get('/materias', { preHandler: [authenticate] }, listMateriasHandler);
 
   // Catálogo completo de PNFs del sistema
   fastify.get('/pnfs', { preHandler: [authenticate] }, listPnfsHandler);

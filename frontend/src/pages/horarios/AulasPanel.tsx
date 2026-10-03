@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { apiFetch } from '../../api/client.js';
 import { Aula } from './types.js';
-import { Building2, Plus, Edit2, Trash2, X, Loader2 } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search } from 'lucide-react';
+
+// Materia del catálogo global (SAGA): nombre + de qué PNF/malla viene
+interface MateriaOpcion {
+  nombre: string;
+  pnf: string;
+  maya: string;
+  trayecto: string;
+}
 
 const TIPOS = [
   { v: 'AULA_REGULAR', l: 'Aula regular' },
@@ -31,6 +39,24 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
   const [activa, setActiva] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [materiasSel, setMateriasSel] = useState<Set<string>>(new Set());
+  // Picker de materias: catálogo global, se carga solo al abrirlo
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQ, setPickerQ] = useState('');
+  const [materiasOpts, setMateriasOpts] = useState<MateriaOpcion[] | null>(null);
+  const [pickerLoading, setPickerLoading] = useState(false);
+
+  const abrirPicker = async () => {
+    setPickerOpen(true);
+    setPickerQ('');
+    if (materiasOpts === null) {
+      setPickerLoading(true);
+      const r = await apiFetch<MateriaOpcion[]>('/horarios/materias');
+      setPickerLoading(false);
+      if (r.success && r.data) setMateriasOpts(r.data);
+      else setMateriasOpts([]);
+    }
+  };
 
   const abrirNueva = () => {
     setEditando(null);
@@ -41,6 +67,7 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
     setTipo('AULA_REGULAR');
     setPnfId('');
     setActiva(true);
+    setMateriasSel(new Set());
     setError(null);
     setModal(true);
   };
@@ -54,6 +81,7 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
     setTipo(a.tipo);
     setPnfId(a.pnf_saga_id ?? '');
     setActiva(!!a.activa);
+    setMateriasSel(new Set(a.materias ?? []));
     setError(null);
     setModal(true);
   };
@@ -69,6 +97,7 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
       tipo,
       pnf_saga_id: pnfId === '' ? null : pnfId,
       activa,
+      materias: [...materiasSel],
     };
     const res = editando
       ? await apiFetch(`/horarios/aulas/${editando.id}`, { method: 'PUT', body: JSON.stringify(payload) })
@@ -268,6 +297,49 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
                   Al agendar, este aula se prefieren para clases de ese PNF, pero cualquier PNF puede usarla.
                 </p>
               </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-1.5">
+                  <FlaskConical className="w-3 h-3 text-amber-400" />
+                  Materias preferidas <span className="normal-case font-normal text-slate-600">(opcional)</span>
+                </label>
+                {materiasSel.size > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {[...materiasSel].map((m) => (
+                      <span
+                        key={m}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[10px] font-semibold"
+                        title={m}
+                      >
+                        <span className="max-w-56 truncate">{m}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const s = new Set(materiasSel);
+                            s.delete(m);
+                            setMateriasSel(s);
+                          }}
+                          className="text-amber-400/70 hover:text-white cursor-pointer"
+                          title="Quitar"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={abrirPicker}
+                  className="mt-2 w-full py-2 rounded-lg border border-dashed border-slate-600 hover:border-amber-400/60 hover:bg-amber-500/5 text-slate-300 hover:text-amber-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  Buscar y agregar materias…
+                </button>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Al generar el horario se priorizan estas aulas para las materias marcadas; si la clase
+                  queda en otra aula se muestra una advertencia amarilla.
+                </p>
+              </div>
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                 <input
                   type="checkbox"
@@ -292,6 +364,108 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
               >
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Picker de materias preferidas: catálogo global con buscador */}
+      {pickerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                <FlaskConical className="w-4 h-4 text-amber-400" /> Materias de todos los PNFs
+              </h4>
+              <button onClick={() => setPickerOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 pt-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                <input
+                  autoFocus
+                  value={pickerQ}
+                  onChange={(e) => setPickerQ(e.target.value)}
+                  placeholder="Buscar por materia, PNF o malla…"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white"
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
+              {pickerLoading && (
+                <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-xs">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Cargando catálogo de materias…
+                </div>
+              )}
+              {!pickerLoading && materiasOpts !== null && materiasOpts.length === 0 && (
+                <div className="py-10 text-center text-slate-500 text-xs italic">
+                  No se pudo cargar el catálogo de materias.
+                </div>
+              )}
+              {!pickerLoading &&
+                (materiasOpts ?? [])
+                  .filter(
+                    (o) =>
+                      !pickerQ.trim() ||
+                      `${o.nombre} ${o.pnf} ${o.maya} ${o.trayecto}`
+                        .toLowerCase()
+                        .includes(pickerQ.trim().toLowerCase())
+                  )
+                  .slice(0, 300)
+                  .map((o, i) => {
+                    const sel = materiasSel.has(o.nombre);
+                    return (
+                      <button
+                        key={`${o.nombre}|${o.pnf}|${o.maya}|${i}`}
+                        type="button"
+                        onClick={() => {
+                          const s = new Set(materiasSel);
+                          if (sel) s.delete(o.nombre);
+                          else s.add(o.nombre);
+                          setMateriasSel(s);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg border cursor-pointer transition-colors flex items-center justify-between gap-3 ${
+                          sel
+                            ? 'bg-emerald-500/10 border-emerald-500/40'
+                            : 'bg-slate-950/50 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs text-slate-200 font-semibold truncate">{o.nombre}</div>
+                          <div className="text-[10px] text-slate-500 truncate">
+                            {o.pnf}
+                            {o.trayecto ? ` · ${o.trayecto}` : ''}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {o.maya && (
+                            <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-400 text-[9px] font-semibold">
+                              {o.maya}
+                            </span>
+                          )}
+                          {sel && (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-[9px] font-bold uppercase">
+                              Preferida
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">
+                {materiasSel.size} materia{materiasSel.size === 1 ? '' : 's'} preferida
+                {materiasSel.size === 1 ? '' : 's'}
+              </span>
+              <button
+                onClick={() => setPickerOpen(false)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
+              >
+                Listo
               </button>
             </div>
           </div>

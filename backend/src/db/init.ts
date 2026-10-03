@@ -282,6 +282,19 @@ export async function initializeDatabase() {
     "ALTER TABLE aulas MODIFY COLUMN tipo ENUM('AULA_REGULAR','LABORATORIO','TALLER','AUDITORIO','INSTALACION_DEPORTIVA','SALA_LECTURA') DEFAULT 'AULA_REGULAR'"
   );
 
+  // 8b. Materias preferidas por aula (ej. "QUÍMICA I" → Laboratorio de Química):
+  // el generador las prioriza y la UI avisa cuando la clase queda fuera de su
+  // aula preferida. Se guarda el nombre (normalizado), no el id: el mismo
+  // nombre de materia puede aparecer en varias proyecciones.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS aula_materias (
+      aula_id INT NOT NULL,
+      materia_nombre VARCHAR(150) NOT NULL,
+      PRIMARY KEY (aula_id, materia_nombre),
+      FOREIGN KEY (aula_id) REFERENCES aulas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // 9a. Tabla de Tipos de Contrato (dedicación docente)
   // saga_id corresponde a dedicacion_id de SAGA; NULL = tipo creado localmente.
   // horas_semanales: carga horaria semanal que el contrato le otorga al profesor.

@@ -30,7 +30,12 @@ export interface Aula {
   pnf_nombre: string | null;
   activa: number;
   en_uso?: number;
+  materias?: string[]; // materias preferidas del aula (por nombre)
 }
+
+// Normaliza nombre de materia para compararlo con las preferidas del aula
+export const normMateria = (s: string | null | undefined): string =>
+  String(s ?? '').trim().toUpperCase();
 
 export interface HorarioEntry {
   id: number;

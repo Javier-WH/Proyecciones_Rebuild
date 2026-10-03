@@ -26,6 +26,16 @@ export async function listAulasHandler(_request: FastifyRequest, reply: FastifyR
       `SELECT a.*, (SELECT COUNT(*) FROM horario_entries e WHERE e.aula_id = a.id) AS en_uso
        FROM aulas a ORDER BY a.codigo`
     );
+    const prefs = await query<any[]>(
+      'SELECT aula_id, materia_nombre FROM aula_materias ORDER BY materia_nombre'
+    );
+    const porAula = new Map<number, string[]>();
+    for (const p of prefs) {
+      const arr = porAula.get(Number(p.aula_id)) ?? [];
+      arr.push(p.materia_nombre);
+      porAula.set(Number(p.aula_id), arr);
+    }
+    for (const a of aulas) a.materias = porAula.get(Number(a.id)) ?? [];
     return reply.send({ success: true, data: aulas });
   } catch (error: any) {
     return reply.status(500).send({ success: false, message: 'Error cargando aulas.' });
@@ -40,6 +50,81 @@ interface AulaBody {
   tipo?: string;
   pnf_saga_id?: number | null;
   activa?: boolean | number;
+  materias?: string[]; // materias preferidas del aula (por nombre)
+}
+
+// Reemplaza las materias preferidas del aula (nombres normalizados)
+async function syncAulaMaterias(aulaId: number, materias?: string[]) {
+  if (materias === undefined) return;
+  await query('DELETE FROM aula_materias WHERE aula_id = ?', [aulaId]);
+  const unicas = [...new Set(materias.map((m) => String(m).trim()).filter(Boolean))];
+  for (const m of unicas) {
+    await query('INSERT IGNORE INTO aula_materias (aula_id, materia_nombre) VALUES (?, ?)', [
+      aulaId,
+      m,
+    ]);
+  }
+}
+
+// GET /api/horarios/materias — catálogo global de materias para el selector
+// de preferidas del aula: todas las materias de todos los PNFs y sus mallas
+// (SAGA), con respaldo en los nombres ya usados en proyecciones locales.
+export async function listMateriasHandler(_request: FastifyRequest, reply: FastifyReply) {
+  interface MateriaOpcion {
+    nombre: string;
+    pnf: string;
+    maya: string;
+    trayecto: string;
+  }
+  try {
+    const out: MateriaOpcion[] = [];
+    const vistos = new Set<string>();
+    const programas = (await sagaService.getProgramas()) ?? [];
+    await Promise.all(
+      programas.map(async (p) => {
+        const mayas = await sagaService.getMayas(p.id);
+        await Promise.all(
+          mayas.map(async (m) => {
+            const grupos = await sagaService.getMateriasPorMaya(p.id, m.id);
+            for (const g of grupos) {
+              for (const uc of g.materias) {
+                const k = `${String(uc.description).trim().toUpperCase()}|${p.id}|${m.id}`;
+                if (vistos.has(k)) continue;
+                vistos.add(k);
+                out.push({
+                  nombre: uc.description,
+                  pnf: p.programa,
+                  maya: m.descripcion || `Malla ${m.id}`,
+                  trayecto: g.trayecto,
+                });
+              }
+            }
+          })
+        );
+      })
+    );
+    if (out.length === 0) {
+      // SAGA no respondió: respaldo con lo ya usado en proyecciones
+      const rows = await query<any[]>(
+        `SELECT DISTINCT m.nombre, p.pnf_nombre, p.maya_descripcion, p.trayecto_nombre
+         FROM proyeccion_materias m
+         JOIN proyecciones p ON p.id = m.proyeccion_id
+         WHERE m.eliminada = 0`
+      );
+      for (const r of rows) {
+        out.push({
+          nombre: r.nombre,
+          pnf: r.pnf_nombre || '',
+          maya: r.maya_descripcion || '',
+          trayecto: r.trayecto_nombre || '',
+        });
+      }
+    }
+    out.sort((a, b) => a.pnf.localeCompare(b.pnf) || a.nombre.localeCompare(b.nombre));
+    return reply.send({ success: true, data: out });
+  } catch (error: any) {
+    return reply.status(500).send({ success: false, message: 'Error cargando materias.' });
+  }
 }
 
 function validarAula(body: AulaBody): string | null {
@@ -70,6 +155,7 @@ export async function createAulaHandler(request: FastifyRequest, reply: FastifyR
         body.activa === undefined ? 1 : body.activa ? 1 : 0,
       ]
     );
+    await syncAulaMaterias(Number(r.insertId), body.materias);
     return reply.send({ success: true, message: 'Aula creada.', data: { id: r.insertId } });
   } catch (e: any) {
     if (e.code === 'ER_DUP_ENTRY') {
@@ -102,6 +188,7 @@ export async function updateAulaHandler(request: FastifyRequest, reply: FastifyR
         Number(id),
       ]
     );
+    await syncAulaMaterias(Number(id), body.materias);
     return reply.send({ success: true, message: 'Aula actualizada.' });
   } catch (e: any) {
     if (e.code === 'ER_DUP_ENTRY') {

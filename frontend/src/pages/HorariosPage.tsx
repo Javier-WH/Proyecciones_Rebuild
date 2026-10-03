@@ -852,6 +852,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               turnos={turnos}
               formato12={usa12}
               enError={celdasEnError}
+              aulas={aulas}
             />
           )}
 
@@ -862,6 +863,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               turnos={turnos}
               formato12={usa12}
               enError={celdasEnError}
+              aulas={aulas}
             />
           )}
         </>

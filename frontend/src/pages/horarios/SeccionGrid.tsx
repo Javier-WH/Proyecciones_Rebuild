@@ -30,6 +30,7 @@ import {
   formatearHorasEnTexto,
   traslapan,
   colorMateria,
+  normMateria,
   ErrorClase,
 } from './types.js';
 import { Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
@@ -197,6 +198,25 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     () => [...progreso.values()].filter((p) => p.total - p.puestas !== 0),
     [progreso]
   );
+
+  // Advertencia: la MATERIA tiene aulas preferidas configuradas y la clase
+  // quedó en otra distinta (triángulo amarillo bajo el bloque).
+  const aulasPrefPorMateria = useMemo(() => {
+    const m = new Map<string, Set<number>>(); // materia normalizada → aula_ids preferidas
+    for (const a of aulas) {
+      for (const mat of a.materias ?? []) {
+        const k = normMateria(mat);
+        const s = m.get(k) ?? new Set<number>();
+        s.add(a.id);
+        m.set(k, s);
+      }
+    }
+    return m;
+  }, [aulas]);
+  const fueraDeAulaPref = (e: HorarioEntry) => {
+    const pref = aulasPrefPorMateria.get(normMateria(e.materia_nombre));
+    return !!pref?.size && !pref.has(e.aula_id);
+  };
 
   const mostrarAviso = (msg: string, tipo: 'ok' | 'error' | 'warn' = 'ok') => {
     setAviso({ tipo, msg });
@@ -682,6 +702,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           resaltada={resaltar?.has(key) ?? false}
                           usa12h={usa12}
                           errores={celdaEnError(bIdx, d, sp?.n ?? 1)}
+                          aulaNoPreferida={entry ? fueraDeAulaPref(entry) : false}
                           onAbrirMenu={setMenuEntry}
                         />
                       );
@@ -974,8 +995,9 @@ const Celda: React.FC<{
   resaltada: boolean;
   usa12h: boolean;
   errores: ErrorClase[];
+  aulaNoPreferida?: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, aulaNoPreferida, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   let cls =
@@ -998,7 +1020,7 @@ const Celda: React.FC<{
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} aulaNoPreferida={aulaNoPreferida} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
       {dropRango && (
@@ -1026,8 +1048,9 @@ const EntryChip: React.FC<{
   puedeEditar: boolean;
   usa12h: boolean;
   errores: ErrorClase[];
+  aulaNoPreferida?: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, onAbrirMenu }) => {
+}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, aulaNoPreferida, onAbrirMenu }) => {
   const esGrupo = run.length > 1;
   const singleData: DragData = {
     tipo: 'entry',
@@ -1074,6 +1097,7 @@ const EntryChip: React.FC<{
           fin={span > 1 ? finHasta : undefined}
           usa12h={usa12h}
           errores={errores}
+          aulaNoPreferida={aulaNoPreferida}
           className="hover:brightness-125 transition-colors"
         />
       </div>
@@ -1099,6 +1123,7 @@ const EntryChip: React.FC<{
           fin={finHasta}
           usa12h={usa12h}
           errores={errores}
+          aulaNoPreferida={aulaNoPreferida}
           className="hover:brightness-125 transition-colors"
         />
       </div>

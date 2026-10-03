@@ -2,7 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
 import {
   cargarEntries,
+  cargarAulasActivas,
   conflictoEn,
+  normMateria,
   aulasOcupadas,
   elegirAula,
   lapsosRivales,
@@ -285,7 +287,7 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     const cuandoTxt = `el ${DIAS[dia] || dia} a las ${hhmm(bloque.hora_inicio)}`;
 
     // Aula: la pedida, la existente (si sigue libre) o auto-asignación
-    const aulas = await query<any[]>('SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1');
+    const aulas = await cargarAulasActivas();
     let aulaId: number | null = body.aula_id ? Number(body.aula_id) : null;
 
     if (aulaId !== null && !aulas.some((a) => a.id === aulaId)) {
@@ -343,7 +345,13 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     if (aulaId === null) {
       // Con forzar se ignora la ocupación y se toma el aula menos usada; el
       // solape resultante lo marca la auditoría con el punto rojo.
-      aulaId = elegirAula(aulas, forzar ? new Set<number>() : ocupadas, usoPorAula, pnfSagaId);
+      aulaId = elegirAula(
+        aulas,
+        forzar ? new Set<number>() : ocupadas,
+        usoPorAula,
+        pnfSagaId,
+        materiaNombre
+      );
       if (aulaId === null) {
         return reply.status(409).send({
           success: false,
@@ -909,9 +917,7 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     const todas = await cargarEntries(periodo, rivales);
     const movidos = new Set([...runIds, ...foraneos.map((f) => Number(f.id))]);
     const resto = todas.filter((e) => !movidos.has(Number(e.id)));
-    const aulas = await query<any[]>(
-      'SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1'
-    );
+    const aulas = await cargarAulasActivas();
     const usoPorAula = new Map<number, number>();
     for (const e of resto) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
 
@@ -951,7 +957,8 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
           aulas,
           forzar ? new Set<number>() : ocupadas,
           usoPorAula,
-          run[0].pnf_saga_id
+          run[0].pnf_saga_id,
+          r.materia_nombre
         );
         if (aulaId === null) {
           return reply.status(409).send({
@@ -966,7 +973,8 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
       // marca la auditoría).
       const exactas = exactOcup(dia, Number(dest.id));
       if (exactas.has(aulaId)) {
-        aulaId = elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id) ?? aulaId;
+        aulaId =
+          elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id, r.materia_nombre) ?? aulaId;
       }
       asignRun.push({ id: Number(r.id), aula: aulaId });
       usoPorAula.set(aulaId, (usoPorAula.get(aulaId) ?? 0) + 1);
@@ -1063,7 +1071,7 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
       if (exactas.has(aulaDest)) {
         aulaDest = !exactas.has(Number(f.aula_id))
           ? Number(f.aula_id)
-          : (elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id) ?? aulaDest);
+          : (elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id, f.materia_nombre) ?? aulaDest);
       }
       await conn.execute(
         'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
@@ -1278,9 +1286,7 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
 
     // Un solo aula para todo el bloque: preferir las ya usadas por la materia,
     // luego la que menos choques tenga en los slots destino.
-    const aulas = await query<any[]>(
-      'SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1'
-    );
+    const aulas = await cargarAulasActivas();
     const usoPorAula = new Map<number, number>();
     for (const e of entries) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
     const preferidas = [
@@ -1300,7 +1306,15 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
       .map((a) => Number(a.id))
       .filter((id) => !preferidas.includes(id))
       .sort((a, b) => (usoPorAula.get(a) ?? 0) - (usoPorAula.get(b) ?? 0));
-    const candidatas = [...preferidas, ...restantes];
+    // Primero las aulas que declaran esta materia como preferida, luego las
+    // ya usadas por la materia y por último el resto por menor uso.
+    const prefNom = normMateria(ctx.materiaNombre);
+    const prefMat = aulas
+      .filter((a) => (a.materias_pref as Set<string>)?.has(prefNom))
+      .map((a) => Number(a.id));
+    const candidatas = [
+      ...new Set([...prefMat, ...preferidas, ...restantes]),
+    ];
     let aulaId: number | null = null;
     let minConflictos = Infinity;
     for (const c of candidatas) {
@@ -1584,7 +1598,7 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
     );
     const minBloque = Math.max(1, Number(cfgRows[0]?.min_horas_bloque) || 2);
     const maxDia = Math.max(minBloque, Number(cfgRows[0]?.max_horas_dia) || 3);
-    const aulas = await query<any[]>('SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1');
+    const aulas = await cargarAulasActivas();
     if (aulas.length === 0) {
       return reply.status(400).send({
         success: false,
@@ -1753,7 +1767,13 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
                 }
               }
               if (choque) continue;
-              const aulaId = elegirAula(aulas, ocupadasRun, usoPorAula, u.pnf_saga_id);
+              const aulaId = elegirAula(
+                aulas,
+                ocupadasRun,
+                usoPorAula,
+                u.pnf_saga_id,
+                u.materia_nombre
+              );
               if (aulaId === null) continue;
               for (const b of ventana) {
                 const nueva: EntryRow = {

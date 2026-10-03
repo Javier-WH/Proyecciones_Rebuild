@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePnfColors } from '../../context/PnfColorContext.js';
 import { HorarioEntry, ErrorClase, colorMateria, fmtHoraCfg } from './types.js';
-import { User, MapPin, Clock } from 'lucide-react';
+import { User, MapPin, Clock, AlertTriangle } from 'lucide-react';
 
 // Tarjeta de una clase agendada, común a las vistas por sección, aula y
 // profesor: materia (grande) + profesor, aula y hora (pequeños).
@@ -16,8 +16,9 @@ export const ClaseCard: React.FC<{
   compacto?: boolean;
   usa12h?: boolean;
   errores?: ErrorClase[];
+  aulaNoPreferida?: boolean; // advertencia: la materia no está en su aula preferida
   className?: string;
-}> = ({ entry, fin, compacto, usa12h, errores, className = '' }) => {
+}> = ({ entry, fin, compacto, usa12h, errores, aulaNoPreferida, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
@@ -82,6 +83,14 @@ export const ClaseCard: React.FC<{
           </div>,
           document.body
         )}
+      {aulaNoPreferida && (
+        <span
+          title={`'${entry.materia_nombre}' no está en su aula preferida`}
+          className="absolute bottom-0.5 left-1/2 -translate-x-1/2 cursor-help"
+        >
+          <AlertTriangle className="w-3 h-3 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]" />
+        </span>
+      )}
       <div className="text-[11px] font-bold leading-tight flex items-start gap-1">
         {pnfColor && (
           <span

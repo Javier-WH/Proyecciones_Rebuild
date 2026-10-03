@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHoraCfg, minutos } from './types.js';
+import { HorarioEntry, Turno, ErrorClase, Aula, DIAS_NOMBRES, fmtHoraCfg, minutos, normMateria } from './types.js';
 import { ClaseCard } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
@@ -14,6 +14,7 @@ interface VistaRecursoProps {
   turnos: Turno[];
   formato12?: boolean; // vista 12h; la BD siempre guarda 24h
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
+  aulas?: Aula[]; // para la advertencia de aula no preferida
 }
 
 interface Banda {
@@ -21,7 +22,25 @@ interface Banda {
   bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, aulas }) => {
+  // Advertencia: la MATERIA tiene aulas preferidas configuradas y la clase
+  // quedó en otra distinta
+  const aulasPrefPorMateria = useMemo(() => {
+    const m = new Map<string, Set<number>>();
+    for (const a of aulas ?? []) {
+      for (const mat of a.materias ?? []) {
+        const k = normMateria(mat);
+        const s = m.get(k) ?? new Set<number>();
+        s.add(a.id);
+        m.set(k, s);
+      }
+    }
+    return m;
+  }, [aulas]);
+  const fueraDeAulaPref = (e: HorarioEntry) => {
+    const pref = aulasPrefPorMateria.get(normMateria(e.materia_nombre));
+    return !!pref?.size && !pref.has(e.aula_id);
+  };
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -209,6 +228,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     compacto={items.length > 1}
                                     usa12h={formato12}
                                     errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
+                                    aulaNoPreferida={fueraDeAulaPref(e)}
                                   />
                                 ))}
                               </div>
@@ -276,6 +296,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                 compacto={items.length > 1}
                                 usa12h={formato12}
                                 errores={items.length > 1 ? errsDe(e) : errsDe()}
+                                aulaNoPreferida={fueraDeAulaPref(e)}
                               />
                             ))}
                           </div>
