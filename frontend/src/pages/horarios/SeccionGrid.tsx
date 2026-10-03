@@ -728,7 +728,7 @@ const PendienteChip: React.FC<{
                 ? `Arrastrar las ${restantes}h juntas`
                 : 'Arrastrar la hora restante'
             }
-            className={`shrink-0 -ml-1 px-0.5 py-0.5 text-slate-500 hover:text-white cursor-grab active:cursor-grabbing ${
+            className={`shrink-0 -ml-1 px-0.5 py-0.5 text-slate-500 hover:text-white cursor-pointer active:cursor-grabbing ${
               grupo.isDragging ? 'opacity-30' : ''
             }`}
           >
@@ -933,7 +933,7 @@ const HourHandle: React.FC<{ entry: HorarioEntry }> = ({ entry }) => {
       {...listeners}
       {...attributes}
       title={`Mover solo esta hora (${fmtHora(entry.hora_inicio)}–${fmtHora(entry.hora_fin)})`}
-      className={`flex-1 min-h-0 flex items-center justify-center rounded-md bg-transparent border border-slate-500/40 text-slate-300 hover:bg-indigo-600/80 hover:border-indigo-400 hover:text-white cursor-grab active:cursor-grabbing transition-colors ${
+      className={`flex-1 min-h-0 flex items-center justify-center rounded-md bg-transparent border border-slate-500/40 text-slate-300 hover:bg-indigo-600/80 hover:border-indigo-400 hover:text-white cursor-pointer active:cursor-grabbing transition-colors ${
         isDragging ? 'opacity-30' : ''
       }`}
     >
