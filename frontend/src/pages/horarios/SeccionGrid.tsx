@@ -137,6 +137,48 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return { spans, cubiertas };
   }, [bloques, dias, porCelda]);
 
+  // Run contiguo (sin receso) de la clase del menú: los mismos bloques que
+  // cambia de aula el endpoint aula-grupo (misma materia, sección y
+  // profesor, ese día).
+  const runMenu = useMemo(() => {
+    if (!menuEntry) return [] as HorarioEntry[];
+    const ordenados = bloques.filter((b) => !b.es_receso);
+    const idx = ordenados.findIndex((b) => b.id === menuEntry.bloque_id);
+    if (idx < 0) return [menuEntry];
+    const same = (x: HorarioEntry | undefined): x is HorarioEntry =>
+      !!x &&
+      x.materia_id === menuEntry.materia_id &&
+      x.seccion_id === menuEntry.seccion_id &&
+      (x.profesor_id ?? null) === (menuEntry.profesor_id ?? null);
+    const run: HorarioEntry[] = [menuEntry];
+    for (let i = idx - 1; i >= 0; i--) {
+      const x = porCelda.get(`${ordenados[i].id}:${menuEntry.dia_semana}`);
+      if (!same(x)) break;
+      run.unshift(x);
+    }
+    for (let i = idx + 1; i < ordenados.length; i++) {
+      const x = porCelda.get(`${ordenados[i].id}:${menuEntry.dia_semana}`);
+      if (!same(x)) break;
+      run.push(x);
+    }
+    return run;
+  }, [menuEntry, bloques, porCelda]);
+
+  // ¿El aula está ocupada (por algo fuera del run) en algún bloque del run?
+  const aulaOcupadaEnRun = (aulaIdCk: number) => {
+    const runIds = new Set(runMenu.map((r) => r.id));
+    return entries.some(
+      (o) =>
+        o.aula_id === aulaIdCk &&
+        !runIds.has(o.id) &&
+        runMenu.some(
+          (r) =>
+            o.dia_semana === r.dia_semana &&
+            traslapan(r.hora_inicio, r.hora_fin, o.hora_inicio, o.hora_fin)
+        )
+    );
+  };
+
   // Progreso por materia: horas agendadas vs horas semanales
   const progreso = useMemo(() => {
     const map = new Map<number, { total: number; puestas: number; row: MateriaAsignableRow }>();
@@ -378,22 +420,19 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
   };
 
+  // Cambia el aula de todo el bloque fusionado (run contiguo de la misma
+  // materia+sección+profesor ese día); con `forzar` admite aulas ocupadas.
   const handleCambiarAula = async (entry: HorarioEntry, aulaId: number) => {
-    const res = await apiFetch('/horarios/entries', {
-      method: 'PUT',
+    const res = await apiFetch('/horarios/entries/aula-grupo', {
+      method: 'POST',
       body: JSON.stringify({
         entry_id: entry.id,
-        materia_id: entry.materia_id,
-        seccion_id: entry.seccion_id,
-        trimestre: entry.trimestre,
-        dia_semana: entry.dia_semana,
-        bloque_id: entry.bloque_id,
         aula_id: aulaId,
         forzar,
       }),
     });
     if (res.success) {
-      mostrarAviso('Aula actualizada.');
+      mostrarAviso(res.message || 'Aula actualizada.');
       setMenuEntry(null);
       onChanged();
     } else {
@@ -686,24 +725,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                   {aulasActivas
                     .filter(
                       (a) =>
-                        a.id === menuEntry.aula_id ||
-                        forzar ||
-                        !aulasOcupadasEn(
-                          menuEntry.dia_semana,
-                          menuEntry.hora_inicio,
-                          menuEntry.hora_fin,
-                          menuEntry.id
-                        ).has(a.id)
+                        a.id === menuEntry.aula_id || forzar || !aulaOcupadaEnRun(a.id)
                     )
                     .map((a) => {
                       const ocupada =
-                        a.id !== menuEntry.aula_id &&
-                        aulasOcupadasEn(
-                          menuEntry.dia_semana,
-                          menuEntry.hora_inicio,
-                          menuEntry.hora_fin,
-                          menuEntry.id
-                        ).has(a.id);
+                        a.id !== menuEntry.aula_id && aulaOcupadaEnRun(a.id);
                       const actual = a.id === menuEntry.aula_id;
                       return (
                         <button

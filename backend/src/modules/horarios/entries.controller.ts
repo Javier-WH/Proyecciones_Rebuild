@@ -657,6 +657,139 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
   }
 }
 
+// POST /api/horarios/entries/aula-grupo — cambia el aula de todo el bloque
+// fusionado: el run de bloques contiguos (sin receso) de la misma
+// materia+sección+profesor en el mismo día y lapso.
+export async function cambiarAulaGrupoHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as { entry_id?: number; aula_id?: number; forzar?: boolean };
+  const entryId = Number(body.entry_id);
+  const aulaId = Number(body.aula_id);
+  const forzar = !!body.forzar;
+  if (!Number.isInteger(entryId) || entryId <= 0 || !Number.isInteger(aulaId) || aulaId <= 0) {
+    return reply
+      .status(400)
+      .send({ success: false, message: 'Parámetros inválidos para cambiar el aula.' });
+  }
+  try {
+    const rows = await query<any[]>(
+      `SELECT en.id, en.periodo_academico, en.tipo_proyeccion, en.trimestre,
+              en.materia_id, en.seccion_id, en.profesor_id, en.dia_semana,
+              en.bloque_id, b.turno_id, pr.pnf_saga_id,
+              m.nombre AS materia_nombre, s.nombre AS seccion_nombre
+       FROM horario_entries en
+       JOIN turno_bloques b ON b.id = en.bloque_id
+       JOIN proyeccion_materias m ON m.id = en.materia_id
+       JOIN proyeccion_secciones s ON s.id = en.seccion_id
+       JOIN proyecciones pr ON pr.id = m.proyeccion_id
+       WHERE en.id = ?`,
+      [entryId]
+    );
+    if (rows.length === 0) {
+      return reply
+        .status(404)
+        .send({ success: false, message: 'La clase ya no existe. Recarga el horario.' });
+    }
+    const base = rows[0];
+    const user = request.userPayload!;
+    if (
+      user.role === 'REGULAR' &&
+      user.pnf_saga_id &&
+      Number(base.pnf_saga_id) !== Number(user.pnf_saga_id)
+    ) {
+      return reply
+        .status(403)
+        .send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
+    }
+    const aula = await query<any[]>(
+      'SELECT id, nombre FROM aulas WHERE id = ? AND activa = 1',
+      [aulaId]
+    );
+    if (aula.length === 0) {
+      return reply
+        .status(400)
+        .send({ success: false, message: 'El aula indicada no existe o está inactiva.' });
+    }
+
+    // Run contiguo (sin receso) de la misma materia+sección+profesor ese día;
+    // todos sus bloques son del turno del bloque base, como en la fusión
+    // visual de la grilla.
+    const bloquesTurno = await query<any[]>(
+      'SELECT id, orden, es_receso, hora_inicio, hora_fin FROM turno_bloques WHERE turno_id = ? ORDER BY orden',
+      [base.turno_id]
+    );
+    const candidatas = await query<any[]>(
+      `SELECT en.id, en.bloque_id
+       FROM horario_entries en
+       WHERE en.periodo_academico = ? AND en.tipo_proyeccion = ? AND en.trimestre = ?
+         AND en.dia_semana = ? AND en.materia_id = ? AND en.seccion_id = ?
+         AND en.profesor_id <=> ?`,
+      [
+        base.periodo_academico, base.tipo_proyeccion, base.trimestre,
+        base.dia_semana, base.materia_id, base.seccion_id, base.profesor_id,
+      ]
+    );
+    const bloquePorId = new Map(bloquesTurno.map((b) => [Number(b.id), b]));
+    const entryPorBloque = new Map(candidatas.map((c) => [Number(c.bloque_id), c]));
+    const ordenados = bloquesTurno.filter((b) => !b.es_receso).map((b) => Number(b.id));
+    const idxBase = ordenados.indexOf(Number(base.bloque_id));
+    const runIds = new Set<number>([entryId]);
+    for (let i = idxBase - 1; i >= 0; i--) {
+      const c = entryPorBloque.get(ordenados[i]);
+      if (!c) break;
+      runIds.add(Number(c.id));
+    }
+    for (let i = idxBase + 1; i < ordenados.length; i++) {
+      const c = entryPorBloque.get(ordenados[i]);
+      if (!c) break;
+      runIds.add(Number(c.id));
+    }
+
+    // Conflicto: el aula ocupada en el rango horario de algún bloque del run
+    // por una clase fuera del run (lapso y lapsos rivales).
+    const rivales = lapsosRivales(base.tipo_proyeccion, base.trimestre);
+    const todas = (await cargarEntries(base.periodo_academico, rivales)).filter(
+      (e) => !runIds.has(Number(e.id))
+    );
+    const detalles: string[] = [];
+    for (const id of runIds) {
+      const c = candidatas.find((x) => Number(x.id) === id);
+      const bl = bloquePorId.get(Number(c?.bloque_id ?? base.bloque_id));
+      if (!bl) continue;
+      const choque = conflictoEn(todas, base.dia_semana, bl.hora_inicio, bl.hora_fin, {
+        aula_id: aulaId,
+      });
+      if (choque) {
+        detalles.push(
+          `a las ${hhmm(bl.hora_inicio)} la ocupa '${choque.materia_nombre ?? 'otra clase'}' ` +
+            `(sección ${choque.seccion_nombre ?? '—'})`
+        );
+      }
+    }
+    if (detalles.length > 0 && !forzar) {
+      return reply.status(409).send({
+        success: false,
+        message:
+          `Conflicto de Aula\nEl aula ${aula[0].nombre} no está libre en todo el bloque: ` +
+          `el ${DIAS[base.dia_semana] || base.dia_semana} ${detalles.join('; ')}.`,
+      });
+    }
+
+    await query(
+      `UPDATE horario_entries SET aula_id = ? WHERE id IN (${[...runIds].map(() => '?').join(',')})`,
+      [aulaId, ...runIds]
+    );
+    return reply.send({
+      success: true,
+      message: `Aula actualizada en ${runIds.size} bloque(s).`,
+    });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudo cambiar el aula.' });
+  }
+}
+
 // POST /api/horarios/entries/move-group — mueve un bloque de varias horas
 // seguidas (misma sección y turno) al bloque destino indicado. Las clases de la
 // sección que ocupen los slots destino se reubican en los slots que deja libre

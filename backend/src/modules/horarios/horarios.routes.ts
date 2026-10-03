@@ -19,6 +19,7 @@ import {
   listEntriesHandler,
   upsertEntryHandler,
   swapEntriesHandler,
+  cambiarAulaGrupoHandler,
   moveGroupHandler,
   scheduleGroupHandler,
   unscheduleEntriesHandler,
@@ -65,6 +66,7 @@ export async function horariosRoutes(fastify: FastifyInstance) {
   fastify.get('/entries', { preHandler: [authenticate] }, listEntriesHandler);
   fastify.put('/entries', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, upsertEntryHandler);
   fastify.post('/entries/swap', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, swapEntriesHandler);
+  fastify.post('/entries/aula-grupo', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, cambiarAulaGrupoHandler);
   fastify.post('/entries/move-group', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, moveGroupHandler);
   fastify.post('/entries/unschedule', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, unscheduleEntriesHandler);
   fastify.post('/entries/schedule-group', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, scheduleGroupHandler);
