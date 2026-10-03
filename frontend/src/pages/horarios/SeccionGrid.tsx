@@ -389,6 +389,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         dia_semana: entry.dia_semana,
         bloque_id: entry.bloque_id,
         aula_id: aulaId,
+        forzar,
       }),
     });
     if (res.success) {
@@ -669,7 +670,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                 </div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
                   {DIAS_NOMBRES[menuEntry.dia_semana]} · {fmtHoraCfg(menuEntry.hora_inicio, usa12)}–
-                  {fmtHoraCfg(menuEntry.hora_fin, usa12)} · Aula {menuEntry.aula_codigo}
+                  {fmtHoraCfg(menuEntry.hora_fin, usa12)} · {menuEntry.aula_nombre}
                 </div>
               </div>
               <button onClick={() => setMenuEntry(null)} className="text-slate-500 hover:text-white">
@@ -681,18 +682,12 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                 <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
                   Cambiar aula
                 </label>
-                <select
-                  className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200"
-                  value={menuEntry.aula_id}
-                  onChange={(e) => handleCambiarAula(menuEntry, Number(e.target.value))}
-                >
-                  <option value={menuEntry.aula_id}>
-                    {menuEntry.aula_codigo} — {menuEntry.aula_nombre}
-                  </option>
+                <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 divide-y divide-slate-800/60">
                   {aulasActivas
                     .filter(
                       (a) =>
-                        a.id !== menuEntry.aula_id &&
+                        a.id === menuEntry.aula_id ||
+                        forzar ||
                         !aulasOcupadasEn(
                           menuEntry.dia_semana,
                           menuEntry.hora_inicio,
@@ -700,12 +695,49 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           menuEntry.id
                         ).has(a.id)
                     )
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.codigo} — {a.nombre}
-                      </option>
-                    ))}
-                </select>
+                    .map((a) => {
+                      const ocupada =
+                        a.id !== menuEntry.aula_id &&
+                        aulasOcupadasEn(
+                          menuEntry.dia_semana,
+                          menuEntry.hora_inicio,
+                          menuEntry.hora_fin,
+                          menuEntry.id
+                        ).has(a.id);
+                      const actual = a.id === menuEntry.aula_id;
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => handleCambiarAula(menuEntry, a.id)}
+                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-left cursor-pointer transition-colors hover:bg-slate-800/70 ${
+                            actual ? 'bg-emerald-500/10' : ''
+                          }`}
+                        >
+                          <span
+                            className={
+                              actual ? 'text-emerald-200 font-semibold' : 'text-slate-200'
+                            }
+                          >
+                            {a.nombre}
+                            {actual && (
+                              <span className="text-slate-500 font-normal"> · actual</span>
+                            )}
+                          </span>
+                          {forzar && (
+                            <span
+                              className={`shrink-0 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wide ${
+                                ocupada
+                                  ? 'text-red-300 bg-red-500/10 border-red-500/40'
+                                  : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/40'
+                              }`}
+                            >
+                              {ocupada ? 'Ocupada' : 'Disponible'}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
                 <button
                   onClick={() => handleDesagendar(menuEntry.id)}
                   className="mt-3 w-full py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-semibold cursor-pointer"
