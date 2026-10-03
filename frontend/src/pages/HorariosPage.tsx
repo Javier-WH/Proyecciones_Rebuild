@@ -182,6 +182,22 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     [rowsLapso, seccion]
   );
 
+  // Opciones del selector de lapso: en la vista por sección solo se ofrecen
+  // los lapsos donde ESA sección tiene materias — una sección de proyección
+  // semestral no muestra "Trimestre 1/2/3" (esos lapsos pertenecen a otras
+  // proyecciones). En las vistas por aula/profesor se muestran todos.
+  const lapsosOpciones = useMemo(() => {
+    const actual = lapsoSel || `${lapso.tipo}:${lapso.n}`;
+    if (vista !== 'seccion' || !seccion) return lapsos;
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (r.seccion_id === seccion.seccion_id) set.add(`${r.tipo_proyeccion}:${r.trimestre}`);
+    }
+    const propios = [...set].sort();
+    const base = propios.length > 0 ? propios : lapsos;
+    return base.includes(actual) ? base : [actual, ...base];
+  }, [rows, seccion, lapsos, lapsoSel, lapso, vista]);
+
   // Auditoría del lapso: choques de sección/profesor/aula, clases en receso o
   // fuera de los días del turno, y violaciones de las reglas de generación
   // (mínimo de horas seguidas por sesión / máximo de horas por día).
@@ -770,7 +786,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 }}
                 className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
               >
-                {lapsos.map((l) => {
+                {lapsosOpciones.map((l) => {
                   const [t, n] = l.split(':');
                   return (
                     <option key={l} value={l}>
