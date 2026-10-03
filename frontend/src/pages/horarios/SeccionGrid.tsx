@@ -8,6 +8,7 @@ import {
   useDraggable,
   useDroppable,
   DragStartEvent,
+  DragMoveEvent,
   DragEndEvent,
 } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
@@ -75,6 +76,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   onChanged,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
+  const [dropPrev, setDropPrev] = useState<{ celdas: Set<string>; valida: boolean } | null>(null);
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error' | 'warn'; msg: string } | null>(null);
   const [menuEntry, setMenuEntry] = useState<HorarioEntry | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -389,9 +391,25 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
 
   // En una celda fusionada (rowSpan) las filas cubiertas no tienen celda
   // propia: el droppable siempre reporta el primer bloque. Con la posición
-  // vertical del puntero al soltar se calcula en qué sub-fila cayó el drop.
-  // Para drags de grupo, si el bloque no cabe empezando en esa fila se
-  // intenta que el grupo termine cubriéndola.
+  // vertical del puntero (o el centro del overlay si no hay puntero) se
+  // calcula en qué sub-fila cayó el drop.
+  const subFilaEnCelda = (ev: DragMoveEvent | DragEndEvent, span: number): number => {
+    if (span <= 1 || !ev.over) return 0;
+    const rect = ev.over.rect;
+    const act = ev.activatorEvent as Partial<PointerEvent>;
+    const translated = ev.active.rect.current.translated;
+    const py =
+      typeof act.clientY === 'number'
+        ? act.clientY + ev.delta.y
+        : translated
+          ? translated.top + translated.height / 2
+          : null;
+    if (py === null || rect.height <= 0) return 0;
+    return Math.min(span - 1, Math.max(0, Math.floor(((py - rect.top) / rect.height) * span)));
+  };
+
+  // Para drags de grupo, si el bloque no cabe empezando en la fila soltada
+  // se intenta que el grupo termine cubriéndola.
   const bloqueParaDrop = (bloqueIds: number[], sub: number, drag: DragData): Bloque | null => {
     const bIdx = bloques.findIndex((x) => x.id === bloqueIds[sub]);
     if (bIdx < 0) return null;
@@ -404,11 +422,49 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return bloques[bIdx]; // sin cabida: que responda la validación normal
   };
 
+  // Bloque destino real del drag sobre una celda (posiblemente fusionada)
+  const destinoDeDrop = (
+    ev: DragMoveEvent | DragEndEvent,
+    drag: DragData
+  ): { bloque: Bloque; dia: number } | null => {
+    const over = ev.over;
+    if (!over || !String(over.id).startsWith('cell:')) return null;
+    const [, bloqueId, diaStr] = String(over.id).split(':');
+    const bloqueIds =
+      (over.data.current as { bloqueIds?: number[] } | undefined)?.bloqueIds ?? [Number(bloqueId)];
+    const bloque = bloqueParaDrop(bloqueIds, subFilaEnCelda(ev, bloqueIds.length), drag);
+    return bloque ? { bloque, dia: Number(diaStr) } : null;
+  };
+
   const onDragStart = (ev: DragStartEvent) => setActivo(ev.active.data.current as DragData);
+
+  // Preview del destino: resalta las filas que ocuparía la clase al soltar
+  const onDragMove = (ev: DragMoveEvent) => {
+    const drag = ev.active.data.current as DragData | undefined;
+    const dest = drag ? destinoDeDrop(ev, drag) : null;
+    if (!drag || !dest) {
+      setDropPrev(null);
+      return;
+    }
+    const n =
+      drag.tipo === 'grupo'
+        ? (drag.entry_ids?.length ?? 1)
+        : drag.tipo === 'grupo-pendiente'
+          ? (drag.horas ?? 1)
+          : 1;
+    const bIdx = bloques.findIndex((b) => b.id === dest.bloque.id);
+    const celdas = new Set<string>();
+    for (let i = bIdx; i >= 0 && i < bIdx + n && i < bloques.length; i++) {
+      if (bloques[i].es_receso) break;
+      celdas.add(`${bloques[i].id}:${dest.dia}`);
+    }
+    setDropPrev({ celdas, valida: celdaValida(dest.bloque, dest.dia, drag) });
+  };
 
   const onDragEnd = async (ev: DragEndEvent) => {
     const drag = ev.active.data.current as DragData;
     setActivo(null);
+    setDropPrev(null);
     const over = ev.over?.id as string | undefined;
     if (!over || !drag) return;
     if (over === 'pendientes') {
@@ -420,35 +476,13 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       return;
     }
     if (over.startsWith('cell:')) {
-      const [, bloqueId, dia] = over.split(':');
-      const bloqueIds =
-        (ev.over?.data.current as { bloqueIds?: number[] } | undefined)?.bloqueIds ??
-        [Number(bloqueId)];
-      let sub = 0;
-      if (bloqueIds.length > 1 && ev.over) {
-        const rect = ev.over.rect;
-        const act = ev.activatorEvent as Partial<PointerEvent>;
-        const translated = ev.active.rect.current.translated;
-        const py =
-          typeof act.clientY === 'number'
-            ? act.clientY + ev.delta.y
-            : translated
-              ? translated.top + translated.height / 2
-              : null;
-        if (py !== null && rect.height > 0) {
-          sub = Math.min(
-            bloqueIds.length - 1,
-            Math.max(0, Math.floor(((py - rect.top) / rect.height) * bloqueIds.length))
-          );
-        }
-      }
-      const bloque = bloqueParaDrop(bloqueIds, sub, drag);
-      if (!bloque) return;
-      if (!celdaValida(bloque, Number(dia), drag)) {
+      const dest = destinoDeDrop(ev, drag);
+      if (!dest) return;
+      if (!celdaValida(dest.bloque, dest.dia, drag)) {
         mostrarAviso('Esa celda no es válida para la clase (ocupada, receso o sin aula libre).', 'error');
         return;
       }
-      await handleDropEnCelda(bloque, Number(dia), drag);
+      await handleDropEnCelda(dest.bloque, dest.dia, drag);
     }
   };
 
@@ -471,7 +505,16 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   }
 
   return (
-    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+    <DndContext
+      sensors={sensors}
+      onDragStart={onDragStart}
+      onDragMove={onDragMove}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => {
+        setActivo(null);
+        setDropPrev(null);
+      }}
+    >
       {aviso && (
         <div
           className={`fixed bottom-6 right-6 z-50 max-w-md px-4 py-2.5 rounded-xl text-xs font-semibold border shadow-2xl shadow-black/50 backdrop-blur-sm whitespace-pre-line transition-all ${
@@ -549,6 +592,22 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                       const entry = porCelda.get(key);
                       const valida = activo ? celdaValida(b, d, activo) : null;
                       const sp = spans.get(key);
+                      const celdaBloqueIds = bloques
+                        .slice(bIdx, bIdx + (sp?.n ?? 1))
+                        .map((x) => x.id);
+                      let dropRango: { desde: number; hasta: number; valida: boolean } | null = null;
+                      if (dropPrev) {
+                        const marcados = celdaBloqueIds
+                          .map((bid, i) => (dropPrev.celdas.has(`${bid}:${d}`) ? i : -1))
+                          .filter((i) => i >= 0);
+                        if (marcados.length > 0) {
+                          dropRango = {
+                            desde: Math.min(...marcados),
+                            hasta: Math.max(...marcados),
+                            valida: dropPrev.valida,
+                          };
+                        }
+                      }
                       return (
                         <Celda
                           key={d}
@@ -556,7 +615,8 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           entry={entry}
                           run={entry ? runEntriesDe(bIdx, d, sp?.n ?? 1) : []}
                           span={sp?.n ?? 1}
-                          bloqueIds={bloques.slice(bIdx, bIdx + (sp?.n ?? 1)).map((x) => x.id)}
+                          bloqueIds={celdaBloqueIds}
+                          dropRango={dropRango}
                           finHasta={sp?.fin}
                           valida={valida}
                           esSwap={
@@ -836,6 +896,7 @@ const Celda: React.FC<{
   run: HorarioEntry[];
   span: number;
   bloqueIds: number[]; // bloques que cubre la celda (span filas), en orden
+  dropRango?: { desde: number; hasta: number; valida: boolean } | null; // sub-filas que ocuparía el drop
   finHasta?: string;
   valida: boolean | null;
   esSwap: boolean;
@@ -845,7 +906,7 @@ const Celda: React.FC<{
   usa12h: boolean;
   errores: ErrorClase[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   let cls =
@@ -870,6 +931,19 @@ const Celda: React.FC<{
         <div className="absolute inset-0 p-0.5">
           <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} onAbrirMenu={onAbrirMenu} />
         </div>
+      )}
+      {dropRango && (
+        <div
+          className={`absolute left-0.5 right-0.5 z-30 rounded-md border-2 border-dashed pointer-events-none ${
+            dropRango.valida
+              ? 'border-emerald-300 bg-emerald-400/25 shadow-[0_0_14px_rgba(52,211,153,0.4)]'
+              : 'border-red-400 bg-red-500/20'
+          }`}
+          style={{
+            top: `${(dropRango.desde / span) * 100}%`,
+            height: `${((dropRango.hasta - dropRango.desde + 1) / span) * 100}%`,
+          }}
+        />
       )}
     </td>
   );
