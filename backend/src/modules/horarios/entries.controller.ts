@@ -1304,6 +1304,33 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
     const rivales = lapsosRivales(tipo, trimestre);
     const entries = await cargarEntries(periodo, rivales);
 
+    // Slots en que cada profesor NO está disponible (tabla = bloqueos).
+    const dispRows = await query<any[]>(
+      `SELECT profesor_id, dia_semana,
+              TIME_FORMAT(hora_inicio, '%H:%i:%s') AS hora_inicio,
+              TIME_FORMAT(hora_fin, '%H:%i:%s') AS hora_fin
+       FROM profesor_disponibilidad`
+    );
+    const bloqueosPorProf = new Map<number, Map<number, { hi: string; hf: string }[]>>();
+    for (const r of dispRows) {
+      const porDia = bloqueosPorProf.get(Number(r.profesor_id)) ?? new Map();
+      const arr = porDia.get(Number(r.dia_semana)) ?? [];
+      arr.push({ hi: String(r.hora_inicio), hf: String(r.hora_fin) });
+      porDia.set(Number(r.dia_semana), arr);
+      bloqueosPorProf.set(Number(r.profesor_id), porDia);
+    }
+    // true si el profesor marcó ese slot (o uno traslapado) como no disponible
+    const profBloqueado = (
+      profId: number | null,
+      dia: number,
+      hi: string,
+      hf: string
+    ): boolean => {
+      if (profId === null) return false;
+      const rs = bloqueosPorProf.get(profId)?.get(dia);
+      return !!rs?.some((r) => r.hi < hf && r.hf > hi);
+    };
+
     // Reglas de generación automática configurables
     const cfgRows = await query<any[]>(
       'SELECT min_horas_bloque, max_horas_dia FROM horario_config WHERE id = 1'
@@ -1409,7 +1436,11 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
       let libres = 0;
       for (const dia of u.dias) {
         for (const b of u.bloques) {
-          if (!conflictoEn(entries, dia, b.hora_inicio, b.hora_fin, { seccion_id: u.seccion_id })) libres++;
+          if (
+            !conflictoEn(entries, dia, b.hora_inicio, b.hora_fin, { seccion_id: u.seccion_id }) &&
+            !profBloqueado(u.profesor_id, dia, b.hora_inicio, b.hora_fin)
+          )
+            libres++;
         }
       }
       u.slotsLibres = libres;
@@ -1455,7 +1486,8 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
             for (let k = 0; k + s <= u.bloques.length && !colocada; k++) {
               const ventana = u.bloques.slice(k, k + s);
               if (!ventana.every((b, j) => b.orden === ventana[0].orden + j)) continue;
-              // Sección y profesor libres en toda la ventana
+              // Sección y profesor libres en toda la ventana, y el profesor
+              // disponible (sin bloqueo de disponibilidad en ese horario)
               let choque = false;
               const ocupadasRun = new Set<number>();
               for (const b of ventana) {
@@ -1463,7 +1495,8 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
                   conflictoEn(entries, dia, b.hora_inicio, b.hora_fin, {
                     seccion_id: u.seccion_id,
                     profesor_id: u.profesor_id,
-                  })
+                  }) ||
+                  profBloqueado(u.profesor_id, dia, b.hora_inicio, b.hora_fin)
                 ) {
                   choque = true;
                   break;
@@ -1509,7 +1542,7 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
           motivo:
             sinEncajar < minBloque
               ? `Resto de ${sinEncajar}h menor al mínimo por bloque (${minBloque}h)`
-              : `Sin run de ${minBloque}-${maxDia} bloques libres (choque de aula, sección o profesor)`,
+              : `Sin run de ${minBloque}-${maxDia} bloques libres (choque de aula, sección, profesor o su disponibilidad)`,
         });
       }
     }

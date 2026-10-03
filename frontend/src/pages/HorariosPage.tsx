@@ -69,6 +69,13 @@ interface Violacion {
   titulo?: string; // línea destacada en el panel/tooltip (choques)
 }
 
+// Slot en que un profesor NO está disponible (tabla profesor_disponibilidad = bloqueos)
+interface DispSlot {
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fin: string;
+}
+
 export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick }) => {
   const { user } = useAuth();
   const puedeEditar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
@@ -107,6 +114,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [reporteOpen, setReporteOpen] = useState(false);
   const [erroresOpen, setErroresOpen] = useState(false);
   const [forzar, setForzar] = useState(false); // mover clases ignorando solapes de aula/profesor/sección
+  const [dispProfs, setDispProfs] = useState<Map<number, DispSlot[]>>(new Map()); // bloqueos por profesor
   const [resaltar, setResaltar] = useState<Set<string> | null>(null);
   const [profEdit, setProfEdit] = useState<Profesor | null>(null);
 
@@ -222,6 +230,29 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           error: `el ${DIAS_NOMBRES[e.dia_semana]} no es un día habilitado del turno '${t.nombre}'.`,
         });
       }
+      // Profesor en un slot que marcó como no disponible (traslapa por hora real)
+      if (!e.es_receso && e.profesor_id) {
+        const bloq = dispProfs.get(e.profesor_id);
+        const hit = bloq?.find(
+          (d) =>
+            d.dia_semana === e.dia_semana &&
+            minutos(d.hora_inicio) < minutos(e.hora_fin) &&
+            minutos(d.hora_fin) > minutos(e.hora_inicio)
+        );
+        if (hit) {
+          out.push({
+            seccion_id: e.seccion_id,
+            dia: e.dia_semana,
+            bloques: [e.bloque_id],
+            detalle: detalle(e),
+            titulo: 'Profesor no disponible',
+            error:
+              `El profesor ${profDe(e)} no está disponible el ${DIAS_NOMBRES[e.dia_semana]} ` +
+              `de ${fmtHoraCfg(hit.hora_inicio, usa12)} a ${fmtHoraCfg(hit.hora_fin, usa12)}, ` +
+              `y la materia '${e.materia_nombre}' está agendada ${cuando(e)}.`,
+          });
+        }
+      }
     }
 
     // Choques: dos clases traslapadas compartiendo sección, profesor o aula.
@@ -329,7 +360,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       cerrarRun();
     }
     return out;
-  }, [entries, secciones, turnos, config]);
+  }, [entries, secciones, turnos, config, dispProfs]);
 
   // Celdas (bloque:día) involucradas en alguna violación, con sus mensajes:
   // las tarjetas las marcan con un punto rojo cuyo tooltip lista los errores.
@@ -408,7 +439,18 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     const res = await apiFetch<{ entries: HorarioEntry[] }>(
       `/horarios/entries?tipo=${lapso.tipo}&trimestre=${lapso.n}`
     );
-    if (res.success && res.data) setEntries(res.data.entries || []);
+    const list = res.success && res.data ? res.data.entries || [] : [];
+    if (res.success && res.data) setEntries(list);
+    // Disponibilidad (bloqueos) de cada profesor presente en el lapso — alimenta la auditoría
+    const ids = [...new Set(list.map((e) => e.profesor_id).filter((id): id is number => !!id))];
+    const respuestas = await Promise.all(
+      ids.map((id) => apiFetch<DispSlot[]>(`/profesores/${id}/disponibilidad`))
+    );
+    const mapa = new Map<number, DispSlot[]>();
+    respuestas.forEach((r, i) => {
+      if (r.success && r.data) mapa.set(ids[i], r.data);
+    });
+    setDispProfs(mapa);
   };
 
   useEffect(() => {
