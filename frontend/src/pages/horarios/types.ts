@@ -104,6 +104,10 @@ export const colorMateria = (id: number): string => PALETA[id % PALETA.length];
 
 export const fmtHora = (h: string): string => h?.slice(0, 5) ?? '';
 
+// Antepone 'PNF' solo si el nombre no lo trae ya (p. ej. 'P.N.F. en Informática')
+export const pnfLabel = (nombre: string | null | undefined): string =>
+  !nombre ? 'PNF —' : /\bp\.?\s?n\.?\s?f\.?\b/i.test(nombre) ? nombre : `PNF ${nombre}`;
+
 export const minutos = (h: string): number => {
   const [hh, mm] = h.split(':').map(Number);
   return hh * 60 + mm;

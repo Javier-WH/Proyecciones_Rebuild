@@ -20,6 +20,7 @@ import {
   traslapan,
   DIAS_NOMBRES,
   ErrorClase,
+  pnfLabel,
 } from './horarios/types.js';
 import {
   CalendarClock,
@@ -180,7 +181,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         : 'sin profesor asignado';
     const detalle = (e: HorarioEntry) => {
       const s = secById.get(e.seccion_id);
-      return `La materia '${e.materia_nombre}' del PNF ${s?.pnf_nombre ?? '—'}, ` +
+      return `La materia '${e.materia_nombre}' del ${pnfLabel(s?.pnf_nombre)}, ` +
         `sección ${e.seccion_nombre} (${s?.proyeccion_nombre ?? '—'}), ` +
         `turno ${e.turno_nombre}, ${profDe(e)},`;
     };
@@ -220,7 +221,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // Mensaje en dos líneas: título del conflicto + descripción con ambas materias.
     const pnfDe = (e: HorarioEntry) => secById.get(e.seccion_id)?.pnf_nombre ?? '—';
     const lado = (e: HorarioEntry) =>
-      `'${e.materia_nombre}' del PNF ${pnfDe(e)} del turno ${e.turno_nombre}`;
+      `'${e.materia_nombre}' del ${pnfLabel(pnfDe(e))} del turno ${e.turno_nombre}`;
     const choques: [
       string,
       (b: HorarioEntry, a: HorarioEntry) => string,

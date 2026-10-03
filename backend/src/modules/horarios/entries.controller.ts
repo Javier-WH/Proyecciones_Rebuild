@@ -20,6 +20,9 @@ async function periodoActivo(): Promise<string | null> {
 
 const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const hhmm = (h: any) => String(h ?? '').slice(0, 5);
+// Antepone 'PNF' solo si el nombre no lo trae ya ('P.N.F. en Informática')
+const pnfLbl = (n: any) =>
+  n && /p\.?\s?n\.?\s?f\.?/i.test(String(n)) ? String(n) : `PNF ${n ?? '—'}`;
 
 // ER_DUP_ENTRY trae en sqlMessage el nombre de la clave única que falló
 // (uq_aula / uq_seccion / uq_profesor): lo usamos para titular el conflicto.
@@ -318,7 +321,7 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
           success: false,
           message:
             `Sin aulas libres\nNo se encuentran aulas libres para la materia '${materiaNombre}', ` +
-            `del PNF ${pnfNombre}, de la sección ${seccionNombre}, del turno ${turnoNombre}, ${cuandoTxt}.`,
+            `del ${pnfLbl(pnfNombre)}, de la sección ${seccionNombre}, del turno ${turnoNombre}, ${cuandoTxt}.`,
         });
       }
     }
@@ -350,13 +353,13 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
         const otra = choque.materia_nombre ?? 'otra clase';
         let msg = `Conflicto de horario\nNo se puede agendar '${materiaNombre}' ${cuandoTxt}.`;
         if (choque.aula_id === aulaId) {
-          msg = `Conflicto de Aula\nLa materia '${materiaNombre}' del PNF ${pnfNombre} del turno ${turnoNombre} ` +
+          msg = `Conflicto de Aula\nLa materia '${materiaNombre}' del ${pnfLbl(pnfNombre)} del turno ${turnoNombre} ` +
             `tiene asignada el aula ${choque.aula_codigo ?? aulaId}, que ya está ocupando la materia ` +
             `'${otra}' (sección ${choque.seccion_nombre ?? '—'}) ${cuandoTxt}.`;
         } else if (choque.seccion_id === seccionId) {
           msg = `Conflicto de Sección\nLa sección ${seccionNombre} ya tiene '${otra}' agendada ${cuandoTxt}.`;
         } else if (profesorId && choque.profesor_id === profesorId) {
-          msg = `Conflicto de Profesor\nLa materia '${materiaNombre}' del PNF ${pnfNombre} del turno ${turnoNombre} ` +
+          msg = `Conflicto de Profesor\nLa materia '${materiaNombre}' del ${pnfLbl(pnfNombre)} del turno ${turnoNombre} ` +
             `tiene un profesor que ya está dando '${otra}' (sección ${choque.seccion_nombre ?? '—'}) ${cuandoTxt}.`;
         }
         return reply.status(409).send({ success: false, message: msg });
