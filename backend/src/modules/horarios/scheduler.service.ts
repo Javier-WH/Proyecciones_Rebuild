@@ -38,6 +38,8 @@ export function seTraslapan(inicioA: string, finA: string, inicioB: string, finB
 
 export interface EntryRow {
   id: number;
+  tipo_proyeccion?: string;
+  trimestre?: number;
   materia_id: number;
   seccion_id: number;
   profesor_id: number | null;
@@ -61,7 +63,8 @@ export async function cargarEntries(
   const cond = lapsos.map(() => '(e.tipo_proyeccion = ? AND e.trimestre = ?)').join(' OR ');
   const params = lapsos.flatMap((l) => [l.tipo, l.n]);
   return query<EntryRow[]>(
-    `SELECT e.id, e.materia_id, e.seccion_id, e.profesor_id, e.dia_semana, e.bloque_id, e.aula_id,
+    `SELECT e.id, e.tipo_proyeccion, e.trimestre, e.materia_id, e.seccion_id, e.profesor_id,
+            e.dia_semana, e.bloque_id, e.aula_id,
             b.hora_inicio, b.hora_fin ${extraJoins}
      FROM horario_entries e
      JOIN turno_bloques b ON b.id = e.bloque_id

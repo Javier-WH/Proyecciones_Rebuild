@@ -235,6 +235,46 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     for (const e of entries) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
 
     const ocupadas = aulasOcupadas(entries, dia, bloque.hora_inicio, bloque.hora_fin, entryId ?? undefined);
+
+    // Herencia de aula: si el destino queda contiguo a otra hora de la misma
+    // materia y profesor en la sección (bloque anterior o siguiente sin receso
+    // de por medio), se usa el aula de la vecina para que formen un solo bloque.
+    let aulaHeredada = false;
+    if (aulaId === null) {
+      const bloquesTurno = await query<any[]>(
+        'SELECT id, orden, es_receso FROM turno_bloques WHERE turno_id = ? ORDER BY orden',
+        [bloque.turno_id]
+      );
+      const bIdx = bloquesTurno.findIndex((b) => Number(b.id) === Number(body.bloque_id));
+      const vecinos: number[] = [];
+      for (let i = bIdx - 1; i >= 0; i--) {
+        if (!bloquesTurno[i].es_receso) {
+          vecinos.push(bloquesTurno[i].id);
+          break;
+        }
+      }
+      for (let i = bIdx + 1; i < bloquesTurno.length; i++) {
+        if (!bloquesTurno[i].es_receso) {
+          vecinos.push(bloquesTurno[i].id);
+          break;
+        }
+      }
+      if (vecinos.length > 0) {
+        const vec = await query<any[]>(
+          `SELECT e.id, e.aula_id FROM horario_entries e
+           WHERE e.bloque_id IN (${vecinos.map(() => '?').join(',')}) AND e.dia_semana = ?
+             AND e.materia_id = ? AND e.seccion_id = ?
+             AND e.periodo_academico = ? AND e.tipo_proyeccion = ? AND e.trimestre = ?
+             AND e.profesor_id <=> ?
+           LIMIT 1`,
+          [...vecinos, dia, Number(body.materia_id), seccionId, periodo, tipo, trimestre, profesorId]
+        );
+        if (vec.length > 0 && Number(vec[0].id) !== entryId) {
+          aulaId = Number(vec[0].aula_id);
+          aulaHeredada = true;
+        }
+      }
+    }
     if (aulaId === null && entryId) {
       const actual = await query<any[]>('SELECT aula_id FROM horario_entries WHERE id = ?', [entryId]);
       if (actual.length > 0 && !ocupadas.has(actual[0].aula_id)) aulaId = actual[0].aula_id;
@@ -259,15 +299,30 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
       entryId ?? undefined
     );
     if (choque) {
-      let msg = 'Conflicto de horario.';
-      if (choque.aula_id === aulaId) {
-        msg = `El aula ${choque.aula_codigo ?? aulaId} ya está ocupada por '${choque.materia_nombre ?? 'otra clase'}' (${choque.seccion_nombre ?? ''}) a esa hora.`;
-      } else if (choque.seccion_id === seccionId) {
-        msg = `La sección ya tiene '${choque.materia_nombre ?? 'otra clase'}' agendada a esa hora.`;
-      } else if (profesorId && choque.profesor_id === profesorId) {
-        msg = `El profesor ya tiene '${choque.materia_nombre ?? 'otra clase'}' (${choque.seccion_nombre ?? ''}) a esa hora.`;
+      const soloChoqueAula =
+        choque.aula_id === aulaId &&
+        choque.seccion_id !== seccionId &&
+        (!profesorId || choque.profesor_id !== profesorId);
+      const choqueExacto =
+        choque.dia_semana === dia &&
+        choque.bloque_id === Number(body.bloque_id) &&
+        choque.tipo_proyeccion === tipo &&
+        Number(choque.trimestre) === trimestre;
+      // Aula heredada ocupada por otra clase en horario traslapado (pero no en
+      // el mismo bloque del mismo lapso): se permite guardar para que la
+      // auditoría marque el choque con el punto rojo. Un choque exacto no se
+      // puede guardar por la clave única de la tabla.
+      if (!(aulaHeredada && soloChoqueAula && !choqueExacto)) {
+        let msg = 'Conflicto de horario.';
+        if (choque.aula_id === aulaId) {
+          msg = `El aula ${choque.aula_codigo ?? aulaId} ya está ocupada por '${choque.materia_nombre ?? 'otra clase'}' (${choque.seccion_nombre ?? ''}) a esa hora.`;
+        } else if (choque.seccion_id === seccionId) {
+          msg = `La sección ya tiene '${choque.materia_nombre ?? 'otra clase'}' agendada a esa hora.`;
+        } else if (profesorId && choque.profesor_id === profesorId) {
+          msg = `El profesor ya tiene '${choque.materia_nombre ?? 'otra clase'}' (${choque.seccion_nombre ?? ''}) a esa hora.`;
+        }
+        return reply.status(409).send({ success: false, message: msg });
       }
-      return reply.status(409).send({ success: false, message: msg });
     }
 
     if (entryId) {
@@ -289,6 +344,12 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     return reply.send({ success: true, message: 'Clase agendada.', data: { aula_id: aulaId } });
   } catch (error: any) {
     request.log.error(error);
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return reply.status(409).send({
+        success: false,
+        message: 'Ya existe una clase con esa aula, sección o profesor en el mismo bloque.',
+      });
+    }
     return reply.status(500).send({ success: false, message: 'Error agendando la clase.' });
   }
 }
