@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
 import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHoraCfg, hora12De, a24 } from './types.js';
-import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
+import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle, Merge } from 'lucide-react';
 
 interface TurnosPanelProps {
   turnos: Turno[];
@@ -183,6 +183,60 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
       if (j < 0 || j >= copia.length) return prev;
       [copia[i], copia[j]] = [copia[j], copia[i]];
       return copia;
+    });
+  };
+
+  // El turno diurno mezcla mañana + tarde: este botón copia los bloques de
+  // ambos turnos y agrega entre ellos un receso del tamaño de la diferencia
+  // horaria (fin de la mañana → inicio de la tarde).
+  const normNombre = (s: string) =>
+    s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const esDiurno = !!turno && /DIURN/.test(normNombre(turno.nombre));
+
+  const combinarMananaTarde = () => {
+    const manana = turnos.find((t) => /MANANA/.test(normNombre(t.nombre)));
+    const tarde = turnos.find((t) => /TARDE/.test(normNombre(t.nombre)));
+    if (!manana || !tarde) {
+      setMsg({ error: true, texto: 'No se encontraron los turnos Mañana y Tarde para combinar.' });
+      return;
+    }
+    if (manana.bloques.length === 0 || tarde.bloques.length === 0) {
+      setMsg({ error: true, texto: 'Mañana y Tarde deben tener bloques configurados.' });
+      return;
+    }
+    const mk = (hi: string, hf: string, es_receso: boolean): BloqueEdit => ({
+      hora_inicio: hi.slice(0, 5),
+      hora_fin: hf.slice(0, 5),
+      es_receso,
+      meridiem: Number(hi.slice(0, 2)) >= 12 ? 'PM' : 'AM',
+    });
+    const bloquesM = manana.bloques.map((b) => mk(b.hora_inicio, b.hora_fin, !!b.es_receso));
+    const bloquesT = tarde.bloques.map((b) => mk(b.hora_inicio, b.hora_fin, !!b.es_receso));
+    const finM = bloquesM[bloquesM.length - 1].hora_fin;
+    const iniT = bloquesT[0].hora_inicio;
+    if (finM > iniT) {
+      setMsg({
+        error: true,
+        texto: `Mañana termina a las ${finM} pero Tarde empieza a las ${iniT}: los horarios se solapan.`,
+      });
+      return;
+    }
+    const nuevos = [...bloquesM];
+    if (finM < iniT) nuevos.push(mk(finM, iniT, true)); // receso entre turnos
+    nuevos.push(...bloquesT);
+    editBloques(nuevos);
+    // Días del diurno: unión de los días habilitados de ambos turnos
+    const u = new Set<number>();
+    for (const t of [manana, tarde]) {
+      for (const d of String(t.dias_semana).split(',').map(Number).filter(Boolean)) u.add(d);
+    }
+    editDias([...u].sort());
+    setMsg({
+      error: false,
+      texto:
+        `Bloques combinados de Mañana y Tarde` +
+        (finM < iniT ? `, con receso ${finM}–${iniT}` : '') +
+        '. Revisa y pulsa Guardar.',
     });
   };
 
@@ -459,6 +513,15 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
               </div>
               {puedeEditar && (
                 <div className="flex gap-1.5">
+                  {esDiurno && (
+                    <button
+                      onClick={combinarMananaTarde}
+                      title="Copia los bloques de Mañana y Tarde, con un receso entre ambos"
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Merge className="w-3 h-3" /> Mañana+Tarde
+                    </button>
+                  )}
                   <button
                     onClick={() =>
                       editBloques((p) => [
