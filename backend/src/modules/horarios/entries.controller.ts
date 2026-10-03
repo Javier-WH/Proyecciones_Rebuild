@@ -39,6 +39,30 @@ function msgDupEntry(e: any, descripcion: string): string {
   return `${titulo}\n${descripcion}`;
 }
 
+// Slot de profesor_disponibilidad que traslapa ese día+bloque (la tabla
+// registra los rangos en que el profesor NO está disponible), o null.
+async function bloqueoProfesor(
+  profesorId: number | null,
+  dia: number,
+  bloqueId: number
+): Promise<{ hi: string; hf: string } | null> {
+  if (!profesorId) return null;
+  const rows = await query<any[]>(
+    `SELECT TIME_FORMAT(d.hora_inicio, '%H:%i') AS hi, TIME_FORMAT(d.hora_fin, '%H:%i') AS hf
+     FROM profesor_disponibilidad d
+     JOIN turno_bloques b ON b.id = ?
+     WHERE d.profesor_id = ? AND d.dia_semana = ?
+       AND d.hora_inicio < b.hora_fin AND d.hora_fin > b.hora_inicio
+     LIMIT 1`,
+    [bloqueId, profesorId, dia]
+  );
+  return rows[0] ?? null;
+}
+
+const msgProfNoDisponible = (materia: string, dia: number, hi: string, hf: string) =>
+  `Profesor no disponible\nEl profesor de '${materia}' no está disponible ` +
+  `el ${DIAS[dia] || dia} de ${hi} a ${hf}.`;
+
 const ENTRY_SELECT = `
   SELECT e.id, e.periodo_academico, e.tipo_proyeccion, e.trimestre,
          e.materia_id, m.nombre AS materia_nombre, m.horas_semanales,
@@ -373,6 +397,18 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
       }
     }
 
+    // Disponibilidad del profesor en el slot destino: sin `forzar` se rechaza;
+    // con `forzar` se guarda y la auditoría lo marca con el punto rojo.
+    if (!forzar && profesorId) {
+      const nd = await bloqueoProfesor(profesorId, dia, Number(body.bloque_id));
+      if (nd) {
+        return reply.status(409).send({
+          success: false,
+          message: msgProfNoDisponible(materiaNombre, dia, nd.hi, nd.hf),
+        });
+      }
+    }
+
     if (entryId) {
       await query(
         `UPDATE horario_entries
@@ -428,7 +464,7 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
     const [rows] = await conn.execute<any[]>(
       `SELECT en.id, en.dia_semana, en.bloque_id, en.aula_id, en.materia_id,
               en.seccion_id, en.profesor_id, en.periodo_academico,
-              en.tipo_proyeccion, en.trimestre, pr.pnf_saga_id
+              en.tipo_proyeccion, en.trimestre, pr.pnf_saga_id, m.nombre AS materia_nombre
        FROM horario_entries en
        JOIN proyeccion_materias m ON m.id = en.materia_id
        JOIN proyecciones pr ON pr.id = m.proyeccion_id
@@ -482,6 +518,21 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
         return reply.status(409).send({
           success: false,
           message: 'Conflicto de Profesor\nEl profesor ya tiene otra clase en el bloque destino.',
+        });
+      }
+      // Disponibilidad de cada profesor en el slot al que quedaría
+      const ndA = await bloqueoProfesor(a.profesor_id, b.dia_semana, Number(b.bloque_id));
+      if (ndA) {
+        return reply.status(409).send({
+          success: false,
+          message: msgProfNoDisponible(a.materia_nombre, b.dia_semana, ndA.hi, ndA.hf),
+        });
+      }
+      const ndB = await bloqueoProfesor(b.profesor_id, a.dia_semana, Number(a.bloque_id));
+      if (ndB) {
+        return reply.status(409).send({
+          success: false,
+          message: msgProfNoDisponible(b.materia_nombre, a.dia_semana, ndB.hi, ndB.hf),
         });
       }
     }
@@ -613,7 +664,7 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     const [rows] = await conn.execute<any[]>(
       `SELECT en.id, en.seccion_id, en.dia_semana, en.bloque_id, en.aula_id, en.profesor_id,
               en.materia_id, en.periodo_academico, en.tipo_proyeccion, en.trimestre,
-              b.orden, b.turno_id, pr.pnf_saga_id
+              b.orden, b.turno_id, pr.pnf_saga_id, m.nombre AS materia_nombre
        FROM horario_entries en
        JOIN turno_bloques b ON b.id = en.bloque_id
        JOIN proyeccion_materias m ON m.id = en.materia_id
@@ -678,10 +729,12 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     // (Entradas de otras secciones o lapsos rivales pueden coexistir en la
     // celda; no se tocan, pero cuentan para la ocupación de aulas.)
     const [ocupantes] = await conn.execute<any[]>(
-      `SELECT id, dia_semana, bloque_id, aula_id, seccion_id, materia_id, profesor_id
-       FROM horario_entries
-       WHERE periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
-         AND dia_semana = ? AND bloque_id IN (${destinoIds.map(() => '?').join(',')})`,
+      `SELECT en.id, en.dia_semana, en.bloque_id, en.aula_id, en.seccion_id,
+              en.materia_id, en.profesor_id, m.nombre AS materia_nombre
+       FROM horario_entries en
+       JOIN proyeccion_materias m ON m.id = en.materia_id
+       WHERE en.periodo_academico = ? AND en.tipo_proyeccion = ? AND en.trimestre = ?
+         AND en.dia_semana = ? AND en.bloque_id IN (${destinoIds.map(() => '?').join(',')})`,
       [periodo, tipo, trimestre, dia, ...destinoIds]
     );
     const foraneos = ocupantes.filter(
@@ -795,6 +848,34 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
           message:
             'Conflicto de Profesor\nLa clase desplazada al origen choca con otra del mismo profesor.',
         });
+      }
+      // Disponibilidad: el profesor del grupo en cada bloque destino y el de
+      // cada clase desplazada en el slot de origen al que quedaría.
+      for (const [i, r] of run.entries()) {
+        const nd = await bloqueoProfesor(r.profesor_id, dia, Number(destinos[i].id));
+        if (nd) {
+          return reply.status(409).send({
+            success: false,
+            message: msgProfNoDisponible(r.materia_nombre ?? 'la clase', dia, nd.hi, nd.hf),
+          });
+        }
+      }
+      for (const [j, f] of foraneos.entries()) {
+        const s = origenLibres[j];
+        const nd = s
+          ? await bloqueoProfesor(f.profesor_id, s.dia_semana, Number(s.bloque_id))
+          : null;
+        if (nd) {
+          return reply.status(409).send({
+            success: false,
+            message: msgProfNoDisponible(
+              f.materia_nombre ?? 'la clase desplazada',
+              s.dia_semana,
+              nd.hi,
+              nd.hf
+            ),
+          });
+        }
       }
     }
 
@@ -1104,6 +1185,16 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
             `Conflicto de Profesor\nEl profesor ya tiene otra clase el ${DIAS[dia] || dia} ` +
             'en alguno de esos bloques.',
         });
+      }
+      // Disponibilidad del profesor en cada bloque destino
+      for (const d of destinos) {
+        const nd = await bloqueoProfesor(profesorId, dia, Number(d.id));
+        if (nd) {
+          return reply.status(409).send({
+            success: false,
+            message: msgProfNoDisponible(ctx.materiaNombre, dia, nd.hi, nd.hf),
+          });
+        }
       }
     }
 
