@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
-import { Aula } from './types.js';
+import { Aula, normMateria } from './types.js';
 import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search } from 'lucide-react';
 
 // Materia del catálogo global (SAGA): nombre + de qué PNF/malla viene
@@ -10,6 +10,23 @@ interface MateriaOpcion {
   maya: string;
   trayecto: string;
 }
+
+// Caché en memoria del catálogo global de materias (se pierde al recargar la
+// página). La app lo precarga en segundo plano al iniciar sesión para que el
+// picker abra sin espera; mientras no esté listo se muestra el loading.
+let catalogoCache: MateriaOpcion[] | null = null;
+let catalogoPromise: Promise<MateriaOpcion[]> | null = null;
+
+export const precargarCatalogoMaterias = (): Promise<MateriaOpcion[]> => {
+  if (catalogoCache) return Promise.resolve(catalogoCache);
+  catalogoPromise ??= apiFetch<MateriaOpcion[]>('/horarios/materias')
+    .then((r) => (catalogoCache = r.success && r.data ? r.data : []))
+    .catch(() => {
+      catalogoPromise = null; // permite reintentar la próxima vez
+      return [] as MateriaOpcion[];
+    });
+  return catalogoPromise;
+};
 
 const TIPOS = [
   { v: 'AULA_REGULAR', l: 'Aula regular' },
@@ -46,15 +63,31 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
   const [materiasOpts, setMateriasOpts] = useState<MateriaOpcion[] | null>(null);
   const [pickerLoading, setPickerLoading] = useState(false);
 
+  // La misma materia puede venir en varias mallas/PNFs del catálogo: se agrupa
+  // por nombre para que el picker la liste una sola vez, mostrando todas sus
+  // procedencias. La preferencia se guarda por nombre de todas formas.
+  const gruposMaterias = useMemo(() => {
+    const m = new Map<string, MateriaOpcion[]>();
+    for (const o of materiasOpts ?? []) {
+      const k = normMateria(o.nombre);
+      const g = m.get(k) ?? [];
+      g.push(o);
+      m.set(k, g);
+    }
+    return [...m.values()].map((opts) => ({ nombre: opts[0].nombre, origenes: opts }));
+  }, [materiasOpts]);
+
   const abrirPicker = async () => {
     setPickerOpen(true);
     setPickerQ('');
     if (materiasOpts === null) {
+      if (catalogoCache) {
+        setMateriasOpts(catalogoCache);
+        return;
+      }
       setPickerLoading(true);
-      const r = await apiFetch<MateriaOpcion[]>('/horarios/materias');
+      setMateriasOpts(await precargarCatalogoMaterias());
       setPickerLoading(false);
-      if (r.success && r.data) setMateriasOpts(r.data);
-      else setMateriasOpts([]);
     }
   };
 
@@ -406,25 +439,28 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
                 </div>
               )}
               {!pickerLoading &&
-                (materiasOpts ?? [])
+                gruposMaterias
                   .filter(
-                    (o) =>
+                    (g) =>
                       !pickerQ.trim() ||
-                      `${o.nombre} ${o.pnf} ${o.maya} ${o.trayecto}`
+                      `${g.nombre} ${g.origenes.map((o) => `${o.pnf} ${o.maya} ${o.trayecto}`).join(' ')}`
                         .toLowerCase()
                         .includes(pickerQ.trim().toLowerCase())
                   )
                   .slice(0, 300)
-                  .map((o, i) => {
-                    const sel = materiasSel.has(o.nombre);
+                  .map((g) => {
+                    const sel = materiasSel.has(g.nombre);
+                    const origenTxt = g.origenes
+                      .map((o) => `${o.pnf}${o.trayecto ? ` (${o.trayecto})` : ''} — ${o.maya}`)
+                      .join('  ·  ');
                     return (
                       <button
-                        key={`${o.nombre}|${o.pnf}|${o.maya}|${i}`}
+                        key={g.nombre}
                         type="button"
                         onClick={() => {
                           const s = new Set(materiasSel);
-                          if (sel) s.delete(o.nombre);
-                          else s.add(o.nombre);
+                          if (sel) s.delete(g.nombre);
+                          else s.add(g.nombre);
                           setMateriasSel(s);
                         }}
                         className={`w-full text-left px-3 py-2 rounded-lg border cursor-pointer transition-colors flex items-center justify-between gap-3 ${
@@ -434,16 +470,15 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
                         }`}
                       >
                         <div className="min-w-0">
-                          <div className="text-xs text-slate-200 font-semibold truncate">{o.nombre}</div>
-                          <div className="text-[10px] text-slate-500 truncate">
-                            {o.pnf}
-                            {o.trayecto ? ` · ${o.trayecto}` : ''}
+                          <div className="text-xs text-slate-200 font-semibold truncate">{g.nombre}</div>
+                          <div className="text-[10px] text-slate-500 truncate" title={origenTxt}>
+                            {origenTxt}
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {o.maya && (
+                          {g.origenes.length > 1 && (
                             <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-400 text-[9px] font-semibold">
-                              {o.maya}
+                              {g.origenes.length} mallas
                             </span>
                           )}
                           {sel && (

@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { PnfColorProvider } from './context/PnfColorContext.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
+import { precargarCatalogoMaterias } from './pages/horarios/AulasPanel.js';
 import { Loader2 } from 'lucide-react';
 
 const AppRoutes: React.FC = () => {
   const { user, loading } = useAuth();
+
+  // Precarga en segundo plano el catálogo global de materias (lo usa el picker
+  // de materias preferidas del aula); el caché es en memoria y se pierde al
+  // recargar la página.
+  useEffect(() => {
+    if (user) precargarCatalogoMaterias();
+  }, [user]);
 
   if (loading) {
     return (
