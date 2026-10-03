@@ -20,6 +20,7 @@ export const ClaseCard: React.FC<{
   className?: string;
 }> = ({ entry, fin, compacto, usa12h, errores, advertencias, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
+  const [tipAdv, setTipAdv] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
   const pnfNombre = catalogo.find((c) => c.id === entry.pnf_saga_id)?.nombre;
@@ -85,12 +86,38 @@ export const ClaseCard: React.FC<{
         )}
       {advertencias && advertencias.length > 0 && (
         <span
-          title={advertencias.join('\n')}
-          className="absolute bottom-0.5 left-1/2 -translate-x-1/2 cursor-help"
+          onMouseEnter={(ev) => {
+            const r = ev.currentTarget.getBoundingClientRect();
+            setTipAdv({ x: r.left + r.width / 2, y: r.bottom, flip: false });
+          }}
+          onMouseLeave={() => setTipAdv(null)}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 p-1.5 z-10 cursor-help"
         >
-          <AlertTriangle className="w-3 h-3 text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]" />
+          <AlertTriangle className="w-4 h-4 text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.9)]" />
         </span>
       )}
+      {tipAdv && advertencias && advertencias.length > 0 &&
+        createPortal(
+          <div
+            className="fixed z-[100] pointer-events-none"
+            style={{ left: tipAdv.x, top: tipAdv.y, transform: 'translate(-50%, 10px)' }}
+          >
+            <div className="w-64 rounded-xl border border-amber-500/40 bg-slate-900/95 backdrop-blur-sm shadow-2xl shadow-black/60 px-3 py-2.5">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-amber-300 mb-1.5">
+                Advertencia{advertencias.length === 1 ? '' : 's'}
+              </div>
+              <ul className="space-y-2">
+                {advertencias.map((t, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-[4px]" />
+                    <span className="text-[10px] text-slate-300 leading-snug">{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>,
+          document.body
+        )}
       <div className="text-[11px] font-bold leading-tight flex items-start gap-1">
         {pnfColor && (
           <span
