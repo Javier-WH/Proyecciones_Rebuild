@@ -407,13 +407,23 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         add(e.id, `'${e.materia_nombre}' no está en su aula preferida.`);
       }
       if (deportivas.has(e.aula_id) && !e.es_receso) {
+        // El "grupo" deportivo de esta clase: misma sección/día/materia/aula —
+        // las horas siguientes del propio bloque NO cuentan como clase posterior.
+        const esDeMiGrupo = (o: HorarioEntry) =>
+          o.seccion_id === e.seccion_id &&
+          o.dia_semana === e.dia_semana &&
+          o.materia_id === e.materia_id &&
+          o.aula_id === e.aula_id;
+        const finGrupo = Math.max(
+          ...entries.filter(esDeMiGrupo).map((o) => minutos(o.hora_fin))
+        );
         const despues = entries
           .filter(
             (o) =>
-              o.id !== e.id &&
+              !esDeMiGrupo(o) &&
               o.seccion_id === e.seccion_id &&
               o.dia_semana === e.dia_semana &&
-              minutos(o.hora_inicio) >= minutos(e.hora_fin)
+              minutos(o.hora_inicio) >= finGrupo
           )
           .sort((a, b) => minutos(a.hora_inicio) - minutos(b.hora_inicio));
         if (despues.length > 0) {
