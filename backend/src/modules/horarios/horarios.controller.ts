@@ -75,6 +75,12 @@ export async function listMateriasHandler(_request: FastifyRequest, reply: Fasti
     pnf: string;
     maya: string;
     trayecto: string;
+    // IDs de SAGA: permiten reconstruir el árbol PNF→malla→trayecto→materia
+    pnf_saga_id?: number;
+    maya_id?: number;
+    trayecto_saga_id?: number;
+    horas?: number;
+    materia_id?: number;
   }
   try {
     const out: MateriaOpcion[] = [];
@@ -96,6 +102,11 @@ export async function listMateriasHandler(_request: FastifyRequest, reply: Fasti
                   pnf: p.programa,
                   maya: m.descripcion || `Malla ${m.id}`,
                   trayecto: g.trayecto,
+                  pnf_saga_id: Number(p.id),
+                  maya_id: m.id,
+                  trayecto_saga_id: g.trayecto_saga_id,
+                  horas: uc.horasSemanales,
+                  materia_id: uc.id,
                 });
               }
             }

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
+import { precargarCatalogoMaterias, MateriaOpcion } from './horarios/catalogoMaterias.js';
 import {
   X,
   Loader2,
@@ -57,10 +58,11 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [expandidos, setExpandidos] = useState<Set<number>>(new Set());
-  const [mayasPorPnf, setMayasPorPnf] = useState<Record<number, Maya[] | 'loading'>>({});
-
   const [mayasExpandidas, setMayasExpandidas] = useState<Set<string>>(new Set());
-  const [materiasPorMaya, setMateriasPorMaya] = useState<Record<string, GrupoTrayecto[] | 'loading'>>({});
+  // Catálogo global cacheado (mismo que usa el picker de materias del aula):
+  // de él se deriva el árbol PNF → malla → trayecto → materia sin fetches por
+  // expansión. null = aún cargando.
+  const [catalogo, setCatalogo] = useState<MateriaOpcion[] | null>(null);
 
   const [guardandoColor, setGuardandoColor] = useState<number | null>(null);
 
@@ -69,8 +71,8 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     setErrorMsg(null);
     setExpandidos(new Set());
     setMayasExpandidas(new Set());
-    setMayasPorPnf({});
-    setMateriasPorMaya({});
+    setCatalogo(null);
+    precargarCatalogoMaterias().then(setCatalogo);
 
     const cargar = async () => {
       setLoadingPnfs(true);
@@ -82,45 +84,48 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     cargar();
   }, [isOpen]);
 
-  const togglePnf = async (pnfId: number) => {
-    const next = new Set(expandidos);
-    if (next.has(pnfId)) {
-      next.delete(pnfId);
-      setExpandidos(next);
-      return;
+  // Árbol derivado del catálogo cacheado
+  const arbol = useMemo(() => {
+    const mayas = new Map<number, Map<number, string>>(); // pnfId → mayaId → descripcion
+    const grupos = new Map<string, Map<number, GrupoTrayecto>>(); // 'pnf:maya' → trayectoId → grupo
+    for (const o of catalogo ?? []) {
+      if (o.pnf_saga_id == null || o.maya_id == null) continue;
+      const mm = mayas.get(o.pnf_saga_id) ?? new Map<number, string>();
+      mm.set(o.maya_id, o.maya);
+      mayas.set(o.pnf_saga_id, mm);
+      const k = `${o.pnf_saga_id}:${o.maya_id}`;
+      const gg = grupos.get(k) ?? new Map<number, GrupoTrayecto>();
+      const tId = o.trayecto_saga_id ?? 0;
+      const g = gg.get(tId) ?? { trayecto_saga_id: tId, trayecto: o.trayecto || 'Sin trayecto', materias: [] };
+      g.materias.push({ id: o.materia_id ?? 0, description: o.nombre, horasSemanales: o.horas ?? 0 });
+      gg.set(tId, g);
+      grupos.set(k, gg);
     }
-    next.add(pnfId);
-    setExpandidos(next);
+    return {
+      mayasDe: (pnfId: number): Maya[] =>
+        [...(mayas.get(pnfId)?.entries() ?? [])]
+          .map(([id, descripcion]) => ({ id, descripcion, tipopensum_id: 0 }))
+          .sort((a, b) => b.id - a.id),
+      gruposDe: (pnfId: number, mayaId: number): GrupoTrayecto[] =>
+        [...(grupos.get(`${pnfId}:${mayaId}`)?.values() ?? [])].sort(
+          (a, b) => a.trayecto_saga_id - b.trayecto_saga_id
+        ),
+    };
+  }, [catalogo]);
 
-    if (!mayasPorPnf[pnfId]) {
-      setMayasPorPnf((prev) => ({ ...prev, [pnfId]: 'loading' }));
-      const res = await apiFetch<Maya[]>(`/saga/mayas/${pnfId}`);
-      setMayasPorPnf((prev) => ({
-        ...prev,
-        [pnfId]: res.success && res.data ? res.data : [],
-      }));
-    }
+  const togglePnf = (pnfId: number) => {
+    const next = new Set(expandidos);
+    if (next.has(pnfId)) next.delete(pnfId);
+    else next.add(pnfId);
+    setExpandidos(next);
   };
 
-  const toggleMaya = async (pnfId: number, mayaId: number) => {
+  const toggleMaya = (pnfId: number, mayaId: number) => {
     const key = `${pnfId}:${mayaId}`;
     const next = new Set(mayasExpandidas);
-    if (next.has(key)) {
-      next.delete(key);
-      setMayasExpandidas(next);
-      return;
-    }
-    next.add(key);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     setMayasExpandidas(next);
-
-    if (!materiasPorMaya[key]) {
-      setMateriasPorMaya((prev) => ({ ...prev, [key]: 'loading' }));
-      const res = await apiFetch<GrupoTrayecto[]>(`/saga/materias-maya/${pnfId}/${mayaId}`);
-      setMateriasPorMaya((prev) => ({
-        ...prev,
-        [key]: res.success && res.data ? res.data : [],
-      }));
-    }
   };
 
   const guardarColor = async (pnf: PnfItem, color: string | null) => {
@@ -162,7 +167,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
           )}
 
           <p className="text-[10px] text-slate-500 leading-relaxed">
-            El color identifica al PNF en toda la aplicación. Las mallas y materias se consultan en SAGA al expandir cada nivel.
+            El color identifica al PNF en toda la aplicación. Las mallas y materias vienen del catálogo cacheado de SAGA.
           </p>
 
           {loadingPnfs ? (
@@ -174,7 +179,8 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
           ) : (
             pnfs.map((pnf) => {
               const abierto = expandidos.has(pnf.id);
-              const mayas = mayasPorPnf[pnf.id];
+              const mayas: Maya[] | 'loading' | null =
+                catalogo === null ? 'loading' : abierto ? arbol.mayasDe(pnf.id) : null;
               return (
                 <div
                   key={pnf.id}
@@ -230,7 +236,12 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
                         mayas.map((maya) => {
                           const key = `${pnf.id}:${maya.id}`;
                           const mayaAbierta = mayasExpandidas.has(key);
-                          const grupos = materiasPorMaya[key];
+                          const grupos: GrupoTrayecto[] | 'loading' | null =
+                            catalogo === null
+                              ? 'loading'
+                              : mayaAbierta
+                                ? arbol.gruposDe(pnf.id, maya.id)
+                                : null;
                           return (
                             <div key={maya.id}>
                               <button

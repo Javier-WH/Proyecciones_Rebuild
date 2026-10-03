@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { PnfColorProvider } from './context/PnfColorContext.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
-import { precargarCatalogoMaterias } from './pages/horarios/AulasPanel.js';
+import { precargarCatalogoMaterias } from './pages/horarios/catalogoMaterias.js';
 import { Loader2 } from 'lucide-react';
 
 const AppRoutes: React.FC = () => {

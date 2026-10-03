@@ -1,32 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
 import { Aula, normMateria } from './types.js';
-import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search } from 'lucide-react';
-
-// Materia del catálogo global (SAGA): nombre + de qué PNF/malla viene
-interface MateriaOpcion {
-  nombre: string;
-  pnf: string;
-  maya: string;
-  trayecto: string;
-}
-
-// Caché en memoria del catálogo global de materias (se pierde al recargar la
-// página). La app lo precarga en segundo plano al iniciar sesión para que el
-// picker abra sin espera; mientras no esté listo se muestra el loading.
-let catalogoCache: MateriaOpcion[] | null = null;
-let catalogoPromise: Promise<MateriaOpcion[]> | null = null;
-
-export const precargarCatalogoMaterias = (): Promise<MateriaOpcion[]> => {
-  if (catalogoCache) return Promise.resolve(catalogoCache);
-  catalogoPromise ??= apiFetch<MateriaOpcion[]>('/horarios/materias')
-    .then((r) => (catalogoCache = r.success && r.data ? r.data : []))
-    .catch(() => {
-      catalogoPromise = null; // permite reintentar la próxima vez
-      return [] as MateriaOpcion[];
-    });
-  return catalogoPromise;
-};
+import {
+  MateriaOpcion,
+  precargarCatalogoMaterias,
+  invalidarCatalogoMaterias,
+  catalogoMateriasListo,
+} from './catalogoMaterias.js';
+import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search, RefreshCw } from 'lucide-react';
 
 const TIPOS = [
   { v: 'AULA_REGULAR', l: 'Aula regular' },
@@ -81,14 +62,24 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
     setPickerOpen(true);
     setPickerQ('');
     if (materiasOpts === null) {
-      if (catalogoCache) {
-        setMateriasOpts(catalogoCache);
+      const listo = catalogoMateriasListo();
+      if (listo) {
+        setMateriasOpts(listo);
         return;
       }
       setPickerLoading(true);
       setMateriasOpts(await precargarCatalogoMaterias());
       setPickerLoading(false);
     }
+  };
+
+  // Invalida el caché en memoria y vuelve a pedir el catálogo a SAGA
+  const recargarCatalogo = async () => {
+    invalidarCatalogoMaterias();
+    setPickerLoading(true);
+    const lista = await precargarCatalogoMaterias();
+    setMateriasOpts(lista);
+    setPickerLoading(false);
   };
 
   const abrirNueva = () => {
@@ -411,9 +402,19 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
               <h4 className="text-sm font-bold text-white flex items-center gap-2">
                 <FlaskConical className="w-4 h-4 text-amber-400" /> Materias de todos los PNFs
               </h4>
-              <button onClick={() => setPickerOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={recargarCatalogo}
+                  disabled={pickerLoading}
+                  title="Recargar el catálogo desde SAGA"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${pickerLoading ? 'animate-spin' : ''}`} />
+                </button>
+                <button onClick={() => setPickerOpen(false)} className="p-1.5 text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="px-5 pt-3">
               <div className="relative">
