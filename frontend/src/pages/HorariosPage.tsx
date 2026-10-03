@@ -288,12 +288,19 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     return out;
   }, [entries, secciones, turnos, config]);
 
-  // Celdas (bloque:día) involucradas en alguna violación: se marcan con un
-  // punto rojo en las tarjetas del horario.
+  // Celdas (bloque:día) involucradas en alguna violación, con sus mensajes:
+  // las tarjetas las marcan con un punto rojo cuyo tooltip lista los errores.
   const celdasEnError = useMemo(() => {
-    const s = new Set<string>();
-    for (const v of violaciones) for (const b of v.bloques) s.add(`${b}:${v.dia}`);
-    return s;
+    const m = new Map<string, string[]>();
+    for (const v of violaciones) {
+      for (const b of v.bloques) {
+        const k = `${b}:${v.dia}`;
+        const arr = m.get(k) ?? [];
+        arr.push(v.error);
+        m.set(k, arr);
+      }
+    }
+    return m;
   }, [violaciones]);
 
   const irAViolacion = (v: Violacion) => {

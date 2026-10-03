@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePnfColors } from '../../context/PnfColorContext.js';
 import { HorarioEntry, colorMateria, fmtHora } from './types.js';
 import { User, MapPin, Clock } from 'lucide-react';
@@ -7,13 +8,15 @@ import { User, MapPin, Clock } from 'lucide-react';
 // profesor: materia (grande) + profesor, aula y hora (pequeños).
 // `fin` = hora de fin efectiva cuando la tarjeta abarca varios bloques fusionados.
 // `compacto` = varias clases comparten la celda: materia + una línea resumida.
+// `errores` = violaciones de la clase: dibuja un punto rojo con tooltip flotante.
 export const ClaseCard: React.FC<{
   entry: HorarioEntry;
   fin?: string;
   compacto?: boolean;
-  error?: boolean;
+  errores?: string[];
   className?: string;
-}> = ({ entry, fin, compacto, error, className = '' }) => {
+}> = ({ entry, fin, compacto, errores, className = '' }) => {
+  const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
   const pnfNombre = catalogo.find((c) => c.id === entry.pnf_saga_id)?.nombre;
@@ -30,12 +33,47 @@ export const ClaseCard: React.FC<{
         entry.materia_id
       )} ${compacto ? 'flex-1 min-h-0' : 'h-full'} ${className}`}
     >
-      {error && (
+      {errores && errores.length > 0 && (
         <span
-          title="Esta clase tiene un conflicto — revisa el panel Errores"
-          className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-300/70 shadow-[0_0_6px_2px_rgba(239,68,68,0.7)] animate-pulse"
+          onMouseEnter={(ev) => {
+            const r = ev.currentTarget.getBoundingClientRect();
+            setTip({ x: r.left + r.width / 2, y: r.top, flip: r.top < 190 });
+          }}
+          onMouseLeave={() => setTip(null)}
+          className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-300/70 shadow-[0_0_6px_2px_rgba(239,68,68,0.7)] animate-pulse cursor-help"
         />
       )}
+      {tip && errores && errores.length > 0 &&
+        createPortal(
+          <div
+            className="fixed z-[100] pointer-events-none"
+            style={{
+              left: tip.x,
+              top: tip.y,
+              transform: tip.flip
+                ? 'translate(-50%, 12px)'
+                : 'translate(-50%, calc(-100% - 10px))',
+            }}
+          >
+            <div className="w-64 rounded-xl border border-red-500/40 bg-slate-900/95 backdrop-blur-sm shadow-2xl shadow-black/60 px-3 py-2.5">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-red-300 mb-1.5">
+                {errores.length} conflicto{errores.length === 1 ? '' : 's'}
+              </div>
+              <ul className="space-y-1.5">
+                {errores.map((t, i) => (
+                  <li
+                    key={i}
+                    className="text-[10px] text-slate-200 leading-snug flex items-start gap-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 mt-[3px]" />
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>,
+          document.body
+        )}
       <div className="text-[11px] font-bold leading-tight flex items-start gap-1">
         {pnfColor && (
           <span

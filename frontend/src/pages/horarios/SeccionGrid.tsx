@@ -53,7 +53,7 @@ interface SeccionGridProps {
   trimestre: number;
   puedeEditar: boolean;
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
-  enError?: Set<string> | null; // claves 'bloque_id:dia' con alguna violación (punto rojo)
+  enError?: Map<string, string[]> | null; // 'bloque_id:dia' → mensajes de violación (punto rojo + tooltip)
   onChanged: () => void;
 }
 
@@ -194,16 +194,19 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return ocup;
   };
 
-  // ¿Esta tarjeta (o alguna celda que absorbe por rowspan) marcada en error?
-  const celdaEnError = (bloqueIdx: number, dia: number, n: number): boolean => {
-    if (!enError) return false;
+  // Mensajes de error de esta tarjeta (incluye celdas que absorbe por rowspan)
+  const celdaEnError = (bloqueIdx: number, dia: number, n: number): string[] => {
+    if (!enError) return [];
+    const msgs: string[] = [];
     let restantes = n;
     for (let i = bloqueIdx; i < bloques.length && restantes > 0; i++) {
       if (bloques[i].es_receso) break;
-      if (enError.has(`${bloques[i].id}:${dia}`)) return true;
+      for (const t of enError.get(`${bloques[i].id}:${dia}`) ?? []) {
+        if (!msgs.includes(t)) msgs.push(t);
+      }
       restantes--;
     }
-    return false;
+    return msgs;
   };
 
   // Entries del run que empieza en (bloqueIdx, dia): las n clases seguidas de
@@ -463,7 +466,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           activo={!!activo}
                           puedeEditar={puedeEditar}
                           resaltada={resaltar?.has(key) ?? false}
-                          enError={celdaEnError(bIdx, d, sp?.n ?? 1)}
+                          errores={celdaEnError(bIdx, d, sp?.n ?? 1)}
                           onAbrirMenu={setMenuEntry}
                         />
                       );
@@ -702,9 +705,9 @@ const Celda: React.FC<{
   activo: boolean;
   puedeEditar: boolean;
   resaltada: boolean;
-  enError: boolean;
+  errores: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, enError, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, errores, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
@@ -727,7 +730,7 @@ const Celda: React.FC<{
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} enError={enError} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} errores={errores} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
     </td>
@@ -740,9 +743,9 @@ const EntryChip: React.FC<{
   span: number;
   finHasta?: string;
   puedeEditar: boolean;
-  enError: boolean;
+  errores: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, run, span, finHasta, puedeEditar, enError, onAbrirMenu }) => {
+}> = ({ entry, run, span, finHasta, puedeEditar, errores, onAbrirMenu }) => {
   const esGrupo = run.length > 1;
   const singleData: DragData = {
     tipo: 'entry',
@@ -787,7 +790,7 @@ const EntryChip: React.FC<{
         <ClaseCard
           entry={entry}
           fin={span > 1 ? finHasta : undefined}
-          error={enError}
+          errores={errores}
           className="hover:brightness-125 transition-colors"
         />
       </div>
@@ -811,7 +814,7 @@ const EntryChip: React.FC<{
         <ClaseCard
           entry={entry}
           fin={finHasta}
-          error={enError}
+          errores={errores}
           className="hover:brightness-125 transition-colors"
         />
       </div>

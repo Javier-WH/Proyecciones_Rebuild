@@ -12,7 +12,7 @@ interface VistaRecursoProps {
   titulo: string;
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
-  enError?: Set<string> | null; // claves 'bloque_id:dia' con alguna violación (punto rojo)
+  enError?: Map<string, string[]> | null; // 'bloque_id:dia' → mensajes de violación (punto rojo + tooltip)
 }
 
 interface Banda {
@@ -206,7 +206,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     key={e.id}
                                     entry={e}
                                     compacto={items.length > 1}
-                                    error={enError?.has(`${e.bloque_id}:${e.dia_semana}`) ?? false}
+                                    errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
                                   />
                                 ))}
                               </div>
@@ -240,15 +240,23 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       const items = ocupacion(d);
                       const sp = b.id > 0 ? spans.get(key) : undefined;
                       const fusion = items.length === 1 && sp && sp.n > 1;
-                      // Error de la tarjeta o de alguna celda que absorbe por rowspan
-                      const enErr = (e?: HorarioEntry) =>
-                        !!enError &&
-                        (e
-                          ? enError.has(`${e.bloque_id}:${e.dia_semana}`)
-                          : items.some((x) => enError.has(`${x.bloque_id}:${x.dia_semana}`)) ||
-                            Array.from({ length: sp?.n ?? 1 }, (_, k) => bloques[bIdx + k]).some(
-                              (bl) => bl && enError.has(`${bl.id}:${d}`)
-                            ));
+                      // Errores de la tarjeta o de alguna celda que absorbe por rowspan
+                      const errsDe = (e?: HorarioEntry): string[] => {
+                        if (!enError) return [];
+                        if (e) return enError.get(`${e.bloque_id}:${e.dia_semana}`) ?? [];
+                        const acc: string[] = [];
+                        const push = (k: string) => {
+                          for (const t of enError.get(k) ?? []) {
+                            if (!acc.includes(t)) acc.push(t);
+                          }
+                        };
+                        for (const x of items) push(`${x.bloque_id}:${x.dia_semana}`);
+                        for (let k = 0; k < (sp?.n ?? 1); k++) {
+                          const bl = bloques[bIdx + k];
+                          if (bl) push(`${bl.id}:${d}`);
+                        }
+                        return acc;
+                      };
                       return (
                         <td
                           key={d}
@@ -263,7 +271,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                 entry={e}
                                 fin={fusion ? sp.fin : undefined}
                                 compacto={items.length > 1}
-                                error={items.length > 1 ? enErr(e) : enErr()}
+                                errores={items.length > 1 ? errsDe(e) : errsDe()}
                               />
                             ))}
                           </div>
