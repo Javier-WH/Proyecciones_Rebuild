@@ -477,6 +477,17 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   // Choques PARCIALES con el trimestre 2 (solo vistas semestrales): T2 solapa
   // la primera mitad con S1 y la segunda con S2. Se permiten — se muestran con
   // el icono verde de la tarjeta, nunca como error ni impedimento.
+  // El "lado semestre" no son solo las entries SEMESTRAL: las secciones
+  // semestrales (ej. D-01 de veterinaria) cursan todo el semestre, así que sus
+  // clases registradas en T1 siguen vigentes en la primera mitad de T2 y las
+  // de T3 en la segunda — también se les advierte el choque parcial.
+  const seccionesSemestrales = useMemo(
+    () =>
+      new Set(
+        rows.filter((r) => r.tipo_proyeccion === 'SEMESTRAL').map((r) => r.seccion_id)
+      ),
+    [rows]
+  );
   const avisosParciales = useMemo(() => {
     const m = new Map<number, string[]>();
     if (lapso.tipo !== 'SEMESTRAL') return m;
@@ -484,6 +495,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       (e) => e.tipo_proyeccion === 'TRIMESTRAL' && e.trimestre === 2
     );
     if (t2.length === 0) return m;
+    const esLadoSemestre = (e: HorarioEntry) =>
+      e.tipo_proyeccion === 'SEMESTRAL'
+        ? e.trimestre === lapso.n
+        : e.trimestre !== 2 && seccionesSemestrales.has(e.seccion_id);
     const add = (id: number, txt: string) => {
       const arr = m.get(id) ?? [];
       if (!arr.includes(txt)) arr.push(txt);
@@ -494,7 +509,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     const mitad =
       lapso.n === 1 ? 'primera mitad del trimestre 2' : 'segunda mitad del trimestre 2';
     for (const e of entries) {
-      if (e.tipo_proyeccion !== 'SEMESTRAL' || e.trimestre !== lapso.n) continue;
+      if (!esLadoSemestre(e)) continue;
       for (const o of t2) {
         if (o.dia_semana !== e.dia_semana) continue;
         if (!traslapan(e.hora_inicio, e.hora_fin, o.hora_inicio, o.hora_fin)) continue;
@@ -516,23 +531,23 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             `${e.aula_nombre || e.aula_codigo} con ${quien}, el ${donde}.`;
           add(e.id, txt);
           add(o.id, `Posible conflicto de aula: comparte el aula ${e.aula_nombre || e.aula_codigo} ` +
-            `con '${e.materia_nombre}' de la sección ${e.seccion_nombre}, semestre ${e.trimestre}, el ${donde}.`);
+            `con '${e.materia_nombre}' de la sección ${e.seccion_nombre}, semestre ${lapso.n}, el ${donde}.`);
         }
         if (o.profesor_id && o.profesor_id === e.profesor_id) {
           const prof = `${o.prof_apellidos ?? ''}, ${o.prof_nombres ?? ''}`.replace(/^,\s*/, '');
           add(e.id, `Posible conflicto de profesor: ${prof} también da ${quien}, el ${donde}.`);
           add(o.id, `Posible conflicto de profesor: ${prof} también da '${e.materia_nombre}' ` +
-            `de la sección ${e.seccion_nombre}, semestre ${e.trimestre}, el ${donde}.`);
+            `de la sección ${e.seccion_nombre}, semestre ${lapso.n}, el ${donde}.`);
         }
         if (o.seccion_id === e.seccion_id) {
           add(e.id, `Posible conflicto de sección: ${quien} es de esta misma sección, el ${donde}.`);
-          add(o.id, `Posible conflicto de sección: '${e.materia_nombre}' del semestre ${e.trimestre} ` +
+          add(o.id, `Posible conflicto de sección: '${e.materia_nombre}' del semestre ${lapso.n} ` +
             `es de esta misma sección, el ${donde}.`);
         }
       }
     }
     return m;
-  }, [entries, lapso, usa12, pnfOptions]);
+  }, [entries, lapso, usa12, pnfOptions, seccionesSemestrales]);
 
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
