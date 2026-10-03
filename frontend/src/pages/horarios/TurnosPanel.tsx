@@ -314,6 +314,16 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
     <div className="flex flex-col lg:flex-row gap-4 items-start">
       {/* Lista de turnos */}
       <div className="w-full lg:w-56 shrink-0 bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-1.5">
+        <div
+          className={`mb-1 px-2 py-1.5 rounded-lg border text-[10px] font-semibold flex items-center gap-1.5 ${
+            formato12
+              ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+              : 'border-slate-700 bg-slate-800/60 text-slate-400'
+          }`}
+        >
+          <Clock className="w-3 h-3 shrink-0" />
+          Formato de {formato12 ? '12 horas (AM/PM)' : '24 horas'}
+        </div>
         {turnos.map((t) => (
           <button
             key={t.id}
