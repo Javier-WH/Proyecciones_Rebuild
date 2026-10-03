@@ -414,7 +414,9 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
   const conn = await getDbPool().getConnection();
   try {
     const [rows] = await conn.execute<any[]>(
-      `SELECT en.id, en.dia_semana, en.bloque_id, en.aula_id, pr.pnf_saga_id
+      `SELECT en.id, en.dia_semana, en.bloque_id, en.aula_id, en.materia_id,
+              en.seccion_id, en.profesor_id, en.periodo_academico,
+              en.tipo_proyeccion, en.trimestre, pr.pnf_saga_id
        FROM horario_entries en
        JOIN proyeccion_materias m ON m.id = en.materia_id
        JOIN proyecciones pr ON pr.id = m.proyeccion_id
@@ -453,6 +455,65 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
       'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
       [b.dia_semana, b.bloque_id, b.aula_id, idA]
     );
+
+    // Herencia de aula tras el intercambio: si en su nueva posición la clase
+    // queda contigua a otra de la misma materia, sección y profesor (bloque
+    // anterior o siguiente sin contar recesos), toma el aula de la vecina para
+    // que se fusionen en un solo bloque. Si esa aula está ocupada por otra
+    // clase en horario traslapado, se guarda igual y la auditoría lo marca.
+    const heredarAulaVecina = async (
+      entry: (typeof rows)[number],
+      dia: number,
+      bloqueId: number
+    ) => {
+      const [bl] = await conn.execute<any[]>(
+        'SELECT turno_id FROM turno_bloques WHERE id = ?',
+        [bloqueId]
+      );
+      if (bl.length === 0) return;
+      const [bloquesTurno] = await conn.execute<any[]>(
+        'SELECT id, es_receso FROM turno_bloques WHERE turno_id = ? ORDER BY orden',
+        [bl[0].turno_id]
+      );
+      const idx = bloquesTurno.findIndex((x) => Number(x.id) === Number(bloqueId));
+      if (idx < 0) return;
+      const vecinos: number[] = [];
+      for (let i = idx - 1; i >= 0; i--) {
+        if (!bloquesTurno[i].es_receso) {
+          vecinos.push(bloquesTurno[i].id);
+          break;
+        }
+      }
+      for (let i = idx + 1; i < bloquesTurno.length; i++) {
+        if (!bloquesTurno[i].es_receso) {
+          vecinos.push(bloquesTurno[i].id);
+          break;
+        }
+      }
+      if (vecinos.length === 0) return;
+      const [vec] = await conn.execute<any[]>(
+        `SELECT id, aula_id FROM horario_entries
+         WHERE bloque_id IN (${vecinos.map(() => '?').join(',')}) AND dia_semana = ?
+           AND materia_id = ? AND seccion_id = ? AND profesor_id <=> ?
+           AND periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
+           AND id <> ?
+         LIMIT 1`,
+        [
+          ...vecinos, dia, entry.materia_id, entry.seccion_id, entry.profesor_id,
+          entry.periodo_academico, entry.tipo_proyeccion, entry.trimestre, entry.id,
+        ]
+      );
+      if (vec.length > 0) {
+        await conn.execute('UPDATE horario_entries SET aula_id = ? WHERE id = ?', [
+          vec[0].aula_id,
+          entry.id,
+        ]);
+      }
+    };
+
+    await heredarAulaVecina(a, b.dia_semana, b.bloque_id);
+    await heredarAulaVecina(b, a.dia_semana, a.bloque_id);
+
     await conn.commit();
     return reply.send({ success: true, message: 'Clases intercambiadas.' });
   } catch (error: any) {
@@ -500,7 +561,7 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
   try {
     const [rows] = await conn.execute<any[]>(
       `SELECT en.id, en.seccion_id, en.dia_semana, en.bloque_id, en.aula_id, en.profesor_id,
-              en.periodo_academico, en.tipo_proyeccion, en.trimestre,
+              en.materia_id, en.periodo_academico, en.tipo_proyeccion, en.trimestre,
               b.orden, b.turno_id, pr.pnf_saga_id
        FROM horario_entries en
        JOIN turno_bloques b ON b.id = en.bloque_id
@@ -566,7 +627,7 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     // (Entradas de otras secciones o lapsos rivales pueden coexistir en la
     // celda; no se tocan, pero cuentan para la ocupación de aulas.)
     const [ocupantes] = await conn.execute<any[]>(
-      `SELECT id, dia_semana, bloque_id, aula_id, seccion_id
+      `SELECT id, dia_semana, bloque_id, aula_id, seccion_id, materia_id, profesor_id
        FROM horario_entries
        WHERE periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
          AND dia_semana = ? AND bloque_id IN (${destinoIds.map(() => '?').join(',')})`,
@@ -641,6 +702,93 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
         [s.dia_semana, s.bloque_id, s.aula_id, f.id]
       );
     }
+
+    // Herencia de aula tras el movimiento: si una clase reubicada queda
+    // contigua a otra de la misma materia, sección y profesor (bloque
+    // anterior o siguiente sin contar recesos), toma el aula de la vecina
+    // para que se fusionen en un solo bloque. Si esa aula está ocupada en
+    // horario traslapado se guarda igual y la auditoría lo marca; un choque
+    // exacto revienta por clave única y hace rollback.
+    const bloqueVecino = (i: number, dir: -1 | 1): number | null => {
+      for (let k = i + dir; k >= 0 && k < todos.length; k += dir) {
+        if (!todos[k].es_receso) return Number(todos[k].id);
+      }
+      return null;
+    };
+    const buscarAulaVecina = async (
+      bloquesCandidatos: (number | null)[],
+      diaN: number,
+      materiaId: number,
+      seccionId: number,
+      profesorId: number | null,
+      excluirIds: number[]
+    ): Promise<number | null> => {
+      for (const bid of bloquesCandidatos) {
+        if (bid === null) continue;
+        const [v] = await conn.execute<any[]>(
+          `SELECT aula_id FROM horario_entries
+           WHERE bloque_id = ? AND dia_semana = ? AND seccion_id = ?
+             AND materia_id = ? AND profesor_id <=> ?
+             AND periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
+             AND id NOT IN (${excluirIds.map(() => '?').join(',')})
+           LIMIT 1`,
+          [
+            bid, diaN, seccionId, materiaId, profesorId,
+            periodo, tipo, trimestre, ...excluirIds,
+          ]
+        );
+        if (v.length > 0) return Number(v[0].aula_id);
+      }
+      return null;
+    };
+
+    // El grupo movido: se mira el bloque anterior al primero y el siguiente
+    // al último (fuera del destino). Si alguno tiene la misma materia, todo
+    // el grupo toma ese aula y se fusiona con la vecina.
+    const extPrev = bloqueVecino(idx, -1);
+    const extNext = bloqueVecino(idx + destinos.length - 1, 1);
+    const aulaFusion = await buscarAulaVecina(
+      [extPrev, extNext],
+      dia,
+      Number(run[0].materia_id),
+      Number(run[0].seccion_id),
+      run[0].profesor_id,
+      [...runIds]
+    );
+    if (aulaFusion !== null) {
+      const idsMat = run
+        .filter(
+          (r) =>
+            Number(r.materia_id) === Number(run[0].materia_id) &&
+            (r.profesor_id === null || run[0].profesor_id === null
+              ? r.profesor_id === run[0].profesor_id
+              : Number(r.profesor_id) === Number(run[0].profesor_id))
+        )
+        .map((r) => Number(r.id));
+      await conn.execute(
+        `UPDATE horario_entries SET aula_id = ? WHERE id IN (${idsMat.map(() => '?').join(',')})`,
+        [aulaFusion, ...idsMat]
+      );
+    }
+
+    // Las clases desplazadas al origen: cada una revisa sus nuevos vecinos.
+    for (const [j, f] of foraneos.entries()) {
+      const s = origenLibres[j];
+      const iS = todos.findIndex((t) => Number(t.id) === Number(s.bloque_id));
+      if (iS < 0) continue;
+      const av = await buscarAulaVecina(
+        [bloqueVecino(iS, -1), bloqueVecino(iS, 1)],
+        s.dia_semana,
+        Number(f.materia_id),
+        Number(f.seccion_id),
+        f.profesor_id,
+        [Number(f.id)]
+      );
+      if (av !== null) {
+        await conn.execute('UPDATE horario_entries SET aula_id = ? WHERE id = ?', [av, f.id]);
+      }
+    }
+
     await conn.commit();
     return reply.send({
       success: true,
