@@ -558,6 +558,50 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
   }
 }
 
+// POST /api/horarios/entries/unschedule — desagenda varias clases de una vez
+// (p. ej. arrastrar un bloque de varias horas a "Materias pendientes").
+export async function unscheduleEntriesHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as { entry_ids?: number[] };
+  const ids = [...new Set((body.entry_ids ?? []).map(Number))].filter(
+    (n) => Number.isInteger(n) && n > 0
+  );
+  if (ids.length === 0) {
+    return reply
+      .status(400)
+      .send({ success: false, message: 'Se esperaba una lista de clases a desagendar.' });
+  }
+  try {
+    const user = request.userPayload!;
+    if (user.role === 'REGULAR' && user.pnf_saga_id) {
+      const rows = await query<any[]>(
+        `SELECT en.id FROM horario_entries en
+         JOIN proyeccion_materias m ON m.id = en.materia_id
+         JOIN proyecciones pr ON pr.id = m.proyeccion_id
+         WHERE en.id IN (${ids.map(() => '?').join(',')}) AND pr.pnf_saga_id = ?`,
+        [...ids, Number(user.pnf_saga_id)]
+      );
+      if (rows.length !== ids.length) {
+        return reply
+          .status(403)
+          .send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
+      }
+    }
+    const r = await query<any>(
+      `DELETE FROM horario_entries WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ids
+    );
+    const n = r?.affectedRows ?? 0;
+    return reply.send({
+      success: true,
+      message: `${n} clase${n === 1 ? '' : 's'} desagendada${n === 1 ? '' : 's'}.`,
+      data: { eliminadas: n },
+    });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error desagendando las clases.' });
+  }
+}
+
 // DELETE /api/horarios/entries/:id
 export async function deleteEntryHandler(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };

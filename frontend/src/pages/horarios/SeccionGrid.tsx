@@ -315,6 +315,20 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
   };
 
+  // Desagendar un bloque completo (varias horas) arrastrado a pendientes
+  const handleDesagendarGrupo = async (ids: number[]) => {
+    const res = await apiFetch('/horarios/entries/unschedule', {
+      method: 'POST',
+      body: JSON.stringify({ entry_ids: ids }),
+    });
+    if (res.success) {
+      mostrarAviso(res.message || 'Clases desagendadas.');
+      onChanged();
+    } else {
+      mostrarAviso(res.message || 'No se pudieron desagendar las clases.', 'error');
+    }
+  };
+
   const handleCambiarAula = async (entry: HorarioEntry, aulaId: number) => {
     const res = await apiFetch('/horarios/entries', {
       method: 'PUT',
@@ -345,7 +359,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     const over = ev.over?.id as string | undefined;
     if (!over || !drag) return;
     if (over === 'pendientes') {
-      if (drag.entry_id) await handleDesagendar(drag.entry_id);
+      if (drag.tipo === 'grupo' && drag.entry_ids?.length) {
+        await handleDesagendarGrupo(drag.entry_ids);
+      } else if (drag.entry_id) {
+        await handleDesagendar(drag.entry_id);
+      }
       return;
     }
     if (over.startsWith('cell:')) {
