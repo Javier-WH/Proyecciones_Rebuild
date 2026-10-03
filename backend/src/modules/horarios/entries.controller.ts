@@ -619,6 +619,170 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
   }
 }
 
+// POST /api/horarios/entries/schedule-group — agenda en bloque todas las horas
+// pendientes de una materia arrastrada desde "Materias pendientes": ocupa los
+// bloques consecutivos sin receso a partir del destino, todas en el mismo aula.
+export async function scheduleGroupHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as {
+    materia_id?: number;
+    seccion_id?: number;
+    trimestre?: number;
+    dia_semana?: number;
+    bloque_id?: number;
+  };
+  try {
+    const ctx = await resolverSlot(request, reply, {
+      materia_id: body.materia_id,
+      seccion_id: body.seccion_id,
+      trimestre: body.trimestre,
+      dia_semana: body.dia_semana,
+      bloque_id: body.bloque_id,
+    } as EntryBody);
+    if (!ctx) return;
+    const { bloque, entries, profesorId, periodo, tipo, trimestre, pnfSagaId } = ctx;
+    const materiaId = Number(body.materia_id);
+    const seccionId = Number(body.seccion_id);
+    const dia = Number(body.dia_semana);
+
+    // Horas restantes de la materia en el lapso
+    const matRows = await query<any[]>(
+      'SELECT horas_semanales FROM proyeccion_materias WHERE id = ? LIMIT 1',
+      [materiaId]
+    );
+    const agendadas = entries.filter(
+      (e) =>
+        e.materia_id === materiaId &&
+        e.seccion_id === seccionId &&
+        e.tipo_proyeccion === tipo &&
+        Number(e.trimestre) === trimestre
+    ).length;
+    const faltan = Math.max(0, Number(matRows[0]?.horas_semanales ?? 0) - agendadas);
+    if (faltan === 0) {
+      return reply
+        .status(400)
+        .send({ success: false, message: 'La materia ya tiene todas sus horas agendadas.' });
+    }
+
+    // N bloques consecutivos sin receso a partir del destino
+    const todos = await query<any[]>(
+      'SELECT id, orden, es_receso, hora_inicio, hora_fin FROM turno_bloques WHERE turno_id = ? ORDER BY orden',
+      [bloque.turno_id]
+    );
+    const idx = todos.findIndex((b) => Number(b.id) === Number(body.bloque_id));
+    const destinos = idx < 0 ? [] : todos.slice(idx, idx + faltan);
+    if (destinos.length < faltan || destinos.some((b) => b.es_receso)) {
+      return reply.status(400).send({
+        success: false,
+        message: `No cabe: se necesitan ${faltan} bloques seguidos sin receso desde ahí.`,
+      });
+    }
+
+    // La sección no puede tener ya clases en esos bloques (mismo lapso)
+    const destinoIds = new Set(destinos.map((b) => Number(b.id)));
+    const ocupadaSeccion = entries.find(
+      (e) =>
+        e.seccion_id === seccionId &&
+        e.dia_semana === dia &&
+        destinoIds.has(e.bloque_id) &&
+        e.tipo_proyeccion === tipo &&
+        Number(e.trimestre) === trimestre
+    );
+    if (ocupadaSeccion) {
+      return reply.status(409).send({
+        success: false,
+        message: 'La sección ya tiene una clase en alguno de esos bloques.',
+      });
+    }
+
+    // Un solo aula para todo el bloque: preferir las ya usadas por la materia,
+    // luego la que menos choques tenga en los slots destino.
+    const aulas = await query<any[]>(
+      'SELECT id, codigo, tipo, activa, pnf_saga_id FROM aulas WHERE activa = 1'
+    );
+    const usoPorAula = new Map<number, number>();
+    for (const e of entries) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
+    const preferidas = [
+      ...new Set(
+        entries
+          .filter(
+            (e) =>
+              e.materia_id === materiaId &&
+              e.seccion_id === seccionId &&
+              e.tipo_proyeccion === tipo &&
+              Number(e.trimestre) === trimestre
+          )
+          .map((e) => Number(e.aula_id))
+      ),
+    ];
+    const restantes = aulas
+      .map((a) => Number(a.id))
+      .filter((id) => !preferidas.includes(id))
+      .sort((a, b) => (usoPorAula.get(a) ?? 0) - (usoPorAula.get(b) ?? 0));
+    const candidatas = [...preferidas, ...restantes];
+    let aulaId: number | null = null;
+    let minConflictos = Infinity;
+    for (const c of candidatas) {
+      const conflictos = destinos.filter((d) =>
+        aulasOcupadas(entries, dia, d.hora_inicio, d.hora_fin).has(c)
+      ).length;
+      if (conflictos === 0) {
+        aulaId = c;
+        break;
+      }
+      if (conflictos < minConflictos) {
+        minConflictos = conflictos;
+        aulaId = c;
+      }
+    }
+    if (aulaId === null) {
+      return reply
+        .status(409)
+        .send({ success: false, message: 'No hay aulas activas registradas.' });
+    }
+
+    // Insertar las N clases en transacción (todo o nada). Los choques de aula
+    // o profesor por horas traslapadas se guardan y los marca la auditoría;
+    // un choque exacto hace rollback por las claves únicas.
+    const conn = await getDbPool().getConnection();
+    try {
+      await conn.beginTransaction();
+      for (const dest of destinos) {
+        await conn.execute(
+          `INSERT INTO horario_entries
+           (periodo_academico, tipo_proyeccion, trimestre, materia_id, seccion_id, profesor_id, dia_semana, bloque_id, aula_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [periodo, tipo, trimestre, materiaId, seccionId, profesorId, dia, dest.id, aulaId]
+        );
+      }
+      await conn.commit();
+    } catch (e: any) {
+      try {
+        await conn.rollback();
+      } catch {
+        // no había transacción activa
+      }
+      if (e?.code === 'ER_DUP_ENTRY') {
+        return reply.status(409).send({
+          success: false,
+          message: 'El aula, la sección o el profesor ya tiene una clase en alguno de esos bloques.',
+        });
+      }
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    return reply.send({
+      success: true,
+      message: `Bloque de ${faltan}h agendado.`,
+      data: { agendadas: faltan, aula_id: aulaId },
+    });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error agendando el bloque.' });
+  }
+}
+
 // POST /api/horarios/entries/unschedule — desagenda varias clases de una vez
 // (p. ej. arrastrar un bloque de varias horas a "Materias pendientes").
 export async function unscheduleEntriesHandler(request: FastifyRequest, reply: FastifyReply) {

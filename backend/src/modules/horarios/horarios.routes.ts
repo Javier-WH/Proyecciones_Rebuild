@@ -20,6 +20,7 @@ import {
   upsertEntryHandler,
   swapEntriesHandler,
   moveGroupHandler,
+  scheduleGroupHandler,
   unscheduleEntriesHandler,
   deleteEntryHandler,
   generarHorarioHandler,
@@ -66,6 +67,7 @@ export async function horariosRoutes(fastify: FastifyInstance) {
   fastify.post('/entries/swap', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, swapEntriesHandler);
   fastify.post('/entries/move-group', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, moveGroupHandler);
   fastify.post('/entries/unschedule', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, unscheduleEntriesHandler);
+  fastify.post('/entries/schedule-group', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, scheduleGroupHandler);
   fastify.delete('/entries/:id', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, deleteEntryHandler);
   fastify.post('/generar', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, generarHorarioHandler);
 }

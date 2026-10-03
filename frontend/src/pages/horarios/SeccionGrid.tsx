@@ -31,7 +31,7 @@ import {
 import { Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
 
 interface DragData {
-  tipo: 'pendiente' | 'entry' | 'grupo';
+  tipo: 'pendiente' | 'entry' | 'grupo' | 'grupo-pendiente';
   materia_id: number;
   seccion_id: number;
   profesor_id: number | null;
@@ -39,6 +39,7 @@ interface DragData {
   subtitulo: string;
   entry_id?: number;
   entry_ids?: number[]; // 'grupo': run completo de horas seguidas, en orden
+  horas?: number; // 'grupo-pendiente': horas restantes de la materia
 }
 
 
@@ -233,6 +234,17 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       const tramos = bIdx < 0 ? [] : bloques.slice(bIdx, bIdx + n);
       return tramos.length === n && tramos.every((x) => !x.es_receso);
     }
+    // Grupo pendiente: cabe si hay n bloques seguidos sin receso y libres
+    if (drag.tipo === 'grupo-pendiente') {
+      const n = drag.horas ?? 0;
+      if (n === 0) return false;
+      const bIdx = bloques.findIndex((x) => x.id === bloque.id);
+      const tramos = bIdx < 0 ? [] : bloques.slice(bIdx, bIdx + n);
+      return (
+        tramos.length === n &&
+        tramos.every((x) => !x.es_receso && !porCelda.has(`${x.id}:${dia}`))
+      );
+    }
     const ocupada = porCelda.get(`${bloque.id}:${dia}`);
     // Celda ocupada por otra clase: solo es destino válido para intercambio
     // (arrastrar una clase agendada sobre otra las intercambia de lugar)
@@ -249,6 +261,26 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   };
 
   const handleDropEnCelda = async (bloque: Bloque, dia: number, drag: DragData) => {
+    // Grupo pendiente: agendar todas las horas restantes de la materia en bloque
+    if (drag.tipo === 'grupo-pendiente') {
+      const res = await apiFetch('/horarios/entries/schedule-group', {
+        method: 'POST',
+        body: JSON.stringify({
+          materia_id: drag.materia_id,
+          seccion_id: drag.seccion_id,
+          trimestre,
+          dia_semana: dia,
+          bloque_id: bloque.id,
+        }),
+      });
+      if (res.success) {
+        mostrarAviso(res.message || 'Bloque agendado.', 'ok');
+        onChanged();
+      } else {
+        mostrarAviso(res.message || 'No se pudo agendar el bloque.', 'error');
+      }
+      return;
+    }
     // Grupo: mover el run completo a partir de esta celda
     if (drag.tipo === 'grupo' && drag.entry_ids?.length) {
       const res = await apiFetch('/horarios/entries/move-group', {
@@ -645,20 +677,35 @@ const PendienteChip: React.FC<{
 }> = ({ p, puedeEditar }) => {
   const restantes = p.total - p.puestas;
   const sinProfesor = !p.row.profesor_id;
-  const data: DragData = {
+  const usable = puedeEditar && restantes > 0;
+  const subtitulo = p.row.prof_apellidos
+    ? `${p.row.prof_apellidos} ${p.row.prof_nombres ?? ''}`.trim()
+    : 'Sin profesor';
+  const dataSingle: DragData = {
     tipo: 'pendiente',
     materia_id: p.row.materia_id,
     seccion_id: p.row.seccion_id,
     profesor_id: p.row.profesor_id,
     titulo: p.row.materia_nombre,
-    subtitulo: p.row.prof_apellidos
-      ? `${p.row.prof_apellidos} ${p.row.prof_nombres ?? ''}`.trim()
-      : 'Sin profesor',
+    subtitulo,
   };
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const dataGrupo: DragData = {
+    ...dataSingle,
+    tipo: 'grupo-pendiente',
+    subtitulo: `${restantes}h seguidas`,
+    horas: restantes,
+  };
+  // El texto del chip arrastra una sola hora; el grip arrastra todo el bloque
+  // (si queda 1h el grip también arrastra una sola).
+  const single = useDraggable({
     id: `pend:${p.row.materia_id}`,
-    data,
-    disabled: !puedeEditar || restantes <= 0,
+    data: dataSingle,
+    disabled: !usable,
+  });
+  const grupo = useDraggable({
+    id: `pendgrp:${p.row.materia_id}`,
+    data: restantes > 1 ? dataGrupo : dataSingle,
+    disabled: !usable,
   });
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(p.row.pnf_saga_id ?? null);
@@ -669,17 +716,34 @@ const PendienteChip: React.FC<{
       ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-400/70'
       : 'bg-red-500/10 border-red-500/40';
   return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      className={`rounded-lg border px-2 py-1.5 ${color} ${
-        isDragging ? 'opacity-30' : ''
-      } ${puedeEditar && restantes > 0 ? 'cursor-grab active:cursor-grabbing' : ''} transition-all`}
-    >
+    <div className={`rounded-lg border px-2 py-1.5 ${color} transition-all`}>
       <div className="flex items-center gap-1.5">
-        {puedeEditar && restantes > 0 && <GripVertical className="w-3 h-3 text-slate-500 shrink-0" />}
-        <div className="min-w-0">
+        {puedeEditar && restantes > 0 && (
+          <div
+            ref={grupo.setNodeRef}
+            {...grupo.listeners}
+            {...grupo.attributes}
+            title={
+              restantes > 1
+                ? `Arrastrar las ${restantes}h juntas`
+                : 'Arrastrar la hora restante'
+            }
+            className={`shrink-0 -ml-1 px-0.5 py-0.5 text-slate-500 hover:text-white cursor-grab active:cursor-grabbing ${
+              grupo.isDragging ? 'opacity-30' : ''
+            }`}
+          >
+            <GripVertical className="w-3 h-3" />
+          </div>
+        )}
+        <div
+          ref={single.setNodeRef}
+          {...single.listeners}
+          {...single.attributes}
+          title="Arrastrar una hora"
+          className={`min-w-0 flex-1 ${usable ? 'cursor-grab active:cursor-grabbing' : ''} ${
+            single.isDragging ? 'opacity-30' : ''
+          }`}
+        >
           <div className="text-[10px] font-bold text-slate-100 leading-tight flex items-start gap-1">
             {pnfColor && (
               <span
