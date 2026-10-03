@@ -40,6 +40,7 @@ export const DashboardPage: React.FC = () => {
   const [configMenuOpen, setConfigMenuOpen] = useState(false);
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
   const [configHorariosOpen, setConfigHorariosOpen] = useState(false);
+  const [horariosConfigTick, setHorariosConfigTick] = useState(0);
   const [pnfMallasOpen, setPnfMallasOpen] = useState(false);
 
   useEffect(() => {
@@ -265,7 +266,7 @@ export const DashboardPage: React.FC = () => {
         ) : activeTab === 'carga' ? (
           <CargaDocentePage />
         ) : activeTab === 'horarios' ? (
-          <HorariosPage subTab={horariosSubTab} onSubTabChange={setHorariosSubTab} />
+          <HorariosPage subTab={horariosSubTab} onSubTabChange={setHorariosSubTab} configTick={horariosConfigTick} />
         ) : activeTab === 'proyecciones' ? (
           <ProyeccionesPage />
         ) : (
@@ -393,6 +394,7 @@ export const DashboardPage: React.FC = () => {
       <ConfigHorariosModal
         isOpen={configHorariosOpen}
         onClose={() => setConfigHorariosOpen(false)}
+        onSaved={() => setHorariosConfigTick((t) => t + 1)}
       />
 
       <PnfMallasModal isOpen={pnfMallasOpen} onClose={() => setPnfMallasOpen(false)} />

@@ -43,6 +43,7 @@ type Vista = 'seccion' | 'aula' | 'profesor';
 interface HorariosPageProps {
   subTab?: HorariosSubTab;
   onSubTabChange?: (t: HorariosSubTab) => void;
+  configTick?: number; // se incrementa al guardar ConfigHorariosModal → recarga la config
 }
 
 interface ProfesorLite {
@@ -59,7 +60,7 @@ interface Violacion {
   error: string;
 }
 
-export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange }) => {
+export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick }) => {
   const { user } = useAuth();
   const puedeEditar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
 
@@ -293,6 +294,11 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     setLoading(false);
   };
 
+  const fetchConfig = async () => {
+    const rConfig = await apiFetch<HorarioConfig>('/horarios/config');
+    if (rConfig.success && rConfig.data) setConfig(rConfig.data);
+  };
+
   const fetchEntries = async () => {
     const res = await apiFetch<{ entries: HorarioEntry[] }>(
       `/horarios/entries?tipo=${lapso.tipo}&trimestre=${lapso.n}`
@@ -303,6 +309,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   useEffect(() => {
     fetchBase();
   }, []);
+
+  useEffect(() => {
+    if (configTick) fetchConfig();
+  }, [configTick]);
 
   useEffect(() => {
     if (rows.length > 0) fetchEntries();

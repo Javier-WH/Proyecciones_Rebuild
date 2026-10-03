@@ -109,6 +109,11 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];
   const dirtyRef = React.useRef(false);
 
+  // Horas semanales que ofrece el turno: bloques de clase × días habilitados.
+  // Se compara contra la jornada configurada (horas_jornada, default 30).
+  const horasSemana = bloques.filter((b) => !b.es_receso).length * dias.length;
+  const jornada = turno?.horas_jornada ?? 30;
+
   useEffect(() => {
     if (!turno) return;
     // No pisar la edición en curso si solo fue una recarga de datos del mismo turno
@@ -386,8 +391,20 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
           {/* Bloques horarios */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold flex items-center gap-2">
                 Horas de clase y recesos
+                <span
+                  className={`normal-case tracking-normal px-2 py-0.5 rounded-md border text-[10px] font-semibold ${
+                    horasSemana > jornada
+                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                      : horasSemana < jornada
+                        ? 'bg-slate-800/60 border-slate-700 text-slate-400'
+                        : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                  }`}
+                  title={`Jornada configurada: ${jornada}h semanales`}
+                >
+                  {horasSemana}h/sem · jornada {jornada}h
+                </span>
               </div>
               {puedeEditar && (
                 <div className="flex gap-1.5">
@@ -457,6 +474,22 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
                 </div>
               ))}
             </div>
+            {horasSemana !== jornada && (
+              <div
+                className={`mt-3 flex items-start gap-2 p-2.5 rounded-lg border text-[11px] leading-snug ${
+                  horasSemana > jornada
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                    : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>
+                  {horasSemana > jornada
+                    ? `El turno ofrece ${horasSemana}h semanales, ${horasSemana - jornada}h por encima de su jornada configurada (${jornada}h). Quita bloques/días o ajusta la jornada en Configuración de Horarios.`
+                    : `El turno ofrece ${horasSemana}h semanales, ${jornada - horasSemana}h por debajo de su jornada configurada (${jornada}h). Faltan bloques o días por habilitar.`}
+                </span>
+              </div>
+            )}
             <p className="text-[10px] text-slate-500 mt-3">
               Nota: si el turno tiene clases agendadas, se te ofrecerá desagendarlas antes de guardar.
             </p>
