@@ -387,6 +387,23 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
   };
 
+  // En una celda fusionada (rowSpan) las filas cubiertas no tienen celda
+  // propia: el droppable siempre reporta el primer bloque. Con la posición
+  // vertical del puntero al soltar se calcula en qué sub-fila cayó el drop.
+  // Para drags de grupo, si el bloque no cabe empezando en esa fila se
+  // intenta que el grupo termine cubriéndola.
+  const bloqueParaDrop = (bloqueIds: number[], sub: number, drag: DragData): Bloque | null => {
+    const bIdx = bloques.findIndex((x) => x.id === bloqueIds[sub]);
+    if (bIdx < 0) return null;
+    if (drag.tipo !== 'grupo') return bloques[bIdx];
+    const n = drag.entry_ids?.length ?? 0;
+    for (let s = bIdx; s >= 0 && s > bIdx - n; s--) {
+      const tramos = bloques.slice(s, s + n);
+      if (tramos.length === n && tramos.every((x) => !x.es_receso)) return bloques[s];
+    }
+    return bloques[bIdx]; // sin cabida: que responda la validación normal
+  };
+
   const onDragStart = (ev: DragStartEvent) => setActivo(ev.active.data.current as DragData);
 
   const onDragEnd = async (ev: DragEndEvent) => {
@@ -404,7 +421,28 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
     if (over.startsWith('cell:')) {
       const [, bloqueId, dia] = over.split(':');
-      const bloque = bloques.find((b) => b.id === Number(bloqueId));
+      const bloqueIds =
+        (ev.over?.data.current as { bloqueIds?: number[] } | undefined)?.bloqueIds ??
+        [Number(bloqueId)];
+      let sub = 0;
+      if (bloqueIds.length > 1 && ev.over) {
+        const rect = ev.over.rect;
+        const act = ev.activatorEvent as Partial<PointerEvent>;
+        const translated = ev.active.rect.current.translated;
+        const py =
+          typeof act.clientY === 'number'
+            ? act.clientY + ev.delta.y
+            : translated
+              ? translated.top + translated.height / 2
+              : null;
+        if (py !== null && rect.height > 0) {
+          sub = Math.min(
+            bloqueIds.length - 1,
+            Math.max(0, Math.floor(((py - rect.top) / rect.height) * bloqueIds.length))
+          );
+        }
+      }
+      const bloque = bloqueParaDrop(bloqueIds, sub, drag);
       if (!bloque) return;
       if (!celdaValida(bloque, Number(dia), drag)) {
         mostrarAviso('Esa celda no es válida para la clase (ocupada, receso o sin aula libre).', 'error');
@@ -518,6 +556,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           entry={entry}
                           run={entry ? runEntriesDe(bIdx, d, sp?.n ?? 1) : []}
                           span={sp?.n ?? 1}
+                          bloqueIds={bloques.slice(bIdx, bIdx + (sp?.n ?? 1)).map((x) => x.id)}
                           finHasta={sp?.fin}
                           valida={valida}
                           esSwap={
@@ -796,6 +835,7 @@ const Celda: React.FC<{
   entry?: HorarioEntry;
   run: HorarioEntry[];
   span: number;
+  bloqueIds: number[]; // bloques que cubre la celda (span filas), en orden
   finHasta?: string;
   valida: boolean | null;
   esSwap: boolean;
@@ -805,8 +845,8 @@ const Celda: React.FC<{
   usa12h: boolean;
   errores: ErrorClase[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, onAbrirMenu }) => {
-  const { setNodeRef, isOver } = useDroppable({ id });
+}> = ({ id, entry, run, span, bloqueIds, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, onAbrirMenu }) => {
+  const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   let cls =
     'relative rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
