@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePnfColors } from '../../context/PnfColorContext.js';
-import { HorarioEntry, ErrorClase, colorMateria, fmtHora } from './types.js';
+import { HorarioEntry, ErrorClase, colorMateria, fmtHoraCfg } from './types.js';
 import { User, MapPin, Clock } from 'lucide-react';
 
 // Tarjeta de una clase agendada, común a las vistas por sección, aula y
@@ -14,9 +14,10 @@ export const ClaseCard: React.FC<{
   entry: HorarioEntry;
   fin?: string;
   compacto?: boolean;
+  usa12h?: boolean;
   errores?: ErrorClase[];
   className?: string;
-}> = ({ entry, fin, compacto, errores, className = '' }) => {
+}> = ({ entry, fin, compacto, usa12h, errores, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
@@ -26,7 +27,7 @@ export const ClaseCard: React.FC<{
     ? `${entry.prof_nombres ?? ''} ${entry.prof_apellidos ?? ''}`.trim()
     : 'Sin profesor';
   const aula = entry.aula_nombre || entry.aula_codigo;
-  const hora = `${fmtHora(entry.hora_inicio)}–${fmtHora(fin ?? entry.hora_fin)}`;
+  const hora = `${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(fin ?? entry.hora_fin, usa12h)}`;
 
   return (
     <div

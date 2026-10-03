@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHora, minutos } from './types.js';
+import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHoraCfg, minutos } from './types.js';
 import { ClaseCard } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
@@ -12,6 +12,7 @@ interface VistaRecursoProps {
   titulo: string;
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
+  formato12?: boolean; // vista 12h; la BD siempre guarda 24h
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
 }
 
@@ -20,7 +21,7 @@ interface Banda {
   bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, enError }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError }) => {
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -193,7 +194,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                   return (
                     <tr key={b.id} style={{ height: '1.75rem' }}>
                       <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
-                        {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                        {fmtHoraCfg(b.hora_inicio, formato12)}–{fmtHoraCfg(b.hora_fin, formato12)}
                       </td>
                       {ocupada ? (
                         dias.map((d) => {
@@ -206,6 +207,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     key={e.id}
                                     entry={e}
                                     compacto={items.length > 1}
+                                    usa12h={formato12}
                                     errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
                                   />
                                 ))}
@@ -231,7 +233,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                     <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
-                        {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                        {fmtHoraCfg(b.hora_inicio, formato12)}–{fmtHoraCfg(b.hora_fin, formato12)}
                       </span>
                     </td>
                     {dias.map((d) => {
@@ -272,6 +274,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                 entry={e}
                                 fin={fusion ? sp.fin : undefined}
                                 compacto={items.length > 1}
+                                usa12h={formato12}
                                 errores={items.length > 1 ? errsDe(e) : errsDe()}
                               />
                             ))}

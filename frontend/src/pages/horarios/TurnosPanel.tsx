@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
-import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHora } from './types.js';
+import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHoraCfg, hora12De, a24 } from './types.js';
 import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 
 interface TurnosPanelProps {
   turnos: Turno[];
   puedeEditar: boolean;
+  formato12?: boolean; // muestra horas en 12h con selector AM/PM (BD siempre 24h)
   onChanged: () => void;
 }
 
 interface BloqueEdit {
-  hora_inicio: string;
+  hora_inicio: string; // siempre 24h 'HH:MM'
   hora_fin: string;
   es_receso: boolean;
+  meridiem: 'AM' | 'PM'; // solo se usa cuando formato12 está activo
 }
 
 interface ClaseConflicto {
@@ -29,25 +31,34 @@ const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
 // Campo de hora con dos inputs separados (horas y minutos), independiente del
 // formato regional del navegador (input[type=time] exige AM/PM en locales 12h).
+// `usa12h` muestra la hora en 1-12 y la combina con el meridiem del bloque;
+// el `value` y el onChange siempre trabajan en 24h.
 const CampoHora: React.FC<{
-  value: string; // 'HH:MM'
+  value: string; // 'HH:MM' 24h
   disabled?: boolean;
+  usa12h?: boolean;
+  pm?: boolean;
   onChange: (v: string) => void;
-}> = ({ value, disabled, onChange }) => {
-  const [hh = '', mm = ''] = value.split(':');
+}> = ({ value, disabled, usa12h, pm, onChange }) => {
+  const mm = value.split(':')[1] ?? '';
+  const hh = usa12h ? hora12De(value).hh : (value.split(':')[0] ?? '');
   const minRef = React.useRef<HTMLInputElement>(null);
   const horaRef = React.useRef<HTMLInputElement>(null);
 
+  const emitir = (hhLocal: string, mmLocal: string) =>
+    onChange(usa12h ? a24(hhLocal, mmLocal, !!pm) : `${hhLocal}:${mmLocal}`);
+
   const cambiarHora = (v: string) => {
     const d = v.replace(/[^\d]/g, '').slice(0, 2);
-    const hhClamped = d !== '' && Number(d) > 23 ? '23' : d;
-    onChange(`${hhClamped}:${mm}`);
+    const limite = usa12h ? 12 : 23;
+    const hhClamped = d !== '' && Number(d) > limite ? String(limite) : d;
+    emitir(hhClamped, mm);
     if (hhClamped.length === 2) minRef.current?.select();
   };
   const cambiarMin = (v: string) => {
     const d = v.replace(/[^\d]/g, '').slice(0, 2);
     const mmClamped = d !== '' && Number(d) > 59 ? '59' : d;
-    onChange(`${hh}:${mmClamped}`);
+    emitir(hh, mmClamped);
   };
 
   const cls =
@@ -68,7 +79,7 @@ const CampoHora: React.FC<{
           // Leer del DOM: tras el auto-foco a minutos el closure `hh` puede estar desactualizado
           const h = e.target.value.replace(/\D/g, '').slice(0, 2);
           const m = (minRef.current?.value ?? mm).replace(/\D/g, '').slice(0, 2);
-          if (h !== '') onChange(`${h.padStart(2, '0')}:${m || '00'}`);
+          if (h !== '') emitir(h.padStart(2, '0'), m || '00');
         }}
         className={cls}
       />
@@ -86,7 +97,7 @@ const CampoHora: React.FC<{
         onBlur={(e) => {
           const m = e.target.value.replace(/\D/g, '').slice(0, 2);
           const h = (horaRef.current?.value ?? hh).replace(/\D/g, '').slice(0, 2);
-          if (h !== '') onChange(`${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}`);
+          if (h !== '') emitir(h.padStart(2, '0'), (m || '00').padStart(2, '0'));
         }}
         className={cls}
       />
@@ -94,7 +105,7 @@ const CampoHora: React.FC<{
   );
 };
 
-export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, onChanged }) => {
+export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, formato12, onChanged }) => {
   const [sel, setSel] = useState<number | null>(turnos[0]?.id ?? null);
   const [dias, setDias] = useState<number[]>([]);
   const [bloques, setBloques] = useState<BloqueEdit[]>([]);
@@ -132,6 +143,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
         hora_inicio: b.hora_inicio.slice(0, 5),
         hora_fin: b.hora_fin.slice(0, 5),
         es_receso: !!b.es_receso,
+        meridiem: Number(b.hora_inicio.slice(0, 2)) >= 12 ? 'PM' : 'AM',
       }))
     );
     setMsg(null);
@@ -150,6 +162,20 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
   const toggleDia = (d: number) =>
     editDias((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
 
+  // AM/PM del bloque: reinterpreta ambas horas con el nuevo meridiem
+  const cambiarMeridiem = (i: number, m: 'AM' | 'PM') => {
+    editBloques((p) =>
+      p.map((x, j) => {
+        if (j !== i) return x;
+        const conv = (h24: string) => {
+          const p12 = hora12De(h24);
+          return h24 ? a24(p12.hh, p12.mm, m === 'PM') : h24;
+        };
+        return { ...x, meridiem: m, hora_inicio: conv(x.hora_inicio), hora_fin: conv(x.hora_fin) };
+      })
+    );
+  };
+
   const moverBloque = (i: number, dir: -1 | 1) => {
     editBloques((prev) => {
       const copia = [...prev];
@@ -162,7 +188,12 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
 
   const guardar = async () => {
     if (!turno) return;
-    for (const [i, b] of bloques.entries()) {
+    // Auto-ordenar por hora efectiva (24h): el turno Diurno mezcla bloques de
+    // mañana y tarde, y el orden de la lista define el orden de los bloques.
+    const ordenados = [...bloques].sort((a, b) =>
+      a.hora_inicio === '' ? 1 : b.hora_inicio === '' ? -1 : a.hora_inicio.localeCompare(b.hora_inicio)
+    );
+    for (const [i, b] of ordenados.entries()) {
       if (!HORA_RE.test(b.hora_inicio) || !HORA_RE.test(b.hora_fin)) {
         setMsg({ error: true, texto: `Bloque ${i + 1}: completa las horas en formato HH:MM.` });
         return;
@@ -189,7 +220,13 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
     }
     const r2 = await apiFetch(`/horarios/turnos/${turno.id}/bloques`, {
       method: 'PUT',
-      body: JSON.stringify({ bloques }),
+      body: JSON.stringify({
+        bloques: ordenados.map((b) => ({
+          hora_inicio: b.hora_inicio,
+          hora_fin: b.hora_fin,
+          es_receso: b.es_receso,
+        })),
+      }),
     });
     setSaving(false);
     if (r2.success) {
@@ -217,7 +254,11 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
     }
     const r2 = await apiFetch(`/horarios/turnos/${turno.id}/bloques`, {
       method: 'PUT',
-      body: JSON.stringify({ bloques }),
+      body: JSON.stringify({
+        bloques: [...bloques]
+          .sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))
+          .map((b) => ({ hora_inicio: b.hora_inicio, hora_fin: b.hora_fin, es_receso: b.es_receso })),
+      }),
     });
     setDesagendando(false);
     setConflicto(null);
@@ -409,13 +450,23 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
               {puedeEditar && (
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => editBloques((p) => [...p, { hora_inicio: '', hora_fin: '', es_receso: false }])}
+                    onClick={() =>
+                      editBloques((p) => [
+                        ...p,
+                        { hora_inicio: '', hora_fin: '', es_receso: false, meridiem: p.length > 0 ? p[p.length - 1].meridiem : 'AM' },
+                      ])
+                    }
                     className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold cursor-pointer"
                   >
                     + Bloque
                   </button>
                   <button
-                    onClick={() => editBloques((p) => [...p, { hora_inicio: '', hora_fin: '', es_receso: true }])}
+                    onClick={() =>
+                      editBloques((p) => [
+                        ...p,
+                        { hora_inicio: '', hora_fin: '', es_receso: true, meridiem: p.length > 0 ? p[p.length - 1].meridiem : 'AM' },
+                      ])
+                    }
                     className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
                   >
                     <Coffee className="w-3 h-3" /> Receso
@@ -441,6 +492,8 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
                   <CampoHora
                     value={b.hora_inicio}
                     disabled={!puedeEditar}
+                    usa12h={formato12}
+                    pm={b.meridiem === 'PM'}
                     onChange={(v) =>
                       editBloques((p) => p.map((x, j) => (j === i ? { ...x, hora_inicio: v } : x)))
                     }
@@ -449,10 +502,24 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
                   <CampoHora
                     value={b.hora_fin}
                     disabled={!puedeEditar}
+                    usa12h={formato12}
+                    pm={b.meridiem === 'PM'}
                     onChange={(v) =>
                       editBloques((p) => p.map((x, j) => (j === i ? { ...x, hora_fin: v } : x)))
                     }
                   />
+                  {formato12 && (
+                    <select
+                      value={b.meridiem}
+                      disabled={!puedeEditar}
+                      onChange={(e) => cambiarMeridiem(i, e.target.value as 'AM' | 'PM')}
+                      title="AM o PM"
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-1 text-[11px] font-semibold text-white cursor-pointer disabled:cursor-default"
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  )}
                   <div className="flex-1" />
                   {puedeEditar && (
                     <div className="flex items-center gap-0.5">
@@ -530,7 +597,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, o
                     <div className="text-slate-500 text-[10px]">Sección {c.seccion_nombre}</div>
                   </div>
                   <div className="text-slate-400 whitespace-nowrap">
-                    {DIAS_NOMBRES[c.dia_semana]} {fmtHora(c.hora_inicio)}
+                    {DIAS_NOMBRES[c.dia_semana]} {fmtHoraCfg(c.hora_inicio, formato12)}
                   </div>
                   <div className="text-slate-500">{c.aula_codigo}</div>
                 </div>

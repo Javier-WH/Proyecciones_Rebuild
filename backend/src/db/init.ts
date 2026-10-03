@@ -460,10 +460,23 @@ export async function initializeDatabase() {
       id TINYINT PRIMARY KEY,
       min_horas_bloque INT NOT NULL DEFAULT 2,
       max_horas_dia INT NOT NULL DEFAULT 3,
+      formato_12h TINYINT(1) NOT NULL DEFAULT 0,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
   await db.query('INSERT IGNORE INTO horario_config (id) VALUES (1)');
+  // Migración idempotente: formato de hora de la UI (BD siempre guarda 24h)
+  const [existeF12] = await db.query<any[]>(
+    `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'horario_config' AND COLUMN_NAME = 'formato_12h'`,
+    [env.DB_NAME]
+  );
+  if (existeF12[0].total === 0) {
+    await db.query(
+      'ALTER TABLE horario_config ADD COLUMN formato_12h TINYINT(1) NOT NULL DEFAULT 0 AFTER max_horas_dia'
+    );
+    console.log("✅ Columna 'formato_12h' agregada a la tabla horario_config");
+  }
 
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
   const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);

@@ -16,6 +16,8 @@ import {
   Turno,
   seccionesDe,
   fmtHora,
+  fmtHoraCfg,
+  formatearHorasEnTexto,
   minutos,
   traslapan,
   DIAS_NOMBRES,
@@ -85,6 +87,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [profesores, setProfesores] = useState<ProfesorLite[]>([]);
   const [pnfOptions, setPnfOptions] = useState<Array<[number, string]>>([]);
   const [config, setConfig] = useState<HorarioConfig>({ min_horas_bloque: 2, max_horas_dia: 3 });
+  const usa12 = !!config.formato_12h; // vista 12h; la BD siempre guarda 24h
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ error: boolean; texto: string } | null>(null);
@@ -186,7 +189,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         `turno ${e.turno_nombre}, ${profDe(e)},`;
     };
     const cuando = (e: HorarioEntry) =>
-      `el ${DIAS_NOMBRES[e.dia_semana]} ${fmtHora(e.hora_inicio)}–${fmtHora(e.hora_fin)}`;
+      `el ${DIAS_NOMBRES[e.dia_semana]} ${fmtHoraCfg(e.hora_inicio, usa12)}–${fmtHoraCfg(e.hora_fin, usa12)}`;
 
     // Clase en bloque de receso o en día no habilitado para el turno.
     // Los recesos de 10 min o menos se ignoran (son pausas entre horas).
@@ -201,7 +204,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           titulo: 'Clase en receso',
           error:
             `Se está colocando la Materia '${e.materia_nombre}' en un bloque de receso ` +
-            `superior a 10 minutos, el ${DIAS_NOMBRES[e.dia_semana]} a las ${fmtHora(e.hora_inicio)}.`,
+            `superior a 10 minutos, el ${DIAS_NOMBRES[e.dia_semana]} a las ${fmtHoraCfg(e.hora_inicio, usa12)}.`,
         });
         continue;
       }
@@ -231,21 +234,21 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         'Conflicto de Sección',
         (b, a) =>
           `La materia ${lado(b)} está agendada a la misma hora que la materia ${lado(a)} ` +
-          `en la sección ${b.seccion_nombre}, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHora(b.hora_inicio)}.`,
+          `en la sección ${b.seccion_nombre}, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHoraCfg(b.hora_inicio, usa12)}.`,
         (e) => `s:${e.seccion_id}:${e.dia_semana}`,
       ],
       [
         'Conflicto de Profesor',
         (b, a) =>
           `La materia ${lado(b)} tiene un profesor que ya está dando la materia ${lado(a)} ` +
-          `a la misma hora, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHora(b.hora_inicio)}.`,
+          `a la misma hora, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHoraCfg(b.hora_inicio, usa12)}.`,
         (e) => (e.profesor_id ? `p:${e.profesor_id}:${e.dia_semana}` : null),
       ],
       [
         'Conflicto de Aula',
         (b, a) =>
           `La materia ${lado(b)} tiene asignada un aula que ya está ocupando la materia ${lado(a)}, ` +
-          `el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHora(b.hora_inicio)}.`,
+          `el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHoraCfg(b.hora_inicio, usa12)}.`,
         (e) => `a:${e.aula_id}:${e.dia_semana}`,
       ],
     ];
@@ -307,7 +310,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             bloques: run.map((e) => e.bloque_id),
             detalle: detalle(run[0]),
             error: `tiene una sesión suelta de ${run.length}h el ${DIAS_NOMBRES[dia]} ` +
-              `${fmtHora(run[0].hora_inicio)}–${fmtHora(run[run.length - 1].hora_fin)} ` +
+              `${fmtHoraCfg(run[0].hora_inicio, usa12)}–${fmtHoraCfg(run[run.length - 1].hora_fin, usa12)} ` +
               `(mínimo ${config.min_horas_bloque}h seguidas).`,
           });
         }
@@ -599,14 +602,17 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
           }`}
         >
-          {aviso.texto.includes('\n') ? (
-            <>
-              <div className="text-[13px] font-bold mb-0.5">{aviso.texto.split('\n')[0]}</div>
-              <div className="font-medium">{aviso.texto.split('\n').slice(1).join('\n')}</div>
-            </>
-          ) : (
-            aviso.texto
-          )}
+          {(() => {
+            const texto = formatearHorasEnTexto(aviso.texto, usa12);
+            return texto.includes('\n') ? (
+              <>
+                <div className="text-[13px] font-bold mb-0.5">{texto.split('\n')[0]}</div>
+                <div className="font-medium">{texto.split('\n').slice(1).join('\n')}</div>
+              </>
+            ) : (
+              texto
+            );
+          })()}
         </div>
       )}
       {errorMsg && (
@@ -618,7 +624,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       {tab === 'aulas' && (
         <AulasPanel aulas={aulas} pnfOptions={pnfOptions} puedeEditar={puedeEditar} onChanged={fetchBase} />
       )}
-      {tab === 'turnos' && <TurnosPanel turnos={turnos} puedeEditar={puedeEditar} onChanged={fetchBase} />}
+      {tab === 'turnos' && <TurnosPanel turnos={turnos} puedeEditar={puedeEditar} formato12={usa12} onChanged={fetchBase} />}
 
       {tab === 'horario' && (
         <>
@@ -776,6 +782,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo={`Ocupación del aula ${aulas.find((a) => a.id === (aulaId ?? aulas[0]?.id))?.codigo ?? ''}`}
               entries={entries.filter((e) => e.aula_id === (aulaId ?? aulas[0]?.id))}
               turnos={turnos}
+              formato12={usa12}
               enError={celdasEnError}
             />
           )}
@@ -785,6 +792,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo="Agenda del profesor"
               entries={entries.filter((e) => e.profesor_id === (profesorId ?? profesores[0]?.id))}
               turnos={turnos}
+              formato12={usa12}
               enError={celdasEnError}
             />
           )}

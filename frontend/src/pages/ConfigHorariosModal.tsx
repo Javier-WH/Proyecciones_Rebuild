@@ -30,6 +30,7 @@ interface JornadaRow {
 export const ConfigHorariosModal: React.FC<ConfigHorariosModalProps> = ({ isOpen, onClose, onSaved }) => {
   const [min, setMin] = useState(2);
   const [max, setMax] = useState(3);
+  const [formato12, setFormato12] = useState(false);
   const [jornadas, setJornadas] = useState<JornadaRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -40,13 +41,14 @@ export const ConfigHorariosModal: React.FC<ConfigHorariosModalProps> = ({ isOpen
     setMsg(null);
     setLoading(true);
     Promise.all([
-      apiFetch<{ min_horas_bloque: number; max_horas_dia: number }>('/horarios/config'),
+      apiFetch<{ min_horas_bloque: number; max_horas_dia: number; formato_12h?: boolean }>('/horarios/config'),
       apiFetch<Turno[]>('/horarios/turnos'),
     ]).then(([cfg, tns]) => {
       setLoading(false);
       if (cfg.success && cfg.data) {
         setMin(cfg.data.min_horas_bloque);
         setMax(cfg.data.max_horas_dia);
+        setFormato12(!!cfg.data.formato_12h);
       } else {
         setMsg({ error: true, texto: cfg.message || 'No se pudo cargar la configuración.' });
       }
@@ -86,6 +88,7 @@ export const ConfigHorariosModal: React.FC<ConfigHorariosModalProps> = ({ isOpen
       body: JSON.stringify({
         min_horas_bloque: min,
         max_horas_dia: max,
+        formato_12h: formato12,
         jornadas: jornadas.map((j) => ({ turno_id: j.turno_id, horas: j.horas })),
       }),
     });
@@ -175,6 +178,34 @@ export const ConfigHorariosModal: React.FC<ConfigHorariosModalProps> = ({ isOpen
                   onChange={(e) => setMax(parseInt(e.target.value, 10) || 0)}
                   className={inputCls}
                 />
+              </div>
+
+              <div className="flex items-start justify-between gap-4 pt-3 border-t border-slate-800">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold text-slate-200 mb-1">
+                    Formato de 12 horas
+                  </label>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Muestra las horas como <strong>5:30 PM</strong> en vez de 17:30. En Turnos y
+                    Bloques aparece un selector AM/PM por bloque. La base de datos siempre guarda
+                    formato de 24 horas.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={formato12}
+                  onClick={() => setFormato12((v) => !v)}
+                  className={`relative shrink-0 w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                    formato12 ? 'bg-purple-600' : 'bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+                      formato12 ? 'left-[22px]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="pt-3 border-t border-slate-800">

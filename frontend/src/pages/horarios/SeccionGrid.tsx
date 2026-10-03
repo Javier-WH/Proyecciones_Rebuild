@@ -25,6 +25,8 @@ import {
   DIAS_NOMBRES,
   DIAS_CORTOS,
   fmtHora,
+  fmtHoraCfg,
+  formatearHorasEnTexto,
   traslapan,
   colorMateria,
   ErrorClase,
@@ -76,6 +78,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error' | 'warn'; msg: string } | null>(null);
   const [menuEntry, setMenuEntry] = useState<HorarioEntry | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const usa12 = !!config.formato_12h; // vista 12h; la BD siempre guarda 24h
 
   const bloques = useMemo(() => turno?.bloques ?? [], [turno]);
   const dias = useMemo(
@@ -441,14 +444,17 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                 : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
           }`}
         >
-          {aviso.msg.includes('\n') ? (
-            <>
-              <div className="text-[13px] font-bold mb-0.5">{aviso.msg.split('\n')[0]}</div>
-              <div className="font-medium">{aviso.msg.split('\n').slice(1).join('\n')}</div>
-            </>
-          ) : (
-            aviso.msg
-          )}
+          {(() => {
+            const msg = formatearHorasEnTexto(aviso.msg, usa12);
+            return msg.includes('\n') ? (
+              <>
+                <div className="text-[13px] font-bold mb-0.5">{msg.split('\n')[0]}</div>
+                <div className="font-medium">{msg.split('\n').slice(1).join('\n')}</div>
+              </>
+            ) : (
+              msg
+            );
+          })()}
         </div>
       )}
 
@@ -480,7 +486,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                 b.es_receso ? (
                   <tr key={b.id} style={{ height: '1.75rem' }}>
                     <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
-                      {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                      {fmtHoraCfg(b.hora_inicio, usa12)}–{fmtHoraCfg(b.hora_fin, usa12)}
                     </td>
                     <td
                       colSpan={dias.length}
@@ -496,7 +502,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                     <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
-                        {fmtHora(b.hora_inicio)}–{fmtHora(b.hora_fin)}
+                        {fmtHoraCfg(b.hora_inicio, usa12)}–{fmtHoraCfg(b.hora_fin, usa12)}
                       </span>
                     </td>
                     {dias.map((d) => {
@@ -524,6 +530,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           activo={!!activo}
                           puedeEditar={puedeEditar}
                           resaltada={resaltar?.has(key) ?? false}
+                          usa12h={usa12}
                           errores={celdaEnError(bIdx, d, sp?.n ?? 1)}
                           onAbrirMenu={setMenuEntry}
                         />
@@ -551,8 +558,8 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                     : 'Sin profesor asignado'}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
-                  {DIAS_NOMBRES[menuEntry.dia_semana]} · {fmtHora(menuEntry.hora_inicio)}–
-                  {fmtHora(menuEntry.hora_fin)} · Aula {menuEntry.aula_codigo}
+                  {DIAS_NOMBRES[menuEntry.dia_semana]} · {fmtHoraCfg(menuEntry.hora_inicio, usa12)}–
+                  {fmtHoraCfg(menuEntry.hora_fin, usa12)} · Aula {menuEntry.aula_codigo}
                 </div>
               </div>
               <button onClick={() => setMenuEntry(null)} className="text-slate-500 hover:text-white">
@@ -795,9 +802,10 @@ const Celda: React.FC<{
   activo: boolean;
   puedeEditar: boolean;
   resaltada: boolean;
+  usa12h: boolean;
   errores: ErrorClase[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, errores, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
@@ -820,7 +828,7 @@ const Celda: React.FC<{
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} errores={errores} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
     </td>
@@ -833,9 +841,10 @@ const EntryChip: React.FC<{
   span: number;
   finHasta?: string;
   puedeEditar: boolean;
+  usa12h: boolean;
   errores: ErrorClase[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, run, span, finHasta, puedeEditar, errores, onAbrirMenu }) => {
+}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, onAbrirMenu }) => {
   const esGrupo = run.length > 1;
   const singleData: DragData = {
     tipo: 'entry',
@@ -844,7 +853,7 @@ const EntryChip: React.FC<{
     seccion_id: entry.seccion_id,
     profesor_id: entry.profesor_id,
     titulo: entry.materia_nombre,
-    subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHora(entry.hora_inicio)} · ${entry.aula_codigo}`,
+    subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHoraCfg(entry.hora_inicio, usa12h)} · ${entry.aula_codigo}`,
   };
   const groupData: DragData = {
     tipo: 'grupo',
@@ -880,6 +889,7 @@ const EntryChip: React.FC<{
         <ClaseCard
           entry={entry}
           fin={span > 1 ? finHasta : undefined}
+          usa12h={usa12h}
           errores={errores}
           className="hover:brightness-125 transition-colors"
         />
@@ -904,6 +914,7 @@ const EntryChip: React.FC<{
         <ClaseCard
           entry={entry}
           fin={finHasta}
+          usa12h={usa12h}
           errores={errores}
           className="hover:brightness-125 transition-colors"
         />
@@ -911,7 +922,7 @@ const EntryChip: React.FC<{
       {puedeEditar && (
         <div className="absolute left-0 top-0 bottom-0 w-5 flex flex-col gap-px z-10 pr-0.5 opacity-0 group-hover/card:opacity-100 transition-opacity">
           {run.map((e) => (
-            <HourHandle key={e.id} entry={e} />
+            <HourHandle key={e.id} entry={e} usa12h={usa12h} />
           ))}
         </div>
       )}
@@ -921,7 +932,7 @@ const EntryChip: React.FC<{
 
 // Handler para arrastrar una sola hora de un bloque fusionado: visible solo al
 // pasar el mouse sobre la tarjeta, uno por cada hora del run.
-const HourHandle: React.FC<{ entry: HorarioEntry }> = ({ entry }) => {
+const HourHandle: React.FC<{ entry: HorarioEntry; usa12h: boolean }> = ({ entry, usa12h }) => {
   const data: DragData = {
     tipo: 'entry',
     entry_id: entry.id,
@@ -929,7 +940,7 @@ const HourHandle: React.FC<{ entry: HorarioEntry }> = ({ entry }) => {
     seccion_id: entry.seccion_id,
     profesor_id: entry.profesor_id,
     titulo: entry.materia_nombre,
-    subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHora(entry.hora_inicio)}–${fmtHora(entry.hora_fin)} · ${entry.aula_codigo}`,
+    subtitulo: `${DIAS_CORTOS[entry.dia_semana]} ${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(entry.hora_fin, usa12h)} · ${entry.aula_codigo}`,
   };
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `hour:${entry.id}`,
@@ -940,7 +951,7 @@ const HourHandle: React.FC<{ entry: HorarioEntry }> = ({ entry }) => {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      title={`Mover solo esta hora (${fmtHora(entry.hora_inicio)}–${fmtHora(entry.hora_fin)})`}
+      title={`Mover solo esta hora (${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(entry.hora_fin, usa12h)})`}
       className={`flex-1 min-h-0 flex items-center justify-center rounded-md bg-transparent border border-slate-500/40 text-slate-300 hover:bg-indigo-600/80 hover:border-indigo-400 hover:text-white cursor-pointer active:cursor-grabbing transition-colors ${
         isDragging ? 'opacity-30' : ''
       }`}

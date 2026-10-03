@@ -423,10 +423,13 @@ export async function deleteTurnoEntriesHandler(request: FastifyRequest, reply: 
 export async function getConfigHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
     const rows = await query<any[]>(
-      'SELECT min_horas_bloque, max_horas_dia FROM horario_config WHERE id = 1'
+      'SELECT min_horas_bloque, max_horas_dia, formato_12h FROM horario_config WHERE id = 1'
     );
-    const c = rows[0] ?? { min_horas_bloque: 2, max_horas_dia: 3 };
-    return reply.send({ success: true, data: c });
+    const c = rows[0] ?? { min_horas_bloque: 2, max_horas_dia: 3, formato_12h: 0 };
+    return reply.send({
+      success: true,
+      data: { ...c, formato_12h: !!Number(c.formato_12h) },
+    });
   } catch (e: any) {
     request.log.error(e);
     return reply.status(500).send({ success: false, message: 'Error cargando la configuración.' });
@@ -439,8 +442,10 @@ export async function updateConfigHandler(request: FastifyRequest, reply: Fastif
   const body = request.body as {
     min_horas_bloque?: number;
     max_horas_dia?: number;
+    formato_12h?: boolean | number;
     jornadas?: { turno_id: number; horas: number }[];
   };
+  const formato12 = body.formato_12h ? 1 : 0;
   const min = Number(body.min_horas_bloque);
   const max = Number(body.max_horas_dia);
   if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max < 1) {
@@ -467,8 +472,8 @@ export async function updateConfigHandler(request: FastifyRequest, reply: Fastif
   }
   try {
     await query(
-      'INSERT INTO horario_config (id, min_horas_bloque, max_horas_dia) VALUES (1, ?, ?) ON DUPLICATE KEY UPDATE min_horas_bloque = VALUES(min_horas_bloque), max_horas_dia = VALUES(max_horas_dia)',
-      [min, max]
+      'INSERT INTO horario_config (id, min_horas_bloque, max_horas_dia, formato_12h) VALUES (1, ?, ?, ?) ON DUPLICATE KEY UPDATE min_horas_bloque = VALUES(min_horas_bloque), max_horas_dia = VALUES(max_horas_dia), formato_12h = VALUES(formato_12h)',
+      [min, max, formato12]
     );
     for (const j of jornadas) {
       await query('UPDATE turnos SET horas_jornada = ? WHERE id = ?', [

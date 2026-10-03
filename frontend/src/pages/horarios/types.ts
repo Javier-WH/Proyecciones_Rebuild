@@ -65,6 +65,7 @@ export interface HorarioEntry {
 export interface HorarioConfig {
   min_horas_bloque: number;
   max_horas_dia: number;
+  formato_12h?: boolean; // la BD siempre guarda 24h; esto solo cambia la vista
 }
 
 export interface SeccionRef {
@@ -115,6 +116,39 @@ export const minutos = (h: string): number => {
 
 export const traslapan = (i1: string, f1: string, i2: string, f2: string): boolean =>
   minutos(i1) < minutos(f2) && minutos(i2) < minutos(f1);
+
+// ── Formato de hora 12h/24h (la BD siempre guarda 24h) ──────────────────────
+// 'HH:MM' 24h → 'h:MM AM/PM'
+export const fmtHora12 = (h: string): string => {
+  const [hh, mm] = (h ?? '').slice(0, 5).split(':');
+  const n = Number(hh);
+  if (Number.isNaN(n)) return h;
+  const suf = n >= 12 ? 'PM' : 'AM';
+  return `${n % 12 === 0 ? 12 : n % 12}:${mm ?? '00'} ${suf}`;
+};
+
+export const fmtHoraCfg = (h: string, usa12?: boolean): string =>
+  usa12 ? fmtHora12(h) : fmtHora(h);
+
+// Convierte las horas 'HH:MM' dentro de un texto (mensajes que vienen del backend)
+export const formatearHorasEnTexto = (texto: string, usa12?: boolean): string =>
+  !usa12 ? texto : texto.replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g, (m) => fmtHora12(m));
+
+// Descompone 'HH:MM' 24h en partes 12h (para editores con selector AM/PM)
+export const hora12De = (h24: string): { hh: string; mm: string; pm: boolean } => {
+  const [hh, mm] = (h24 ?? '').split(':');
+  const n = Number(hh);
+  if (hh === '' || Number.isNaN(n)) return { hh: hh ?? '', mm: mm ?? '', pm: false };
+  return { hh: String(n % 12 === 0 ? 12 : n % 12), mm: mm ?? '00', pm: n >= 12 };
+};
+
+// hh (1-12) + mm + meridiem → 'HH:MM' 24h
+export const a24 = (hh12: string, mm: string, pm: boolean): string => {
+  const n = Number(hh12);
+  if (hh12 === '' || Number.isNaN(n)) return `${hh12}:${mm}`;
+  const h24 = pm ? (n === 12 ? 12 : n + 12) : n === 12 ? 0 : n;
+  return `${String(h24).padStart(2, '0')}:${mm}`;
+};
 
 // Secciones únicas presentes en las filas de carga docente de un lapso
 export function seccionesDe(rows: MateriaAsignableRow[]): SeccionRef[] {
