@@ -52,6 +52,7 @@ interface SeccionGridProps {
   trimestre: number;
   puedeEditar: boolean;
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
+  enError?: Set<string> | null; // claves 'bloque_id:dia' con alguna violación (punto rojo)
   onChanged: () => void;
 }
 
@@ -65,6 +66,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   trimestre,
   puedeEditar,
   resaltar,
+  enError,
   onChanged,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
@@ -191,11 +193,25 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return ocup;
   };
 
+  // ¿Esta tarjeta (o alguna celda que absorbe por rowspan) marcada en error?
+  const celdaEnError = (bloqueIdx: number, dia: number, n: number): boolean => {
+    if (!enError) return false;
+    let restantes = n;
+    for (let i = bloqueIdx; i < bloques.length && restantes > 0; i++) {
+      if (bloques[i].es_receso) break;
+      if (enError.has(`${bloques[i].id}:${dia}`)) return true;
+      restantes--;
+    }
+    return false;
+  };
+
   // ¿Es válido soltar el drag en esta celda?
   const celdaValida = (bloque: Bloque, dia: number, drag: DragData): boolean => {
     if (bloque.es_receso) return false;
     const ocupada = porCelda.get(`${bloque.id}:${dia}`);
-    if (ocupada && ocupada.id !== drag.entry_id) return false;
+    // Celda ocupada por otra clase: solo es destino válido para intercambio
+    // (arrastrar una clase agendada sobre otra las intercambia de lugar)
+    if (ocupada && ocupada.id !== drag.entry_id) return drag.tipo === 'entry';
     const excl = drag.entry_id;
     for (const e of entries) {
       if (excl && e.id === excl) continue;
@@ -208,6 +224,23 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   };
 
   const handleDropEnCelda = async (bloque: Bloque, dia: number, drag: DragData) => {
+    // Soltar una clase sobre otra ocupada = intercambio de día/bloque/aula
+    // (cada una conserva su profesor y demás datos)
+    const destino = porCelda.get(`${bloque.id}:${dia}`);
+    if (destino && destino.id !== drag.entry_id) {
+      if (drag.tipo !== 'entry' || !drag.entry_id) return;
+      const res = await apiFetch('/horarios/entries/swap', {
+        method: 'POST',
+        body: JSON.stringify({ entry_id_a: drag.entry_id, entry_id_b: destino.id }),
+      });
+      if (res.success) {
+        mostrarAviso(`Intercambio: '${drag.titulo}' ↔ '${destino.materia_nombre}'.`, 'ok');
+        onChanged();
+      } else {
+        mostrarAviso(res.message || 'No se pudo intercambiar las clases.', 'error');
+      }
+      return;
+    }
     const res = await apiFetch('/horarios/entries', {
       method: 'PUT',
       body: JSON.stringify({
@@ -342,7 +375,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
               </tr>
             </thead>
             <tbody>
-              {bloques.map((b) =>
+              {bloques.map((b, bIdx) =>
                 b.es_receso ? (
                   <tr key={b.id} style={{ height: '1.75rem' }}>
                     <td className="text-[9px] text-slate-500 text-right pr-2 whitespace-nowrap">
@@ -379,9 +412,16 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           span={sp?.n ?? 1}
                           finHasta={sp?.fin}
                           valida={valida}
+                          esSwap={
+                            !!activo &&
+                            activo.tipo === 'entry' &&
+                            !!entry &&
+                            entry.id !== activo.entry_id
+                          }
                           activo={!!activo}
                           puedeEditar={puedeEditar}
                           resaltada={resaltar?.has(key) ?? false}
+                          enError={celdaEnError(bIdx, d, sp?.n ?? 1)}
                           onAbrirMenu={setMenuEntry}
                         />
                       );
@@ -615,11 +655,13 @@ const Celda: React.FC<{
   span: number;
   finHasta?: string;
   valida: boolean | null;
+  esSwap: boolean;
   activo: boolean;
   puedeEditar: boolean;
   resaltada: boolean;
+  enError: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, span, finHasta, valida, activo, puedeEditar, resaltada, onAbrirMenu }) => {
+}> = ({ id, entry, span, finHasta, valida, esSwap, activo, puedeEditar, resaltada, enError, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   let cls =
@@ -627,18 +669,22 @@ const Celda: React.FC<{
   if (resaltada) cls += 'ring-2 ring-red-400 animate-pulse ';
   if (activo) {
     cls += valida
-      ? 'border-emerald-400/60 bg-emerald-500/10 '
+      ? esSwap
+        ? 'border-indigo-400/70 bg-indigo-500/15 '
+        : 'border-emerald-400/60 bg-emerald-500/10 '
       : 'border-slate-800/60 bg-slate-900/40 opacity-40 ';
   } else {
     cls += entry ? 'border-transparent bg-transparent p-0 ' : 'border-slate-800 bg-slate-950/40 ';
   }
-  if (isOver && valida) cls += 'ring-2 ring-emerald-400 scale-[1.03] ';
+  if (isOver && valida) {
+    cls += esSwap ? 'ring-2 ring-indigo-400 scale-[1.03] ' : 'ring-2 ring-emerald-400 scale-[1.03] ';
+  }
 
   return (
     <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} span={span} finHasta={finHasta} puedeEditar={puedeEditar} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} span={span} finHasta={finHasta} puedeEditar={puedeEditar} enError={enError} onAbrirMenu={onAbrirMenu} />
         </div>
       )}
     </td>
@@ -650,8 +696,9 @@ const EntryChip: React.FC<{
   span: number;
   finHasta?: string;
   puedeEditar: boolean;
+  enError: boolean;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, span, finHasta, puedeEditar, onAbrirMenu }) => {
+}> = ({ entry, span, finHasta, puedeEditar, enError, onAbrirMenu }) => {
   const data: DragData = {
     tipo: 'entry',
     entry_id: entry.id,
@@ -679,6 +726,7 @@ const EntryChip: React.FC<{
       <ClaseCard
         entry={entry}
         fin={span > 1 ? finHasta : undefined}
+        error={enError}
         className="hover:brightness-125 transition-colors"
       />
     </div>

@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { query } from '../../db/mysql.js';
+import { query, getDbPool } from '../../db/mysql.js';
 import {
   cargarEntries,
   conflictoEn,
@@ -290,6 +290,81 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error agendando la clase.' });
+  }
+}
+
+// POST /api/horarios/entries/swap — intercambia día/bloque/aula entre dos
+// clases conservando materia, sección, profesor y demás datos de cada una.
+export async function swapEntriesHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as { entry_id_a?: number; entry_id_b?: number };
+  const idA = Number(body.entry_id_a);
+  const idB = Number(body.entry_id_b);
+  if (!Number.isInteger(idA) || !Number.isInteger(idB) || idA <= 0 || idB <= 0 || idA === idB) {
+    return reply
+      .status(400)
+      .send({ success: false, message: 'Se requieren dos clases distintas para intercambiar.' });
+  }
+  const conn = await getDbPool().getConnection();
+  try {
+    const [rows] = await conn.execute<any[]>(
+      `SELECT en.id, en.dia_semana, en.bloque_id, en.aula_id, pr.pnf_saga_id
+       FROM horario_entries en
+       JOIN proyeccion_materias m ON m.id = en.materia_id
+       JOIN proyecciones pr ON pr.id = m.proyeccion_id
+       WHERE en.id IN (?, ?)`,
+      [idA, idB]
+    );
+    if (rows.length !== 2) {
+      return reply
+        .status(404)
+        .send({ success: false, message: 'Una de las clases ya no existe. Recarga el horario.' });
+    }
+    const user = request.userPayload!;
+    if (
+      user.role === 'REGULAR' &&
+      user.pnf_saga_id &&
+      rows.some((r) => Number(r.pnf_saga_id) !== Number(user.pnf_saga_id))
+    ) {
+      return reply
+        .status(403)
+        .send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
+    }
+    const a = rows.find((r) => Number(r.id) === idA)!;
+    const b = rows.find((r) => Number(r.id) === idB)!;
+
+    // Las claves únicas (sección/aula/profesor por día+bloque) impiden mover A
+    // al slot de B mientras B siga ahí: se estaciona A en dia_semana = 0 (valor
+    // que la app nunca usa) dentro de una transacción y luego se ubica en el
+    // slot de B.
+    await conn.beginTransaction();
+    await conn.execute('UPDATE horario_entries SET dia_semana = 0 WHERE id = ?', [idA]);
+    await conn.execute(
+      'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
+      [a.dia_semana, a.bloque_id, a.aula_id, idB]
+    );
+    await conn.execute(
+      'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
+      [b.dia_semana, b.bloque_id, b.aula_id, idA]
+    );
+    await conn.commit();
+    return reply.send({ success: true, message: 'Clases intercambiadas.' });
+  } catch (error: any) {
+    try {
+      await conn.rollback();
+    } catch {
+      // no había transacción activa
+    }
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return reply.status(409).send({
+        success: false,
+        message:
+          'No se puede intercambiar: el profesor, el aula o la sección ya tiene otra clase en el bloque destino.',
+      });
+    }
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error intercambiando las clases.' });
+  } finally {
+    conn.release();
   }
 }
 

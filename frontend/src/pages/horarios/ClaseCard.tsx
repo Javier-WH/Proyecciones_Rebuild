@@ -11,8 +11,9 @@ export const ClaseCard: React.FC<{
   entry: HorarioEntry;
   fin?: string;
   compacto?: boolean;
+  error?: boolean;
   className?: string;
-}> = ({ entry, fin, compacto, className = '' }) => {
+}> = ({ entry, fin, compacto, error, className = '' }) => {
   const { colorDePnf, catalogo } = usePnfColors();
   const pnfColor = colorDePnf(entry.pnf_saga_id);
   const pnfNombre = catalogo.find((c) => c.id === entry.pnf_saga_id)?.nombre;
@@ -25,10 +26,16 @@ export const ClaseCard: React.FC<{
 
   return (
     <div
-      className={`rounded-lg border px-2 py-1 flex flex-col justify-center overflow-hidden select-none ${colorMateria(
+      className={`relative rounded-lg border px-2 py-1 flex flex-col justify-center overflow-hidden select-none ${colorMateria(
         entry.materia_id
       )} ${compacto ? 'flex-1 min-h-0' : 'h-full'} ${className}`}
     >
+      {error && (
+        <span
+          title="Esta clase tiene un conflicto — revisa el panel Errores"
+          className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-300/70 shadow-[0_0_6px_2px_rgba(239,68,68,0.7)] animate-pulse"
+        />
+      )}
       <div className="text-[11px] font-bold leading-tight flex items-start gap-1">
         {pnfColor && (
           <span

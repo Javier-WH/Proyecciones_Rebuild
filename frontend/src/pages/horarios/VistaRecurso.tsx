@@ -12,6 +12,7 @@ interface VistaRecursoProps {
   titulo: string;
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
+  enError?: Set<string> | null; // claves 'bloque_id:dia' con alguna violación (punto rojo)
 }
 
 interface Banda {
@@ -19,7 +20,7 @@ interface Banda {
   bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, enError }) => {
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -182,7 +183,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                   </td>
                 </tr>
               )}
-              {bloques.map((b) => {
+              {bloques.map((b, bIdx) => {
                 const esReceso = !!b.es_receso;
                 const celdaKey = (d: number) => (b.id > 0 ? `${b.id}:${d}` : `${b.hora_inicio}-${b.hora_fin}:${d}`);
                 const ocupacion = (d: number) =>
@@ -201,7 +202,12 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                             <td key={d} className="relative p-0 align-top" style={{ height: '1.75rem' }}>
                               <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
                                 {items.map((e) => (
-                                  <ClaseCard key={e.id} entry={e} compacto={items.length > 1} />
+                                  <ClaseCard
+                                    key={e.id}
+                                    entry={e}
+                                    compacto={items.length > 1}
+                                    error={enError?.has(`${e.bloque_id}:${e.dia_semana}`) ?? false}
+                                  />
                                 ))}
                               </div>
                             </td>
@@ -234,6 +240,15 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       const items = ocupacion(d);
                       const sp = b.id > 0 ? spans.get(key) : undefined;
                       const fusion = items.length === 1 && sp && sp.n > 1;
+                      // Error de la tarjeta o de alguna celda que absorbe por rowspan
+                      const enErr = (e?: HorarioEntry) =>
+                        !!enError &&
+                        (e
+                          ? enError.has(`${e.bloque_id}:${e.dia_semana}`)
+                          : items.some((x) => enError.has(`${x.bloque_id}:${x.dia_semana}`)) ||
+                            Array.from({ length: sp?.n ?? 1 }, (_, k) => bloques[bIdx + k]).some(
+                              (bl) => bl && enError.has(`${bl.id}:${d}`)
+                            ));
                       return (
                         <td
                           key={d}
@@ -248,6 +263,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                 entry={e}
                                 fin={fusion ? sp.fin : undefined}
                                 compacto={items.length > 1}
+                                error={items.length > 1 ? enErr(e) : enErr()}
                               />
                             ))}
                           </div>

@@ -18,6 +18,7 @@ import {
 import {
   listEntriesHandler,
   upsertEntryHandler,
+  swapEntriesHandler,
   deleteEntryHandler,
   generarHorarioHandler,
 } from './entries.controller.js';
@@ -60,6 +61,7 @@ export async function horariosRoutes(fastify: FastifyInstance) {
   // Entries del horario (una clase en un bloque/día/aula)
   fastify.get('/entries', { preHandler: [authenticate] }, listEntriesHandler);
   fastify.put('/entries', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, upsertEntryHandler);
+  fastify.post('/entries/swap', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, swapEntriesHandler);
   fastify.delete('/entries/:id', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, deleteEntryHandler);
   fastify.post('/generar', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, generarHorarioHandler);
 }

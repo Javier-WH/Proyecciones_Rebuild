@@ -247,6 +247,14 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     return out;
   }, [entries, secciones, turnos, config]);
 
+  // Celdas (bloque:día) involucradas en alguna violación: se marcan con un
+  // punto rojo en las tarjetas del horario.
+  const celdasEnError = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of violaciones) for (const b of v.bloques) s.add(`${b}:${v.dia}`);
+    return s;
+  }, [violaciones]);
+
   const irAViolacion = (v: Violacion) => {
     setVista('seccion');
     setSeccionId(v.seccion_id);
@@ -613,6 +621,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 trimestre={lapso.n}
                 puedeEditar={puedeEditar}
                 resaltar={resaltar}
+                enError={celdasEnError}
                 onChanged={fetchEntries}
               />
             ) : (
@@ -626,6 +635,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo={`Ocupación del aula ${aulas.find((a) => a.id === (aulaId ?? aulas[0]?.id))?.codigo ?? ''}`}
               entries={entries.filter((e) => e.aula_id === (aulaId ?? aulas[0]?.id))}
               turnos={turnos}
+              enError={celdasEnError}
             />
           )}
 
@@ -634,6 +644,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo="Agenda del profesor"
               entries={entries.filter((e) => e.profesor_id === (profesorId ?? profesores[0]?.id))}
               turnos={turnos}
+              enError={celdasEnError}
             />
           )}
         </>
