@@ -423,9 +423,11 @@ export async function initializeDatabase() {
   // La unidad agendada es (materia_id, seccion_id, trimestre) — la misma fila
   // "asignable" de la carga docente; profesor_id es un snapshot denormalizado
   // que se sincroniza al cambiar la asignación (NULL = materia sin profesor).
-  // Las claves únicas evitan choque de aula, sección y profesor dentro del mismo
-  // (periodo, régimen, lapso, día, bloque). El solape entre regímenes
-  // (SEMESTRAL S1 coexiste con TRIMESTRAL T1/T2) se valida en código.
+  // Las claves únicas evitan choque de aula y sección dentro del mismo
+  // (periodo, régimen, lapso, día, bloque). El choque exacto de profesor se
+  // valida en código (permitido con el modo "ignorar conflictos": se guarda y
+  // la auditoría lo marca). El solape entre regímenes (SEMESTRAL S1 coexiste
+  // con TRIMESTRAL T1/T2) también se valida en código.
   await db.query(`
     CREATE TABLE IF NOT EXISTS horario_entries (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -442,7 +444,6 @@ export async function initializeDatabase() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY uq_aula (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, aula_id),
       UNIQUE KEY uq_seccion (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, seccion_id),
-      UNIQUE KEY uq_profesor (periodo_academico, tipo_proyeccion, trimestre, dia_semana, bloque_id, profesor_id),
       FOREIGN KEY (materia_id) REFERENCES proyeccion_materias(id) ON DELETE CASCADE,
       FOREIGN KEY (seccion_id) REFERENCES proyeccion_secciones(id) ON DELETE CASCADE,
       FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE SET NULL,
@@ -476,6 +477,19 @@ export async function initializeDatabase() {
       'ALTER TABLE horario_config ADD COLUMN formato_12h TINYINT(1) NOT NULL DEFAULT 0 AFTER max_horas_dia'
     );
     console.log("✅ Columna 'formato_12h' agregada a la tabla horario_config");
+  }
+
+  // Migración idempotente: la clave única de profesor impedía guardar
+  // movimientos forzados con solape exacto; ahora se valida en código y la
+  // auditoría marca el conflicto (uq_aula y uq_seccion se conservan).
+  const [tieneUqProf] = await db.query<any[]>(
+    `SELECT COUNT(*) AS total FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'horario_entries' AND INDEX_NAME = 'uq_profesor'`,
+    [env.DB_NAME]
+  );
+  if (Number(tieneUqProf[0].total) > 0) {
+    await db.query('ALTER TABLE horario_entries DROP INDEX uq_profesor');
+    console.log("✅ Índice único 'uq_profesor' eliminado de horario_entries");
   }
 
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)

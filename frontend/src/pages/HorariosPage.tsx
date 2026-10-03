@@ -40,6 +40,9 @@ import {
   CheckCircle2,
   Search,
   Pencil,
+  Square,
+  CheckSquare,
+  ShieldAlert,
 } from 'lucide-react';
 
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
@@ -103,6 +106,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [generando, setGenerando] = useState(false);
   const [reporteOpen, setReporteOpen] = useState(false);
   const [erroresOpen, setErroresOpen] = useState(false);
+  const [forzar, setForzar] = useState(false); // mover clases ignorando solapes de aula/profesor/sección
   const [resaltar, setResaltar] = useState<Set<string> | null>(null);
   const [profEdit, setProfEdit] = useState<Profesor | null>(null);
 
@@ -487,6 +491,27 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               >
                 <Eraser className="w-3.5 h-3.5" /> Regenerar
               </button>
+              <button
+                onClick={() => setForzar((v) => !v)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer border transition-colors ${
+                  forzar
+                    ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 border-amber-500/50'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                }`}
+                title={
+                  forzar
+                    ? 'Movimiento forzado ACTIVO: los arrastres se guardan aunque generen conflictos (se marcan con el punto rojo)'
+                    : 'Permite mover clases aunque el aula, el profesor o la sección queden solapados; el conflicto se marca con el punto rojo'
+                }
+              >
+                {forzar ? (
+                  <CheckSquare className="w-3.5 h-3.5" />
+                ) : (
+                  <Square className="w-3.5 h-3.5" />
+                )}
+                Ignorar conflictos
+                {forzar && <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />}
+              </button>
             </>
           )}
           {tab === 'horario' && (
@@ -767,6 +792,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 config={config}
                 trimestre={lapso.n}
                 puedeEditar={puedeEditar}
+                forzar={forzar}
                 resaltar={resaltar}
                 enError={celdasEnError}
                 onChanged={fetchEntries}

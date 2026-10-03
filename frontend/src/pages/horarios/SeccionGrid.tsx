@@ -57,6 +57,7 @@ interface SeccionGridProps {
   config: HorarioConfig;
   trimestre: number;
   puedeEditar: boolean;
+  forzar?: boolean; // permite guardar movimientos con conflictos por solape
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
   onChanged: () => void;
@@ -71,6 +72,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   config,
   trimestre,
   puedeEditar,
+  forzar,
   resaltar,
   enError,
   onChanged,
@@ -255,6 +257,9 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     // Celda ocupada por otra clase: solo es destino válido para intercambio
     // (arrastrar una clase agendada sobre otra las intercambia de lugar)
     if (ocupada && ocupada.id !== drag.entry_id) return drag.tipo === 'entry';
+    // Modo forzado: se permiten solapes de profesor/sección/aula; el
+    // conflicto queda guardado y la auditoría lo marca con el punto rojo.
+    if (forzar) return true;
     const excl = drag.entry_id;
     for (const e of entries) {
       if (excl && e.id === excl) continue;
@@ -295,6 +300,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           entry_ids: drag.entry_ids,
           dia_semana: dia,
           bloque_id: bloque.id,
+          forzar: !!forzar,
         }),
       });
       if (res.success) {
@@ -312,7 +318,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       if (drag.tipo !== 'entry' || !drag.entry_id) return;
       const res = await apiFetch('/horarios/entries/swap', {
         method: 'POST',
-        body: JSON.stringify({ entry_id_a: drag.entry_id, entry_id_b: destino.id }),
+        body: JSON.stringify({
+          entry_id_a: drag.entry_id,
+          entry_id_b: destino.id,
+          forzar: !!forzar,
+        }),
       });
       if (res.success) {
         mostrarAviso(`Intercambio: '${drag.titulo}' ↔ '${destino.materia_nombre}'.`, 'ok');
@@ -331,6 +341,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         trimestre,
         dia_semana: dia,
         bloque_id: bloque.id,
+        forzar: !!forzar,
       }),
     });
     if (res.success) {

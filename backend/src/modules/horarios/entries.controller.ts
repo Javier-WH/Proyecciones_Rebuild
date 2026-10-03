@@ -103,6 +103,7 @@ interface EntryBody {
   dia_semana: number;
   bloque_id: number;
   aula_id?: number | null;
+  forzar?: boolean; // guardar aunque haya conflictos por solape (auditoría los marca)
 }
 
 // Resuelve y valida la unidad agendable (materia × sección × lapso) y el slot destino.
@@ -256,6 +257,7 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     } = ctx;
     const dia = Number(body.dia_semana);
     const seccionId = Number(body.seccion_id);
+    const forzar = !!body.forzar;
     const cuandoTxt = `el ${DIAS[dia] || dia} a las ${hhmm(bloque.hora_inicio)}`;
 
     // Aula: la pedida, la existente (si sigue libre) o auto-asignación
@@ -312,10 +314,12 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
     }
     if (aulaId === null && entryId) {
       const actual = await query<any[]>('SELECT aula_id FROM horario_entries WHERE id = ?', [entryId]);
-      if (actual.length > 0 && !ocupadas.has(actual[0].aula_id)) aulaId = actual[0].aula_id;
+      if (actual.length > 0 && (!ocupadas.has(actual[0].aula_id) || forzar)) aulaId = actual[0].aula_id;
     }
     if (aulaId === null) {
-      aulaId = elegirAula(aulas, ocupadas, usoPorAula, pnfSagaId);
+      // Con forzar se ignora la ocupación y se toma el aula menos usada; el
+      // solape resultante lo marca la auditoría con el punto rojo.
+      aulaId = elegirAula(aulas, forzar ? new Set<number>() : ocupadas, usoPorAula, pnfSagaId);
       if (aulaId === null) {
         return reply.status(409).send({
           success: false,
@@ -345,11 +349,14 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
         choque.bloque_id === Number(body.bloque_id) &&
         choque.tipo_proyeccion === tipo &&
         Number(choque.trimestre) === trimestre;
-      // Aula heredada ocupada por otra clase en horario traslapado (pero no en
-      // el mismo bloque del mismo lapso): se permite guardar para que la
-      // auditoría marque el choque con el punto rojo. Un choque exacto no se
-      // puede guardar por la clave única de la tabla.
-      if (!(aulaHeredada && soloChoqueAula && !choqueExacto)) {
+      // Choque exacto de aula o sección: físicamente imposible (sus claves
+      // únicas siguen activas). El de profesor ya no tiene clave única: con
+      // `forzar` se guarda y la auditoría lo marca; sin `forzar` se rechaza.
+      const exactoImposible =
+        choqueExacto && (choque.aula_id === aulaId || choque.seccion_id === seccionId);
+      const permitido =
+        !exactoImposible && (forzar || (aulaHeredada && soloChoqueAula && !choqueExacto));
+      if (!permitido) {
         const otra = choque.materia_nombre ?? 'otra clase';
         let msg = `Conflicto de horario\nNo se puede agendar '${materiaNombre}' ${cuandoTxt}.`;
         if (choque.aula_id === aulaId) {
@@ -403,9 +410,14 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
 // POST /api/horarios/entries/swap — intercambia día/bloque/aula entre dos
 // clases conservando materia, sección, profesor y demás datos de cada una.
 export async function swapEntriesHandler(request: FastifyRequest, reply: FastifyReply) {
-  const body = request.body as { entry_id_a?: number; entry_id_b?: number };
+  const body = request.body as {
+    entry_id_a?: number;
+    entry_id_b?: number;
+    forzar?: boolean; // admite choque exacto de profesor (auditoría lo marca)
+  };
   const idA = Number(body.entry_id_a);
   const idB = Number(body.entry_id_b);
+  const forzar = !!body.forzar;
   if (!Number.isInteger(idA) || !Number.isInteger(idB) || idA <= 0 || idB <= 0 || idA === idB) {
     return reply
       .status(400)
@@ -440,6 +452,39 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
     }
     const a = rows.find((r) => Number(r.id) === idA)!;
     const b = rows.find((r) => Number(r.id) === idB)!;
+
+    // Choque exacto de profesor (mismo lapso, día y bloque): ya no hay clave
+    // única — se valida en código. Con `forzar` se permite y la auditoría lo
+    // marca con el punto rojo.
+    if (!forzar) {
+      const profOcupado = async (profId: number | null, e: (typeof rows)[number], dest: (typeof rows)[number]) => {
+        if (profId === null) return false;
+        const [p] = await conn.execute<any[]>(
+          `SELECT id FROM horario_entries
+           WHERE periodo_academico = ? AND tipo_proyeccion = ? AND trimestre = ?
+             AND dia_semana = ? AND bloque_id = ? AND profesor_id = ?
+             AND id NOT IN (?, ?)
+           LIMIT 1`,
+          [
+            e.periodo_academico, e.tipo_proyeccion, e.trimestre,
+            dest.dia_semana, dest.bloque_id, profId, idA, idB,
+          ]
+        );
+        return p.length > 0;
+      };
+      if (await profOcupado(a.profesor_id, a, b)) {
+        return reply.status(409).send({
+          success: false,
+          message: 'Conflicto de Profesor\nEl profesor ya tiene otra clase en el bloque destino.',
+        });
+      }
+      if (await profOcupado(b.profesor_id, b, a)) {
+        return reply.status(409).send({
+          success: false,
+          message: 'Conflicto de Profesor\nEl profesor ya tiene otra clase en el bloque destino.',
+        });
+      }
+    }
 
     // Las claves únicas (sección/aula/profesor por día+bloque) impiden mover A
     // al slot de B mientras B siga ahí: se estaciona A en dia_semana = 0 (valor
@@ -545,12 +590,18 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
 // sección que ocupen los slots destino se reubican en los slots que deja libre
 // el grupo (intercambio por desplazamiento, conservando el aula de cada slot).
 export async function moveGroupHandler(request: FastifyRequest, reply: FastifyReply) {
-  const body = request.body as { entry_ids?: number[]; dia_semana?: number; bloque_id?: number };
+  const body = request.body as {
+    entry_ids?: number[];
+    dia_semana?: number;
+    bloque_id?: number;
+    forzar?: boolean; // guardar aunque haya solapes de aula (auditoría los marca)
+  };
   const ids = [...new Set((body.entry_ids ?? []).map(Number))].filter(
     (n) => Number.isInteger(n) && n > 0
   );
   const dia = Number(body.dia_semana);
   const bloqueId = Number(body.bloque_id);
+  const forzar = !!body.forzar;
   if (ids.length === 0 || !Number.isInteger(dia) || !Number.isInteger(bloqueId) || bloqueId <= 0) {
     return reply
       .status(400)
@@ -657,6 +708,21 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     const usoPorAula = new Map<number, number>();
     for (const e of resto) usoPorAula.set(e.aula_id, (usoPorAula.get(e.aula_id) ?? 0) + 1);
 
+    // Aulas ocupadas en el slot EXACTO (mismo lapso, día y bloque): esas no
+    // se pueden reutilizar ni con `forzar` porque la clave única lo impide.
+    const exactOcup = (diaN: number, bloqueIdN: number) =>
+      new Set(
+        resto
+          .filter(
+            (e) =>
+              e.dia_semana === diaN &&
+              Number(e.bloque_id) === bloqueIdN &&
+              e.tipo_proyeccion === tipo &&
+              Number(e.trimestre) === Number(trimestre)
+          )
+          .map((e) => Number(e.aula_id))
+      );
+
     const foraneoPorSlot = new Map<number, any>(foraneos.map((f) => [Number(f.bloque_id), f]));
     const asignRun: { id: number; aula: number }[] = [];
     for (const [i, r] of run.entries()) {
@@ -665,11 +731,20 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
       const ocupadas = aulasOcupadas(resto, dia, dest.hora_inicio, dest.hora_fin);
       // En slot ocupado: el aula del foráneo (intercambio). En slot vacío:
       // conservar la propia si sigue libre, si no, auto-asignar la menos usada.
+      // Con `forzar` se conservan las aulas aunque queden solapadas (la
+      // auditoría marca el conflicto) y el fallback toma la menos usada.
       let aulaId: number | null = fora ? Number(fora.aula_id) : null;
-      if (aulaId !== null && ocupadas.has(aulaId)) aulaId = null;
-      if (aulaId === null && !ocupadas.has(Number(r.aula_id))) aulaId = Number(r.aula_id);
+      if (aulaId !== null && ocupadas.has(aulaId) && !forzar) aulaId = null;
+      if (aulaId === null && (!ocupadas.has(Number(r.aula_id)) || forzar)) {
+        aulaId = Number(r.aula_id);
+      }
       if (aulaId === null) {
-        aulaId = elegirAula(aulas, ocupadas, usoPorAula, run[0].pnf_saga_id);
+        aulaId = elegirAula(
+          aulas,
+          forzar ? new Set<number>() : ocupadas,
+          usoPorAula,
+          run[0].pnf_saga_id
+        );
         if (aulaId === null) {
           return reply.status(409).send({
             success: false,
@@ -677,18 +752,65 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
           });
         }
       }
+      // Ni con `forzar` puede repetirse el aula en el mismo bloque del mismo
+      // lapso: en ese caso se toma otra (idealmente libre; si no, la menos
+      // usada — el solape lo marca la auditoría).
+      const exactas = exactOcup(dia, Number(dest.id));
+      if (exactas.has(aulaId)) {
+        aulaId = elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id) ?? aulaId;
+      }
       asignRun.push({ id: Number(r.id), aula: aulaId });
       usoPorAula.set(aulaId, (usoPorAula.get(aulaId) ?? 0) + 1);
     }
 
+    // Choque exacto de profesor (mismo lapso, día y bloque): uq_profesor ya no
+    // existe como clave única — se valida en código. Sin `forzar` se rechaza;
+    // con `forzar` se guarda y la auditoría lo marca con el punto rojo.
+    const profExacto = (diaN: number, bloqueIdN: number, profId: number | null) =>
+      profId !== null &&
+      resto.some(
+        (e) =>
+          e.dia_semana === diaN &&
+          Number(e.bloque_id) === bloqueIdN &&
+          e.tipo_proyeccion === tipo &&
+          Number(e.trimestre) === Number(trimestre) &&
+          e.profesor_id !== null &&
+          Number(e.profesor_id) === Number(profId)
+      );
+    if (!forzar) {
+      if (run.some((r, i) => profExacto(dia, Number(destinos[i].id), r.profesor_id))) {
+        return reply.status(409).send({
+          success: false,
+          message:
+            'Conflicto de Profesor\nEl profesor ya tiene otra clase en alguno de los bloques destino.',
+        });
+      }
+      const foraChoca = foraneos.some((f, j) => {
+        const s = origenLibres[j];
+        return s && profExacto(s.dia_semana, Number(s.bloque_id), f.profesor_id);
+      });
+      if (foraChoca) {
+        return reply.status(409).send({
+          success: false,
+          message:
+            'Conflicto de Profesor\nLa clase desplazada al origen choca con otra del mismo profesor.',
+        });
+      }
+    }
+
     // Las claves únicas por (día, bloque) impiden mover en dos pasos: todo lo
-    // afectado se estaciona en dia_semana = 0 dentro de una transacción.
+    // afectado se estaciona en días negativos distintos (-1, -2, …) dentro de
+    // una transacción. No puede ser el mismo día para todos: dos clases de la
+    // misma sección con el mismo bloque_id en días distintos chocarían en la
+    // clave única al estacionarse juntas en dia_semana = 0.
     await conn.beginTransaction();
     const todosIds = [...runIds, ...foraneos.map((f) => Number(f.id))];
-    await conn.execute(
-      `UPDATE horario_entries SET dia_semana = 0 WHERE id IN (${todosIds.map(() => '?').join(',')})`,
-      todosIds
-    );
+    for (const [i, id] of todosIds.entries()) {
+      await conn.execute('UPDATE horario_entries SET dia_semana = ? WHERE id = ?', [
+        -(i + 1),
+        id,
+      ]);
+    }
     for (const [i, r] of run.entries()) {
       await conn.execute(
         'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
@@ -697,9 +819,18 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     }
     for (const [j, f] of foraneos.entries()) {
       const s = origenLibres[j];
+      // El aula del slot origen puede estar ocupada exacta por otra sección:
+      // en ese caso se conserva la propia del desplazado o se elige otra.
+      let aulaDest = Number(s.aula_id);
+      const exactas = exactOcup(s.dia_semana, Number(s.bloque_id));
+      if (exactas.has(aulaDest)) {
+        aulaDest = !exactas.has(Number(f.aula_id))
+          ? Number(f.aula_id)
+          : (elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id) ?? aulaDest);
+      }
       await conn.execute(
         'UPDATE horario_entries SET dia_semana = ?, bloque_id = ?, aula_id = ? WHERE id = ?',
-        [s.dia_semana, s.bloque_id, s.aula_id, f.id]
+        [s.dia_semana, s.bloque_id, aulaDest, f.id]
       );
     }
 
@@ -954,9 +1085,31 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
         .send({ success: false, message: 'No hay aulas activas registradas.' });
     }
 
+    // Choque exacto de profesor (uq_profesor ya no existe: se valida en
+    // código). Los traslapados se guardan y los marca la auditoría.
+    if (profesorId !== null) {
+      const profOcup = entries.find(
+        (e) =>
+          e.dia_semana === dia &&
+          e.tipo_proyeccion === tipo &&
+          Number(e.trimestre) === Number(trimestre) &&
+          e.profesor_id !== null &&
+          Number(e.profesor_id) === Number(profesorId) &&
+          destinos.some((d) => Number(d.id) === Number(e.bloque_id))
+      );
+      if (profOcup) {
+        return reply.status(409).send({
+          success: false,
+          message:
+            `Conflicto de Profesor\nEl profesor ya tiene otra clase el ${DIAS[dia] || dia} ` +
+            'en alguno de esos bloques.',
+        });
+      }
+    }
+
     // Insertar las N clases en transacción (todo o nada). Los choques de aula
     // o profesor por horas traslapadas se guardan y los marca la auditoría;
-    // un choque exacto hace rollback por las claves únicas.
+    // un choque exacto de aula o sección hace rollback por las claves únicas.
     const conn = await getDbPool().getConnection();
     try {
       await conn.beginTransaction();
