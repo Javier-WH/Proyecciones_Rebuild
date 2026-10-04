@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHoraCfg, minutos, normMateria } from './types.js';
-import { ClaseCard, ClaseDividida } from './ClaseCard.js';
+import { ClaseCard, ClaseCascada } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
 // Vista de solo lectura: grilla días × bloques con las clases de un recurso
@@ -109,53 +109,6 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
     return map;
   }, [entries]);
 
-  // Runs verticales por día dentro de cada banda: bloques consecutivos (sin
-  // receso de por medio) con la misma materia+sección+aula se fusionan en una
-  // sola celda (rowSpan). Solo se fusiona si cada celda tiene una sola clase.
-  const { spans, cubiertas } = useMemo(() => {
-    const spans = new Map<string, { n: number; fin: string }>();
-    const cubiertas = new Set<string>();
-    for (const { bloques } of bandas) {
-      for (const d of dias) {
-        let i = 0;
-        while (i < bloques.length) {
-          const b = bloques[i];
-          if (b.es_receso) {
-            i++;
-            continue;
-          }
-          const cell = porCelda.get(`${b.id}:${d}`) || [];
-          if (cell.length !== 1) {
-            i++;
-            continue;
-          }
-          const e = cell[0];
-          let n = 1;
-          let fin = b.hora_fin;
-          let j = i + 1;
-          while (j < bloques.length && !bloques[j].es_receso) {
-            const nc = porCelda.get(`${bloques[j].id}:${d}`) || [];
-            const nxt =
-              nc.length === 1 &&
-              nc[0].materia_id === e.materia_id &&
-              nc[0].seccion_id === e.seccion_id &&
-              nc[0].aula_id === e.aula_id
-                ? nc[0]
-                : null;
-            if (!nxt) break;
-            cubiertas.add(`${bloques[j].id}:${d}`);
-            n++;
-            fin = bloques[j].hora_fin;
-            j++;
-          }
-          if (n > 1) spans.set(`${b.id}:${d}`, { n, fin });
-          i = j;
-        }
-      }
-    }
-    return { spans, cubiertas };
-  }, [bandas, dias, porCelda]);
-
   // Parejas del choque parcial T2↔semestre que están en ESTA vista del
   // recurso (un choque de aula puede ser con otra sección/profesor que no
   // aparece aquí → se ignora). Son exactamente los pares del icono verde.
@@ -170,6 +123,84 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
   // bloque, no una región por hora intercalada.
   const claveMateria = (e: HorarioEntry) =>
     `${e.seccion_id}|${normMateria(e.materia_nombre)}|${e.profesor_id ?? 0}`;
+
+  // Conjunto de clases del slot: propias + parejas del choque parcial (pueden
+  // estar en otra banda). Se usa para conectar celdas contiguas.
+  const setCelda = (items: HorarioEntry[]): Set<string> => {
+    const s = new Set<string>();
+    for (const e of items) {
+      for (const x of [e, ...parejasDe(e)]) s.add(`${claveMateria(x)}|${x.aula_id ?? 0}`);
+    }
+    return s;
+  };
+
+  const sigCelda = (items: HorarioEntry[]): string => [...setCelda(items)].sort().join(';');
+
+  const hayPareja = (items: HorarioEntry[]) => items.some((e) => parejasDe(e).length > 0);
+
+  // Runs verticales por día dentro de cada banda. Las celdas contiguas que
+  // comparten alguna clase (propia o pareja T2↔semestre) forman un cluster:
+  //   · si el cluster contiene un choque parcial → se fusiona ENTERO y se
+  //     dibuja como cascada a posición temporal real (la materia que empieza
+  //     antes atrás, las siguientes encima desplazadas);
+  //   · si no hay choque → solo se fusionan celdas de firma idéntica (el
+  //     bloque limpio de siempre).
+  const { spans, cubiertas } = useMemo(() => {
+    const spans = new Map<string, { n: number; fin: string }>();
+    const cubiertas = new Set<string>();
+    for (const { bloques } of bandas) {
+      for (const d of dias) {
+        let i = 0;
+        while (i < bloques.length) {
+          const b = bloques[i];
+          if (b.es_receso) {
+            i++;
+            continue;
+          }
+          const cell = porCelda.get(`${b.id}:${d}`) || [];
+          if (cell.length === 0) {
+            i++;
+            continue;
+          }
+          // Cluster: absorbe celdas contiguas que compartan alguna clase
+          const acum = new Set(setCelda(cell));
+          let tienePareja = hayPareja(cell);
+          let j = i + 1;
+          while (j < bloques.length && !bloques[j].es_receso) {
+            const nc = porCelda.get(`${bloques[j].id}:${d}`) || [];
+            if (nc.length === 0) break;
+            const s = setCelda(nc);
+            if (![...s].some((k) => acum.has(k))) break;
+            for (const k of s) acum.add(k);
+            if (hayPareja(nc)) tienePareja = true;
+            j++;
+          }
+          if (j - i > 1) {
+            let fusionar = tienePareja;
+            if (!fusionar) {
+              const sig = sigCelda(cell);
+              fusionar = true;
+              for (let k = i + 1; k < j; k++) {
+                if (sigCelda(porCelda.get(`${bloques[k].id}:${d}`) || []) !== sig) {
+                  fusionar = false;
+                  break;
+                }
+              }
+            }
+            if (fusionar) {
+              spans.set(`${b.id}:${d}`, { n: j - i, fin: bloques[j - 1].hora_fin });
+              for (let k = i + 1; k < j; k++) cubiertas.add(`${bloques[k].id}:${d}`);
+              i = j;
+              continue;
+            }
+          }
+          i++;
+        }
+      }
+    }
+    return { spans, cubiertas };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bandas, dias, porCelda, porId, parejasParciales]);
 
   // Tarjetas a renderizar en una celda, agrupadas por materia: las propias
   // de la celda más las parejas de choque parcial de todas ellas (pueden
@@ -203,6 +234,8 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
   const itemDividido = (g: HorarioEntry[]) => ({
     entry: g[0],
     lapsoTexto: lapsoTexto(g[0]),
+    iniMin: Math.min(...g.map((x) => minutos(x.hora_inicio))),
+    finMin: Math.max(...g.map((x) => minutos(x.hora_fin))),
     horas: (() => {
       const ini = g.map((x) => x.hora_inicio).sort()[0];
       const fin = g.map((x) => x.hora_fin).sort().slice(-1)[0];
@@ -285,7 +318,11 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     ))}
                                   </div>
                                 ) : (
-                                  <ClaseDividida items={grupoDe(items).map(itemDividido)} />
+                                  <ClaseCascada
+                                    items={grupoDe(items).map(itemDividido)}
+                                    rangoInicio={minutos(b.hora_inicio)}
+                                    rangoFin={minutos(b.hora_fin)}
+                                  />
                                 )}
                               </div>
                             </td>
@@ -317,7 +354,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       if (b.id > 0 && cubiertas.has(key)) return null;
                       const items = ocupacion(d);
                       const sp = b.id > 0 ? spans.get(key) : undefined;
-                      const fusion = items.length === 1 && sp && sp.n > 1;
+                      const fusion = sp && sp.n > 1;
                       // Errores de la tarjeta o de alguna celda que absorbe por rowspan
                       const errsDe = (e?: HorarioEntry): ErrorClase[] => {
                         if (!enError) return [];
@@ -381,8 +418,10 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                               }
                               if (itemsRun.some((e) => parejasDe(e).length > 0)) {
                                 return (
-                                  <ClaseDividida
+                                  <ClaseCascada
                                     items={grupoDe(itemsRun.length > 0 ? itemsRun : items).map(itemDividido)}
+                                    rangoInicio={minutos(b.hora_inicio)}
+                                    rangoFin={minutos(fusion ? sp!.fin : b.hora_fin)}
                                   />
                                 );
                               }

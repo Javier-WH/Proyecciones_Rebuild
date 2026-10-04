@@ -207,6 +207,8 @@ export interface ItemDividido {
   entry: HorarioEntry;
   lapsoTexto?: string; // lapso lógico a mostrar ('Semestre 1'); si falta se deriva de la entry
   horas?: string; // rango horario del grupo ('HH:MM–HH:MM'), ya formateado
+  iniMin?: number; // inicio del grupo en minutos (para posición en cascada)
+  finMin?: number; // fin del grupo en minutos
   errores?: ErrorClase[];
   advertencias?: string[];
   avisosParciales?: string[];
@@ -300,6 +302,138 @@ export const ClaseDividida: React.FC<{
           </div>
         </div>
       ))}
+    </div>
+  );
+};
+
+// ── Cascada: choque parcial particionado por franjas de tiempo real ───────
+// El espacio del cluster se corta horizontalmente en los límites reales de
+// las clases; cada franja reparte su ancho en columnas iguales entre las
+// materias presentes. La posición horizontal es estable: cada materia ocupa
+// un "carril" (coloreo de intervalos — el carril más bajo que no se solape
+// con ella), así si una materia sigue en la franja de abajo conserva su
+// columna, y una materia nueva que cabe en un carril libre ocupa su espacio.
+export const ClaseCascada: React.FC<{
+  items: ItemDividido[]; // cada item trae iniMin/finMin del grupo
+  rangoInicio: number; // minutos
+  rangoFin: number; // minutos
+  onItemClick?: (entry: HorarioEntry) => void;
+}> = ({ items, rangoInicio, rangoFin, onItemClick }) => {
+  if (items.length === 0) return null;
+  const span = Math.max(1, rangoFin - rangoInicio);
+  const orden = [...items].sort(
+    (a, b) =>
+      (a.iniMin ?? rangoInicio) - (b.iniMin ?? rangoInicio) ||
+      (b.finMin ?? rangoFin) - (a.finMin ?? rangoFin)
+  );
+  const iniDe = (it: ItemDividido) => Math.max(it.iniMin ?? rangoInicio, rangoInicio);
+  const finDe = (it: ItemDividido) => Math.min(it.finMin ?? rangoFin, rangoFin);
+
+  // Carril de cada materia: el más bajo libre a su hora de inicio
+  const carrilDe = new Map<ItemDividido, number>();
+  const finCarril: number[] = [];
+  for (const it of orden) {
+    let c = finCarril.findIndex((f) => f <= (it.iniMin ?? rangoInicio));
+    if (c === -1) {
+      c = finCarril.length;
+      finCarril.push(0);
+    }
+    finCarril[c] = Math.max(finCarril[c], it.finMin ?? rangoFin);
+    carrilDe.set(it, c);
+  }
+
+  // Cortes = todos los inicios/fines reales dentro del rango + los bordes
+  const cortes = new Set<number>([rangoInicio, rangoFin]);
+  for (const it of orden) {
+    cortes.add(iniDe(it));
+    cortes.add(finDe(it));
+  }
+  const bounds = [...cortes].sort((a, b) => a - b);
+
+  // Franjas entre cortes; se fusionan las contiguas con el mismo conjunto
+  // de carriles activos (una materia continua queda como una sola región)
+  interface Franja {
+    t0: number;
+    t1: number;
+    activas: ItemDividido[]; // ordenadas de mayor a menor carril
+    key: string;
+  }
+  const franjas: Franja[] = [];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const t0 = bounds[k];
+    const t1 = bounds[k + 1];
+    if (t1 <= t0) continue;
+    const activas = orden.filter((it) => iniDe(it) < t1 && finDe(it) > t0);
+    if (activas.length === 0) continue;
+    activas.sort((a, b) => (carrilDe.get(b) ?? 0) - (carrilDe.get(a) ?? 0));
+    const key = activas.map((it) => carrilDe.get(it)).join(',');
+    const prev = franjas[franjas.length - 1];
+    if (prev && prev.key === key && prev.t1 === t0) prev.t1 = t1;
+    else franjas.push({ t0, t1, activas, key });
+  }
+
+  // La etiqueta de cada materia se muestra solo en su franja más alta
+  const mejorFranja = new Map<ItemDividido, number>();
+  franjas.forEach((f, idx) => {
+    for (const it of f.activas) {
+      const cur = mejorFranja.get(it);
+      if (cur === undefined || f.t1 - f.t0 > franjas[cur].t1 - franjas[cur].t0) {
+        mejorFranja.set(it, idx);
+      }
+    }
+  });
+
+  return (
+    <div className="absolute inset-0 select-none overflow-hidden rounded-lg">
+      {franjas.map((f, fi) => {
+        const top = ((f.t0 - rangoInicio) / span) * 100;
+        const alto = ((f.t1 - f.t0) / span) * 100;
+        const n = f.activas.length;
+        return f.activas.map((it, col) => (
+          <div
+            key={`${fi}-${col}`}
+            className="absolute"
+            style={{
+              top: `${top}%`,
+              height: `${alto}%`,
+              left: `${(col / n) * 100}%`,
+              width: `${100 / n}%`,
+            }}
+            onClick={() => onItemClick?.(it.entry)}
+          >
+            {/* Base opaca: el tinte de materia es translúcido y sin ella se
+                verían las regiones de atrás al solaparse */}
+            <div className="absolute inset-0 bg-slate-900" />
+            <div
+              className={`relative h-full overflow-hidden border border-slate-950/40 ${colorMateria(
+                it.entry.materia_id
+              )} ${onItemClick ? 'cursor-pointer' : ''}`}
+            >
+              {mejorFranja.get(it) === fi && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-1 pb-3 text-center">
+                  <span
+                    className="text-[10px] font-bold leading-tight line-clamp-2"
+                    title={`${it.entry.materia_nombre} · ${it.entry.seccion_nombre}`}
+                  >
+                    {it.entry.materia_nombre}
+                  </span>
+                  <span className="text-[8px] opacity-80 leading-tight truncate max-w-full mt-0.5">
+                    {it.entry.seccion_nombre} · {lapsoDe(it)} · {it.entry.turno_nombre}
+                  </span>
+                  {it.horas && (
+                    <span className="text-[8px] opacity-80 leading-tight truncate max-w-full">
+                      {it.horas}
+                    </span>
+                  )}
+                  <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
+                    <MiniAvisos item={it} horizontal />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ));
+      })}
     </div>
   );
 };
