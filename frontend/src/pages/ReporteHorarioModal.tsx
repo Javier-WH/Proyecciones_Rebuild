@@ -50,7 +50,46 @@ interface HojaRep {
   lineas: string[]; // encabezado institucional
   dias: number[];
   filas: FilaRep[];
+  spans: Map<string, number>; // 'filaIdx:diaIdx' → alto del bloque fusionado
+  cubiertas: Set<string>; // celdas absorbidas por un span (no se dibujan)
 }
+
+// Firma de una celda para decidir si se fusiona con la de arriba: mismas
+// clases (materia + datos secundarios) = misma clase continuando.
+const sigCeldaRep = (c: CeldaRep[] | null): string | null =>
+  c && c.length > 0 ? c.map((x) => `${x.mat}|${x.subs.join('|')}`).join(';;') : null;
+
+// Fusiones verticales: celdas contiguas del mismo día con la misma firma
+// forman una sola celda alta (como el rowspan de la vista). Una fila
+// separadora/receso entre medias corta la fusión.
+const fusionesDe = (filas: FilaRep[], nDias: number) => {
+  const spans = new Map<string, number>();
+  const cubiertas = new Set<string>();
+  for (let d = 0; d < nDias; d++) {
+    let i = 0;
+    while (i < filas.length) {
+      const f = filas[i];
+      if (f.kind !== 'bloque' || !sigCeldaRep(f.celdas[d])) {
+        i++;
+        continue;
+      }
+      const sig = sigCeldaRep(f.celdas[d]);
+      let j = i + 1;
+      while (
+        j < filas.length &&
+        filas[j].kind === 'bloque' &&
+        sigCeldaRep((filas[j] as { celdas: (CeldaRep[] | null)[] }).celdas[d]) === sig
+      )
+        j++;
+      if (j - i > 1) {
+        spans.set(`${i}:${d}`, j - i);
+        for (let k = i + 1; k < j; k++) cubiertas.add(`${k}:${d}`);
+      }
+      i = j;
+    }
+  }
+  return { spans, cubiertas };
+};
 
 interface GrupoLapso {
   tipo: string;
@@ -274,6 +313,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       ],
       dias,
       filas,
+      ...fusionesDe(filas, dias.length),
     };
   };
 
@@ -336,6 +376,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       lineas: [...ENCABEZADO, `${titulo} — ${g.label.toUpperCase()}`, `PERIODO ${periodo ?? ''}`],
       dias,
       filas,
+      ...fusionesDe(filas, dias.length),
     };
   };
 
@@ -425,7 +466,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
         }
         fila++;
 
-        for (const f of h.filas) {
+        h.filas.forEach((f, fi) => {
           const r = ws.getRow(fila);
           if (f.kind === 'sep' || f.kind === 'rec') {
             ws.mergeCells(fila, 1, fila, cols);
@@ -439,9 +480,12 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
             r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
             f.celdas.forEach((celda, i) => {
               const c = r.getCell(2 + i);
+              if (h.cubiertas.has(`${fi}:${i}`)) return; // absorbida por el merge de arriba
               if (celda && celda.length > 0) {
                 c.value = celda.map((x) => `${x.mat}\n${x.subs.join('\n')}`).join('\n— — —\n');
                 c.alignment = { wrapText: true, vertical: 'middle' };
+                const sp = h.spans.get(`${fi}:${i}`);
+                if (sp && sp > 1) ws.mergeCells(fila, 2 + i, fila + sp - 1, 2 + i);
               } else {
                 c.alignment = { vertical: 'middle' };
               }
@@ -450,7 +494,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           }
           for (let c = 1; c <= cols; c++) r.getCell(c).border = borde;
           fila++;
-        }
+        });
 
         ws.pageSetup = {
           paperSize: 5,
@@ -486,23 +530,26 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       .map((h) => {
         const encabezado = h.lineas.map((l) => `<div class="hline">${escapeHtml(l)}</div>`).join('');
         const filas = h.filas
-          .map((f) => {
+          .map((f, fi) => {
             if (f.kind === 'sep')
               return `<tr><td colspan="${h.dias.length + 1}" class="sep">${escapeHtml(f.texto)}</td></tr>`;
             if (f.kind === 'rec')
               return `<tr><td colspan="${h.dias.length + 1}" class="receso">${escapeHtml(f.texto)}</td></tr>`;
             const tds = f.celdas
-              .map((celda) =>
-                celda && celda.length > 0
-                  ? `<td>${celda
+              .map((celda, di) => {
+                if (h.cubiertas.has(`${fi}:${di}`)) return ''; // absorbida por rowspan
+                const sp = h.spans.get(`${fi}:${di}`);
+                const rs = sp && sp > 1 ? ` rowspan="${sp}"` : '';
+                return celda && celda.length > 0
+                  ? `<td${rs} class="clase">${celda
                       .map(
                         (x) =>
                           `<div class="mat">${escapeHtml(x.mat)}</div>` +
                           x.subs.map((s) => `<div class="sub">${escapeHtml(s)}</div>`).join('')
                       )
                       .join('<div class="cardsep"></div>')}</td>`
-                  : '<td></td>'
-              )
+                  : `<td${rs}></td>`;
+              })
               .join('');
             return `<tr><td class="hora">${escapeHtml(f.hora)}</td>${tds}</tr>`;
           })
@@ -526,6 +573,7 @@ th { text-align: center; vertical-align: middle; font-weight: bold; }
 td.hora { text-align: center; vertical-align: middle; font-size: 7.5pt; white-space: nowrap; }
 td.receso { text-align: center; font-weight: bold; letter-spacing: 0.3em; color: #666; font-size: 7.5pt; }
 td.sep { text-align: center; font-weight: bold; letter-spacing: 0.3em; background: #eee; font-size: 7.5pt; }
+td.clase { vertical-align: middle; }
 .mat { font-weight: bold; }
 .sub { font-size: 7.5pt; color: #333; }
 .cardsep { border-top: 1px dashed #999; margin: 3px 0; }
