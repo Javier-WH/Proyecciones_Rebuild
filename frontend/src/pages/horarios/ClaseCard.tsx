@@ -408,6 +408,41 @@ export const ClaseCascada: React.FC<{
     }
   });
 
+  // Separadores SOLO entre materias distintas (no cortes internos de la
+  // misma clase): verticales entre columnas de una franja; horizontales
+  // solo en los tramos donde la materia cambia al cruzar la franja.
+  interface Sep {
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  }
+  const seps: Sep[] = [];
+  const pctY = (t: number) => ((t - rangoInicio) / span) * 100;
+  for (const f of franjas) {
+    const n = f.celdas.length;
+    for (let c = 1; c < n; c++) {
+      seps.push({ x0: (c / n) * 100, y0: pctY(f.t0), x1: (c / n) * 100, y1: pctY(f.t1) });
+    }
+  }
+  const ocupanteDe = (f: Franja, x: number) =>
+    f.celdas[Math.min(f.celdas.length - 1, Math.floor((x / 100) * f.celdas.length))].it;
+  for (let i = 0; i + 1 < franjas.length; i++) {
+    const f = franjas[i];
+    const g = franjas[i + 1];
+    if (f.t1 !== g.t0) continue;
+    const xs = new Set<number>([0, 100]);
+    for (let c = 1; c < f.celdas.length; c++) xs.add((c / f.celdas.length) * 100);
+    for (let c = 1; c < g.celdas.length; c++) xs.add((c / g.celdas.length) * 100);
+    const exs = [...xs].sort((a, b) => a - b);
+    for (let k = 0; k + 1 < exs.length; k++) {
+      const mid = (exs[k] + exs[k + 1]) / 2;
+      if (ocupanteDe(f, mid) !== ocupanteDe(g, mid)) {
+        seps.push({ x0: exs[k], y0: pctY(f.t1), x1: exs[k + 1], y1: pctY(f.t1) });
+      }
+    }
+  }
+
   return (
     <div className="absolute inset-0 select-none overflow-hidden rounded-lg">
       {franjas.map((f, fi) => {
@@ -459,6 +494,22 @@ export const ClaseCascada: React.FC<{
           </div>
         ));
       })}
+      {/* Separadores solo donde realmente cambia la materia */}
+      {seps.map((s, i) =>
+        s.x0 === s.x1 ? (
+          <div
+            key={i}
+            className="absolute bg-white/25 z-20 pointer-events-none"
+            style={{ left: `${s.x0}%`, top: `${s.y0}%`, width: '1.5px', height: `${s.y1 - s.y0}%` }}
+          />
+        ) : (
+          <div
+            key={i}
+            className="absolute bg-white/25 z-20 pointer-events-none"
+            style={{ top: `${s.y0}%`, left: `${s.x0}%`, height: '1.5px', width: `${s.x1 - s.x0}%` }}
+          />
+        )
+      )}
     </div>
   );
 };
