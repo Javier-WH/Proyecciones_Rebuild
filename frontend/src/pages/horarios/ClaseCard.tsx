@@ -350,35 +350,60 @@ export const ClaseCascada: React.FC<{
   }
   const bounds = [...cortes].sort((a, b) => a - b);
 
-  // Franjas entre cortes; se fusionan las contiguas con el mismo conjunto
-  // de carriles activos (una materia continua queda como una sola región)
+  // Franjas entre cortes. Un carril que queda vacío por un hueco temporal
+  // (la materia anterior ya terminó pero otra vendrá a ese carril) se
+  // RELLENA con el último ocupante — así no aparecen franjas angostas de
+  // una sola materia entre dos materias distintas.
+  interface CeldaFranja {
+    it: ItemDividido;
+    relleno: boolean; // true = prolongación visual del carril, no tiempo real
+  }
   interface Franja {
     t0: number;
     t1: number;
-    activas: ItemDividido[]; // ordenadas de mayor a menor carril
+    celdas: CeldaFranja[]; // ordenadas de mayor a menor carril
     key: string;
   }
-  const franjas: Franja[] = [];
+  const crudos: { t0: number; t1: number; reales: ItemDividido[] }[] = [];
   for (let k = 0; k + 1 < bounds.length; k++) {
     const t0 = bounds[k];
     const t1 = bounds[k + 1];
     if (t1 <= t0) continue;
-    const activas = orden.filter((it) => iniDe(it) < t1 && finDe(it) > t0);
-    if (activas.length === 0) continue;
-    activas.sort((a, b) => (carrilDe.get(b) ?? 0) - (carrilDe.get(a) ?? 0));
-    const key = activas.map((it) => carrilDe.get(it)).join(',');
-    const prev = franjas[franjas.length - 1];
-    if (prev && prev.key === key && prev.t1 === t0) prev.t1 = t1;
-    else franjas.push({ t0, t1, activas, key });
+    const reales = orden.filter((it) => iniDe(it) < t1 && finDe(it) > t0);
+    if (reales.length > 0) crudos.push({ t0, t1, reales });
   }
+  // Último slice donde cada carril está activo de verdad (para saber si un
+  // carril vacío será reocupado más adelante y conviene rellenarlo)
+  const ultActivo = new Map<number, number>();
+  crudos.forEach((s, i) => {
+    for (const it of s.reales) ultActivo.set(carrilDe.get(it) ?? 0, i);
+  });
+  const ultimo = new Map<number, ItemDividido>();
+  const franjas: Franja[] = [];
+  crudos.forEach((s, i) => {
+    const celdas: CeldaFranja[] = s.reales.map((it) => ({ it, relleno: false }));
+    const presentes = new Set(s.reales.map((it) => carrilDe.get(it) ?? 0));
+    for (const [c, it] of ultimo) {
+      if (!presentes.has(c) && (ultActivo.get(c) ?? -1) > i) {
+        celdas.push({ it, relleno: true });
+      }
+    }
+    celdas.sort((a, b) => (carrilDe.get(b.it) ?? 0) - (carrilDe.get(a.it) ?? 0));
+    for (const it of s.reales) ultimo.set(carrilDe.get(it) ?? 0, it);
+    const key = celdas.map((x) => `${carrilDe.get(x.it)}${x.relleno ? 'r' : ''}`).join(',');
+    const prev = franjas[franjas.length - 1];
+    if (prev && prev.key === key && prev.t1 === s.t0) prev.t1 = s.t1;
+    else franjas.push({ t0: s.t0, t1: s.t1, celdas, key });
+  });
 
-  // La etiqueta de cada materia se muestra solo en su franja más alta
+  // La etiqueta de cada materia se muestra solo en su franja real más alta
   const mejorFranja = new Map<ItemDividido, number>();
   franjas.forEach((f, idx) => {
-    for (const it of f.activas) {
-      const cur = mejorFranja.get(it);
+    for (const x of f.celdas) {
+      if (x.relleno) continue;
+      const cur = mejorFranja.get(x.it);
       if (cur === undefined || f.t1 - f.t0 > franjas[cur].t1 - franjas[cur].t0) {
-        mejorFranja.set(it, idx);
+        mejorFranja.set(x.it, idx);
       }
     }
   });
@@ -388,8 +413,8 @@ export const ClaseCascada: React.FC<{
       {franjas.map((f, fi) => {
         const top = ((f.t0 - rangoInicio) / span) * 100;
         const alto = ((f.t1 - f.t0) / span) * 100;
-        const n = f.activas.length;
-        return f.activas.map((it, col) => (
+        const n = f.celdas.length;
+        return f.celdas.map((x, col) => (
           <div
             key={`${fi}-${col}`}
             className="absolute"
@@ -399,34 +424,34 @@ export const ClaseCascada: React.FC<{
               left: `${(col / n) * 100}%`,
               width: `${100 / n}%`,
             }}
-            onClick={() => onItemClick?.(it.entry)}
+            onClick={() => onItemClick?.(x.it.entry)}
           >
             {/* Base opaca: el tinte de materia es translúcido y sin ella se
                 verían las regiones de atrás al solaparse */}
             <div className="absolute inset-0 bg-slate-900" />
             <div
-              className={`relative h-full overflow-hidden border border-slate-950/40 ${colorMateria(
-                it.entry.materia_id
+              className={`relative h-full overflow-hidden ${colorMateria(
+                x.it.entry.materia_id
               )} ${onItemClick ? 'cursor-pointer' : ''}`}
             >
-              {mejorFranja.get(it) === fi && (
+              {!x.relleno && mejorFranja.get(x.it) === fi && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center p-1 pb-3 text-center">
                   <span
                     className="text-[10px] font-bold leading-tight line-clamp-2"
-                    title={`${it.entry.materia_nombre} · ${it.entry.seccion_nombre}`}
+                    title={`${x.it.entry.materia_nombre} · ${x.it.entry.seccion_nombre}`}
                   >
-                    {it.entry.materia_nombre}
+                    {x.it.entry.materia_nombre}
                   </span>
                   <span className="text-[8px] opacity-80 leading-tight truncate max-w-full mt-0.5">
-                    {it.entry.seccion_nombre} · {lapsoDe(it)} · {it.entry.turno_nombre}
+                    {x.it.entry.seccion_nombre} · {lapsoDe(x.it)} · {x.it.entry.turno_nombre}
                   </span>
-                  {it.horas && (
+                  {x.it.horas && (
                     <span className="text-[8px] opacity-80 leading-tight truncate max-w-full">
-                      {it.horas}
+                      {x.it.horas}
                     </span>
                   )}
                   <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
-                    <MiniAvisos item={it} horizontal />
+                    <MiniAvisos item={x.it} horizontal />
                   </div>
                 </div>
               )}
