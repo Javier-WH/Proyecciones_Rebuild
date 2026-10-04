@@ -339,7 +339,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
         hora,
         celdas: dias.map((d) => {
           const e = porCelda.get(`${b.id}:${d}`);
-          return e ? [{ mat: e.materia_nombre, subs: [nomProf(e), `Aula: ${e.aula_nombre}`] }] : null;
+          return e ? [{ mat: e.materia_nombre, subs: [nomProf(e), e.aula_nombre] }] : null;
         }),
       };
     });
@@ -430,7 +430,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       }
       for (const a of g.aulas) {
         if (selAula.has(`${lk}:${a.id}`))
-          out.push(hojaAgenda(lk, 'aula', a.id, `AULA ${a.codigo}`, `Aula ${a.codigo} ${g.label}`));
+          out.push(hojaAgenda(lk, 'aula', a.id, a.codigo.toUpperCase(), `${a.codigo} ${g.label}`));
       }
       for (const p of g.profesores) {
         if (selProf.has(`${lk}:${p.id}`))
