@@ -1128,11 +1128,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       <ReporteHorarioModal
         isOpen={reporteOpen}
         onClose={() => setReporteOpen(false)}
-        lapsoLabel={labelLapso(lapso.n, lapso.tipo)}
         periodo={periodo}
-        secciones={secciones}
+        lapsoActual={`${lapso.tipo}:${lapso.n}`}
+        lapsos={lapsos}
+        rows={rows}
+        aulas={aulas}
         turnos={turnos}
-        entries={entries}
+        formato12={usa12}
       />
 
       <ProfesorModal

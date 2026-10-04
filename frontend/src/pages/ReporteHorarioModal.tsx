@@ -1,29 +1,64 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ExcelJS from 'exceljs';
-import { X, FileSpreadsheet, Printer, CalendarClock } from 'lucide-react';
+import {
+  X,
+  FileSpreadsheet,
+  Printer,
+  CalendarClock,
+  Loader2,
+  Building2,
+  Users,
+} from 'lucide-react';
+import { apiFetch } from '../api/client.js';
+import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import {
   HorarioEntry,
   SeccionRef,
   Turno,
+  Aula,
+  seccionesDe,
   DIAS_NOMBRES,
-  DIAS_CORTOS,
-  fmtHora,
+  fmtHoraCfg,
+  minutos,
 } from './horarios/types.js';
 
 interface ReporteHorarioModalProps {
   isOpen: boolean;
   onClose: () => void;
-  lapsoLabel: string;
   periodo: string | null;
-  secciones: SeccionRef[];
+  lapsoActual: string; // 'TRIMESTRAL:1' — sus secciones vienen pre-marcadas
+  lapsos: string[]; // todos los lapsos con carga docente ('TRIMESTRAL:1' … 'SEMESTRAL:2')
+  rows: MateriaAsignableRow[];
+  aulas: Aula[];
   turnos: Turno[];
-  entries: HorarioEntry[];
+  formato12?: boolean;
 }
 
-interface HojaHorario {
-  seccion: SeccionRef;
-  turno: Turno | null;
+// Contenido de una celda del reporte: materia en negrita + líneas secundarias
+interface CeldaRep {
+  mat: string;
+  subs: string[];
+}
+
+type FilaRep =
+  | { kind: 'sep'; texto: string } // fila separadora de turno
+  | { kind: 'rec'; texto: string } // receso (fila combinada)
+  | { kind: 'bloque'; hora: string; celdas: (CeldaRep[] | null)[] }; // una por día
+
+interface HojaRep {
+  nombre: string; // base para nombrar la hoja de Excel
+  lineas: string[]; // encabezado institucional
   dias: number[];
+  filas: FilaRep[];
+}
+
+interface GrupoLapso {
+  tipo: string;
+  n: number;
+  label: string;
+  secciones: SeccionRef[];
+  profesores: { id: number; nombre: string }[];
+  aulas: { id: number; codigo: string }[];
 }
 
 const escapeHtml = (s: string): string =>
@@ -46,46 +81,315 @@ const crearNombradorHojas = () => {
 const nomProf = (e: HorarioEntry): string =>
   e.prof_apellidos ? `${e.prof_apellidos} ${e.prof_nombres ?? ''}`.trim() : 'Sin profesor';
 
+// Orden fijo de bandas: Mañana → Tarde → Noche (mismo criterio que VistaRecurso)
+const ordenTurno = (nombre: string): number => {
+  const n = nombre
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toUpperCase();
+  if (n.includes('MANANA') || n.includes('MATUT')) return 0;
+  if (n.includes('TARDE') || n.includes('VESPERT')) return 1;
+  if (n.includes('NOCHE') || n.includes('NOCTURN')) return 2;
+  return 3;
+};
+
 export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   isOpen,
   onClose,
-  lapsoLabel,
   periodo,
-  secciones,
+  lapsoActual,
+  lapsos,
+  rows,
+  aulas,
   turnos,
-  entries,
+  formato12,
 }) => {
-  const [sel, setSel] = useState<number[]>([]); // vacío = todas
+  const [selSec, setSelSec] = useState<Set<string>>(new Set());
+  const [selAula, setSelAula] = useState<Set<string>>(new Set());
+  const [selProf, setSelProf] = useState<Set<string>>(new Set());
+  const [ocupReal, setOcupReal] = useState(false);
+  const [entradas, setEntradas] = useState<Map<string, HorarioEntry[]>>(new Map());
+  const [cargando, setCargando] = useState(false);
   const [generando, setGenerando] = useState(false);
 
-  const hojas = useMemo<HojaHorario[]>(() => {
-    const lista = sel.length === 0 ? secciones : secciones.filter((s) => sel.includes(s.seccion_id));
-    return lista.map((s) => {
-      const turno = turnos.find((t) => t.saga_id === s.turno_saga_id) ?? null;
-      const dias = turno
-        ? String(turno.dias_semana).split(',').map(Number).filter(Boolean).sort()
-        : [1, 2, 3, 4, 5];
-      return { seccion: s, turno, dias };
-    });
-  }, [secciones, turnos, sel]);
-
-  const entriesDe = (seccionId: number, bloqueId: number, dia: number) =>
-    entries.find(
-      (e) => e.seccion_id === seccionId && e.bloque_id === bloqueId && e.dia_semana === dia
+  // Al abrir: secciones del lapso activo pre-marcadas + entries de todos los
+  // lapsos (el endpoint devuelve también los lapsos rivales).
+  useEffect(() => {
+    if (!isOpen) return;
+    const [tipo, n] = lapsoActual.split(':');
+    const secActual = seccionesDe(
+      rows.filter((r) => r.tipo_proyeccion === tipo && r.trimestre === Number(n))
     );
+    setSelSec(new Set(secActual.map((s) => `${lapsoActual}:${s.seccion_id}`)));
+    setSelAula(new Set());
+    setSelProf(new Set());
+    setOcupReal(false);
 
-  const toggle = (id: number) =>
-    setSel((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+    setCargando(true);
+    Promise.all(
+      lapsos.map(async (lk) => {
+        const [t, nn] = lk.split(':');
+        const res = await apiFetch<{ entries: HorarioEntry[] }>(
+          `/horarios/entries?tipo=${t}&trimestre=${nn}`
+        );
+        return [lk, res.success && res.data ? res.data.entries || [] : []] as const;
+      })
+    ).then((pares) => {
+      setEntradas(new Map(pares));
+      setCargando(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
-  const encabezadoDe = (h: HojaHorario): string[] => [
+  // Listas por lapso: secciones y profesores (materia asignada) vienen de la
+  // carga docente; aulas, de las clases agendadas de cada lapso.
+  const grupos = useMemo<Map<string, GrupoLapso>>(() => {
+    const m = new Map<string, GrupoLapso>();
+    for (const lk of lapsos) {
+      const [tipo, nStr] = lk.split(':');
+      const n = Number(nStr);
+      const rowsL = rows.filter((r) => r.tipo_proyeccion === tipo && r.trimestre === n);
+      const profMap = new Map<number, string>();
+      for (const r of rowsL) {
+        if (r.profesor_id != null && !profMap.has(r.profesor_id)) {
+          profMap.set(
+            r.profesor_id,
+            `${r.prof_apellidos ?? ''} ${r.prof_nombres ?? ''}`.trim() || 'Sin nombre'
+          );
+        }
+      }
+      const propias = (entradas.get(lk) ?? []).filter(
+        (e) => e.tipo_proyeccion === tipo && e.trimestre === n
+      );
+      const aulaIds = new Set(propias.map((e) => e.aula_id));
+      m.set(lk, {
+        tipo,
+        n,
+        label: labelLapso(n, tipo),
+        secciones: seccionesDe(rowsL),
+        profesores: [...profMap.entries()]
+          .map(([id, nombre]) => ({ id, nombre }))
+          .sort((a, b) => a.nombre.localeCompare(b.nombre)),
+        aulas: aulas
+          .filter((a) => aulaIds.has(a.id))
+          .map((a) => ({ id: a.id, codigo: a.codigo }))
+          .sort((a, b) => a.codigo.localeCompare(b.codigo)),
+      });
+    }
+    return m;
+  }, [lapsos, rows, entradas, aulas]);
+
+  const propiasDe = (lk: string): HorarioEntry[] => {
+    const g = grupos.get(lk);
+    if (!g) return [];
+    return (entradas.get(lk) ?? []).filter(
+      (e) => e.tipo_proyeccion === g.tipo && e.trimestre === g.n
+    );
+  };
+
+  // Bandas de turno para una agenda: solo turnos usados por las entries,
+  // orden Mañana → Tarde → Noche; bloques huérfanos en banda extra.
+  const bandasDe = (lista: HorarioEntry[]) => {
+    const ids = new Set(lista.map((e) => e.turno_id));
+    const usados = turnos.filter((t) => ids.has(t.id));
+    const lista2 = (usados.length > 0 ? usados : [])
+      .map((t) => ({ turno: t, bloques: [...t.bloques].sort((a, b) => a.orden - b.orden) }))
+      .filter((b) => b.bloques.length > 0);
+    lista2.sort(
+      (a, b) =>
+        ordenTurno(a.turno.nombre) - ordenTurno(b.turno.nombre) ||
+        minutos(a.bloques[0].hora_inicio) - minutos(b.bloques[0].hora_inicio)
+    );
+    // Entries cuyo bloque ya no existe en la configuración de turnos
+    const bloqueIds = new Set(lista2.flatMap((b) => b.bloques.map((x) => x.id)));
+    const resto = lista.filter((e) => !bloqueIds.has(e.bloque_id));
+    if (resto.length > 0) {
+      const rangos = new Map<string, { inicio: string; fin: string }>();
+      for (const e of resto)
+        rangos.set(`${e.hora_inicio}-${e.hora_fin}`, { inicio: e.hora_inicio, fin: e.hora_fin });
+      const bloques = [...rangos.values()]
+        .sort((a, b) => minutos(a.inicio) - minutos(b.inicio))
+        .map((r, i) => ({
+          id: -(i + 1),
+          turno_id: 0,
+          orden: i,
+          hora_inicio: r.inicio,
+          hora_fin: r.fin,
+          es_receso: 0,
+        }));
+      lista2.push({ turno: { id: 0, nombre: 'Otras horas' } as unknown as Turno, bloques });
+    }
+    return lista2;
+  };
+
+  const diasAgenda = (bandas: ReturnType<typeof bandasDe>, lista: HorarioEntry[]): number[] => {
+    const set = new Set<number>();
+    for (const b of bandas) {
+      if (!b.turno.dias_semana) continue;
+      String(b.turno.dias_semana)
+        .split(',')
+        .map(Number)
+        .filter(Boolean)
+        .forEach((d) => set.add(d));
+    }
+    for (const e of lista) set.add(e.dia_semana);
+    const arr = [...set].sort((a, b) => a - b);
+    return arr.length > 0 ? arr : [1, 2, 3, 4, 5];
+  };
+
+  const ENCABEZADO = [
     'HORARIO DE CLASE',
     'U.P.T. DE LOS LLANOS "JUANA RAMÍREZ", EXTENSIÓN ALTAGRACIA DE ORITUCO',
-    `${h.seccion.proyeccion_nombre} — ${h.seccion.seccion_nombre} — TURNO ${h.seccion.turno_nombre.toUpperCase()}`,
-    `${lapsoLabel.toUpperCase()} — PERIODO ${periodo ?? ''}`,
   ];
+
+  // Hoja de una sección: su turno fijo define la grilla (igual que antes)
+  const hojaSeccion = (lk: string, s: SeccionRef): HojaRep => {
+    const g = grupos.get(lk)!;
+    const turno = turnos.find((t) => t.saga_id === s.turno_saga_id) ?? null;
+    const dias = turno
+      ? String(turno.dias_semana).split(',').map(Number).filter(Boolean).sort()
+      : [1, 2, 3, 4, 5];
+    const porCelda = new Map<string, HorarioEntry>();
+    for (const e of propiasDe(lk)) {
+      if (e.seccion_id === s.seccion_id) porCelda.set(`${e.bloque_id}:${e.dia_semana}`, e);
+    }
+    const filas: FilaRep[] = (turno?.bloques ?? []).map((b) => {
+      const hora = `${fmtHoraCfg(b.hora_inicio, formato12)}-${fmtHoraCfg(b.hora_fin, formato12)}`;
+      if (b.es_receso) return { kind: 'rec', texto: `${hora}  ·  RECESO` };
+      return {
+        kind: 'bloque',
+        hora,
+        celdas: dias.map((d) => {
+          const e = porCelda.get(`${b.id}:${d}`);
+          return e ? [{ mat: e.materia_nombre, subs: [nomProf(e), `Aula: ${e.aula_codigo}`] }] : null;
+        }),
+      };
+    });
+    return {
+      nombre: `${s.seccion_nombre} ${g.label}`,
+      lineas: [
+        ...ENCABEZADO,
+        `SECCIÓN ${s.seccion_nombre} — ${s.proyeccion_nombre} — TURNO ${s.turno_nombre.toUpperCase()}`,
+        `${g.label.toUpperCase()} — PERIODO ${periodo ?? ''}`,
+      ],
+      dias,
+      filas,
+    };
+  };
+
+  // Hoja agenda de aula o profesor: una sola tabla, bandas por turno con
+  // fila separadora que lleva el nombre del turno.
+  const hojaAgenda = (
+    lk: string,
+    recurso: 'aula' | 'profesor',
+    id: number,
+    titulo: string,
+    nombreHoja: string
+  ): HojaRep => {
+    const g = grupos.get(lk)!;
+    const base = entradas.get(lk) ?? [];
+    const propias = ocupReal ? base : propiasDe(lk);
+    const lista = propias.filter((e) =>
+      recurso === 'aula' ? e.aula_id === id : e.profesor_id === id
+    );
+    const bandas = bandasDe(lista);
+    const dias = diasAgenda(bandas, lista);
+    const porCelda = new Map<string, HorarioEntry[]>();
+    for (const e of lista) {
+      const k = `${e.bloque_id}:${e.dia_semana}`;
+      const arr = porCelda.get(k) || [];
+      arr.push(e);
+      porCelda.set(k, arr);
+    }
+    const filas: FilaRep[] = [];
+    for (const { turno, bloques } of bandas) {
+      filas.push({ kind: 'sep', texto: turno.nombre.toUpperCase() });
+      for (const b of bloques) {
+        const hora = `${fmtHoraCfg(b.hora_inicio, formato12)}-${fmtHoraCfg(b.hora_fin, formato12)}`;
+        if (b.es_receso) {
+          filas.push({ kind: 'rec', texto: `${hora}  ·  RECESO` });
+          continue;
+        }
+        filas.push({
+          kind: 'bloque',
+          hora,
+          celdas: dias.map((d) => {
+            const items = porCelda.get(`${b.id}:${d}`) ?? [];
+            if (items.length === 0) return null;
+            return items.map((e) =>
+              recurso === 'aula'
+                ? {
+                    mat: e.materia_nombre,
+                    subs: [`Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`, nomProf(e)],
+                  }
+                : {
+                    mat: e.materia_nombre,
+                    subs: [`Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`, `Aula: ${e.aula_codigo}`],
+                  }
+            );
+          }),
+        });
+      }
+    }
+    return {
+      nombre: nombreHoja,
+      lineas: [...ENCABEZADO, `${titulo} — ${g.label.toUpperCase()}`, `PERIODO ${periodo ?? ''}`],
+      dias,
+      filas,
+    };
+  };
+
+  // Todas las hojas seleccionadas: secciones → aulas → profesores, por lapso
+  const hojas = useMemo<HojaRep[]>(() => {
+    const out: HojaRep[] = [];
+    for (const lk of lapsos) {
+      const g = grupos.get(lk);
+      if (!g) continue;
+      for (const s of g.secciones) {
+        if (selSec.has(`${lk}:${s.seccion_id}`)) out.push(hojaSeccion(lk, s));
+      }
+      for (const a of g.aulas) {
+        if (selAula.has(`${lk}:${a.id}`))
+          out.push(hojaAgenda(lk, 'aula', a.id, `AULA ${a.codigo}`, `Aula ${a.codigo} ${g.label}`));
+      }
+      for (const p of g.profesores) {
+        if (selProf.has(`${lk}:${p.id}`))
+          out.push(hojaAgenda(lk, 'profesor', p.id, `PROF. ${p.nombre.toUpperCase()}`, `${p.nombre} ${g.label}`));
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lapsos, grupos, selSec, selAula, selProf, ocupReal, turnos, periodo, formato12]);
+
+  const toggle = (set: Set<string>, setSet: (s: Set<string>) => void, clave: string) => {
+    const n = new Set(set);
+    if (n.has(clave)) n.delete(clave);
+    else n.add(clave);
+    setSet(n);
+  };
+
+  const toggleGrupo = (
+    set: Set<string>,
+    setSet: (s: Set<string>) => void,
+    lk: string,
+    ids: (string | number)[]
+  ) => {
+    const n = new Set(set);
+    const claves = ids.map((id) => `${lk}:${id}`);
+    const todoMarcado = claves.every((c) => n.has(c));
+    for (const c of claves) {
+      if (todoMarcado) n.delete(c);
+      else n.add(c);
+    }
+    setSet(n);
+  };
 
   // ------------------------- EXCEL -------------------------
   const generarExcel = async () => {
+    if (hojas.length === 0) {
+      alert('No hay nada seleccionado.');
+      return;
+    }
     setGenerando(true);
     try {
       const wb = new ExcelJS.Workbook();
@@ -94,11 +398,11 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       const nombrar = crearNombradorHojas();
 
       for (const h of hojas) {
-        const ws = wb.addWorksheet(nombrar(`${h.seccion.seccion_nombre}`.slice(0, 28)));
+        const ws = wb.addWorksheet(nombrar(h.nombre));
         const cols = 1 + h.dias.length;
         ws.columns = [{ width: 14 }, ...h.dias.map(() => ({ width: 26 }))];
 
-        encabezadoDe(h).forEach((linea, i) => {
+        h.lineas.forEach((linea, i) => {
           const r = ws.getRow(i + 1);
           ws.mergeCells(i + 1, 1, i + 1, cols);
           const c = r.getCell(1);
@@ -107,8 +411,8 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           c.alignment = { horizontal: 'center', vertical: 'middle' };
         });
 
-        const fHeader = 6;
-        const rH = ws.getRow(fHeader);
+        let fila = h.lineas.length + 2;
+        const rH = ws.getRow(fila);
         rH.getCell(1).value = 'Hora';
         h.dias.forEach((d, i) => {
           rH.getCell(2 + i).value = DIAS_NOMBRES[d];
@@ -119,25 +423,24 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
           cell.border = borde;
         }
+        fila++;
 
-        let fila = fHeader + 1;
-        for (const b of h.turno?.bloques ?? []) {
+        for (const f of h.filas) {
           const r = ws.getRow(fila);
-          r.getCell(1).value = `${fmtHora(b.hora_inicio)}-${fmtHora(b.hora_fin)}`;
-          r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-          r.getCell(1).border = borde;
-          if (b.es_receso) {
-            ws.mergeCells(fila, 2, fila, cols);
-            const c = r.getCell(2);
-            c.value = 'RECESO';
-            c.font = { bold: true, color: { argb: 'FF888888' } };
+          if (f.kind === 'sep' || f.kind === 'rec') {
+            ws.mergeCells(fila, 1, fila, cols);
+            const c = r.getCell(1);
+            c.value = f.texto;
+            c.font = { bold: true, size: 9, color: { argb: 'FF666666' } };
             c.alignment = { horizontal: 'center', vertical: 'middle' };
+            if (f.kind === 'sep') c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
           } else {
-            h.dias.forEach((d, i) => {
-              const e = entriesDe(h.seccion.seccion_id, b.id, d);
+            r.getCell(1).value = f.hora;
+            r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            f.celdas.forEach((celda, i) => {
               const c = r.getCell(2 + i);
-              if (e) {
-                c.value = `${e.materia_nombre}\n${nomProf(e)}\nAula: ${e.aula_codigo}`;
+              if (celda && celda.length > 0) {
+                c.value = celda.map((x) => `${x.mat}\n${x.subs.join('\n')}`).join('\n— — —\n');
                 c.alignment = { wrapText: true, vertical: 'middle' };
               } else {
                 c.alignment = { vertical: 'middle' };
@@ -145,7 +448,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
             });
             r.height = 42;
           }
-          for (let c = 2; c <= cols; c++) r.getCell(c).border = borde;
+          for (let c = 1; c <= cols; c++) r.getCell(c).border = borde;
           fila++;
         }
 
@@ -158,10 +461,6 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
         } as ExcelJS.PageSetup;
       }
 
-      if (hojas.length === 0) {
-        alert('No hay secciones seleccionadas.');
-        return;
-      }
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -169,7 +468,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Horario_${lapsoLabel.replace(/\s+/g, '_')}_${periodo ?? ''}.xlsx`;
+      a.download = `Horarios_${periodo ?? ''}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -180,29 +479,32 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   // ------------------------- IMPRESIÓN -------------------------
   const imprimir = () => {
     if (hojas.length === 0) {
-      alert('No hay secciones seleccionadas.');
+      alert('No hay nada seleccionado.');
       return;
     }
     const seccionesHtml = hojas
       .map((h) => {
-        const encabezado = encabezadoDe(h)
-          .map((l) => `<div class="hline">${escapeHtml(l)}</div>`)
-          .join('');
-        const filas = (h.turno?.bloques ?? [])
-          .map((b) => {
-            const hora = `${fmtHora(b.hora_inicio)}-${fmtHora(b.hora_fin)}`;
-            if (b.es_receso) {
-              return `<tr><td class="hora">${hora}</td><td colspan="${h.dias.length}" class="receso">RECESO</td></tr>`;
-            }
-            const tds = h.dias
-              .map((d) => {
-                const e = entriesDe(h.seccion.seccion_id, b.id, d);
-                return e
-                  ? `<td><div class="mat">${escapeHtml(e.materia_nombre)}</div><div class="sub">${escapeHtml(nomProf(e))}</div><div class="sub">Aula ${escapeHtml(e.aula_codigo)}</div></td>`
-                  : '<td></td>';
-              })
+        const encabezado = h.lineas.map((l) => `<div class="hline">${escapeHtml(l)}</div>`).join('');
+        const filas = h.filas
+          .map((f) => {
+            if (f.kind === 'sep')
+              return `<tr><td colspan="${h.dias.length + 1}" class="sep">${escapeHtml(f.texto)}</td></tr>`;
+            if (f.kind === 'rec')
+              return `<tr><td colspan="${h.dias.length + 1}" class="receso">${escapeHtml(f.texto)}</td></tr>`;
+            const tds = f.celdas
+              .map((celda) =>
+                celda && celda.length > 0
+                  ? `<td>${celda
+                      .map(
+                        (x) =>
+                          `<div class="mat">${escapeHtml(x.mat)}</div>` +
+                          x.subs.map((s) => `<div class="sub">${escapeHtml(s)}</div>`).join('')
+                      )
+                      .join('<div class="cardsep"></div>')}</td>`
+                  : '<td></td>'
+              )
               .join('');
-            return `<tr><td class="hora">${hora}</td>${tds}</tr>`;
+            return `<tr><td class="hora">${escapeHtml(f.hora)}</td>${tds}</tr>`;
           })
           .join('');
         const thDias = h.dias.map((d) => `<th>${escapeHtml(DIAS_NOMBRES[d])}</th>`).join('');
@@ -223,8 +525,10 @@ th, td { border: 1px solid #000; padding: 3px 4px; font-size: 8pt; vertical-alig
 th { text-align: center; vertical-align: middle; font-weight: bold; }
 td.hora { text-align: center; vertical-align: middle; font-size: 7.5pt; white-space: nowrap; }
 td.receso { text-align: center; font-weight: bold; letter-spacing: 0.3em; color: #666; font-size: 7.5pt; }
+td.sep { text-align: center; font-weight: bold; letter-spacing: 0.3em; background: #eee; font-size: 7.5pt; }
 .mat { font-weight: bold; }
 .sub { font-size: 7.5pt; color: #333; }
+.cardsep { border-top: 1px dashed #999; margin: 3px 0; }
 </style></head><body>${seccionesHtml}</body></html>`;
 
     const win = window.open('', '_blank');
@@ -242,77 +546,187 @@ td.receso { text-align: center; font-weight: bold; letter-spacing: 0.3em; color:
 
   if (!isOpen) return null;
 
+  // ---------- UI de selección ----------
+  const grupoCheck = (
+    titulo: string,
+    icono: React.ReactNode,
+    set: Set<string>,
+    setSet: (s: Set<string>) => void,
+    renderItem: (lk: string, g: GrupoLapso) => React.ReactNode
+  ) => (
+    <div className="mb-4">
+      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-2">
+        {icono} {titulo}
+      </label>
+      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-3 max-h-56 overflow-y-auto">
+        {lapsos.map((lk) => {
+          const g = grupos.get(lk);
+          if (!g) return null;
+          const items = renderItem(lk, g);
+          return items ? <div key={lk}>{items}</div> : null;
+        })}
+      </div>
+    </div>
+  );
+
+  const subGrupo = (
+    lk: string,
+    label: string,
+    ids: (string | number)[],
+    set: Set<string>,
+    setSet: (s: Set<string>) => void,
+    children: React.ReactNode
+  ) => {
+    if (ids.length === 0) {
+      return (
+        <div>
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</div>
+          <div className="text-[10px] text-slate-600 italic px-1 py-0.5">— sin opciones —</div>
+        </div>
+      );
+    }
+    const claves = ids.map((id) => `${lk}:${id}`);
+    const marcadas = claves.filter((c) => set.has(c)).length;
+    return (
+      <div>
+        <label className="flex items-center gap-2 px-1 py-0.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={marcadas === ids.length}
+            ref={(el) => {
+              if (el) el.indeterminate = marcadas > 0 && marcadas < ids.length;
+            }}
+            onChange={() => toggleGrupo(set, setSet, lk, ids)}
+            className="accent-blue-500"
+          />
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            {label} <span className="text-slate-600 normal-case">({marcadas}/{ids.length})</span>
+          </span>
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 ml-5 mt-0.5">{children}</div>
+      </div>
+    );
+  };
+
+  const itemCheck = (
+    clave: string,
+    texto: string,
+    set: Set<string>,
+    setSet: (s: Set<string>) => void
+  ) => (
+    <label
+      key={clave}
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
+        set.has(clave)
+          ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+          : 'text-slate-300 hover:bg-slate-800/60 border border-transparent'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={set.has(clave)}
+        onChange={() => toggle(set, setSet, clave)}
+        className="accent-blue-500 shrink-0"
+      />
+      <span className="truncate" title={texto}>
+        {texto}
+      </span>
+    </label>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <CalendarClock className="w-5 h-5 text-blue-400" /> Imprimir / exportar horario
+              <CalendarClock className="w-5 h-5 text-blue-400" /> Imprimir / exportar horarios
             </h3>
             <button onClick={onClose} className="text-slate-400 hover:text-white">
               <X className="w-5 h-5" />
             </button>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            {lapsoLabel} · Periodo {periodo ?? '—'} · Sin selección = todas las secciones del lapso.
+            Periodo {periodo ?? '—'} · Una hoja por cada elemento seleccionado.
           </p>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Secciones a incluir
-            </label>
-            {sel.length > 0 && (
-              <button
-                onClick={() => setSel([])}
-                className="text-[10px] text-slate-400 hover:text-blue-300 font-semibold cursor-pointer"
-              >
-                Limpiar (todas)
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-1.5 max-h-64 overflow-y-auto bg-slate-950 border border-slate-800 rounded-xl p-2">
-            {hojas.length === 0 ||
-              secciones.map((s) => (
-                <label
-                  key={s.seccion_id}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-xs transition-colors ${
-                    sel.includes(s.seccion_id)
-                      ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
-                      : 'text-slate-300 hover:bg-slate-800/60 border border-transparent'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={sel.includes(s.seccion_id)}
-                    onChange={() => toggle(s.seccion_id)}
-                    className="accent-blue-500"
-                  />
-                  <span className="truncate">
-                    {s.seccion_nombre} · {s.proyeccion_nombre} ({s.turno_nombre})
-                  </span>
-                </label>
-              ))}
-          </div>
+          {cargando && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 mb-3">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando clases de todos los lapsos…
+            </div>
+          )}
+
+          {grupoCheck(
+            'Secciones',
+            <CalendarClock className="w-3.5 h-3.5" />,
+            selSec,
+            setSelSec,
+            (lk, g) =>
+              subGrupo(lk, `${g.label} — Todas las secciones`, g.secciones.map((s) => s.seccion_id), selSec, setSelSec,
+                g.secciones.map((s) =>
+                  itemCheck(`${lk}:${s.seccion_id}`, `${s.seccion_nombre} · ${s.proyeccion_nombre} (${s.turno_nombre})`, selSec, setSelSec)
+                )
+              )
+          )}
+
+          {grupoCheck(
+            'Aulas',
+            <Building2 className="w-3.5 h-3.5" />,
+            selAula,
+            setSelAula,
+            (lk, g) =>
+              subGrupo(lk, `${g.label} — Todas las aulas`, g.aulas.map((a) => a.id), selAula, setSelAula,
+                g.aulas.map((a) => itemCheck(`${lk}:${a.id}`, a.codigo, selAula, setSelAula))
+              )
+          )}
+
+          {grupoCheck(
+            'Profesores',
+            <Users className="w-3.5 h-3.5" />,
+            selProf,
+            setSelProf,
+            (lk, g) =>
+              subGrupo(lk, `${g.label} — Todos los profesores`, g.profesores.map((p) => p.id), selProf, setSelProf,
+                g.profesores.map((p) => itemCheck(`${lk}:${p.id}`, p.nombre, selProf, setSelProf))
+              )
+          )}
+
+          <label className="flex items-center gap-2 px-1 py-1 cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={ocupReal}
+              onChange={() => setOcupReal((v) => !v)}
+              className="accent-emerald-500"
+            />
+            <span className="text-xs text-slate-300">
+              Ocupación real: las agendas incluyen también las clases de lapsos superpuestos
+              (p. ej. Semestre 1 incluye T1 y T2)
+            </span>
+          </label>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
-          <button
-            onClick={imprimir}
-            disabled={generando}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 cursor-pointer"
-          >
-            <Printer className="w-4 h-4" /> Imprimir
-          </button>
-          <button
-            onClick={generarExcel}
-            disabled={generando}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4" /> {generando ? 'Generando…' : 'Excel'}
-          </button>
+        <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
+          <span className="text-[11px] text-slate-500">
+            {hojas.length} hoja{hojas.length === 1 ? '' : 's'} seleccionada{hojas.length === 1 ? '' : 's'}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={imprimir}
+              disabled={generando || cargando}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold flex items-center gap-2 cursor-pointer"
+            >
+              <Printer className="w-4 h-4" /> Imprimir
+            </button>
+            <button
+              onClick={generarExcel}
+              disabled={generando || cargando}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4" /> {generando ? 'Generando…' : 'Excel'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
