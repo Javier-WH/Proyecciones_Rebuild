@@ -20,6 +20,7 @@ import {
   DIAS_NOMBRES,
   fmtHoraCfg,
   minutos,
+  traslapan,
 } from './horarios/types.js';
 
 interface ReporteHorarioModalProps {
@@ -120,17 +121,22 @@ const crearNombradorHojas = () => {
 const nomProf = (e: HorarioEntry): string =>
   e.prof_apellidos ? `${e.prof_apellidos} ${e.prof_nombres ?? ''}`.trim() : 'Sin profesor';
 
-// Orden fijo de bandas: Mañana → Tarde → Noche (mismo criterio que VistaRecurso)
-const ordenTurno = (nombre: string): number => {
-  const n = nombre
+const normNombre = (s: string): string =>
+  s
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toUpperCase();
+
+// Orden fijo de bandas: Mañana → Tarde → Noche (mismo criterio que VistaRecurso)
+const ordenTurno = (nombre: string): number => {
+  const n = normNombre(nombre);
   if (n.includes('MANANA') || n.includes('MATUT')) return 0;
   if (n.includes('TARDE') || n.includes('VESPERT')) return 1;
   if (n.includes('NOCHE') || n.includes('NOCTURN')) return 2;
   return 3;
 };
+
+const esDiurno = (nombre: string): boolean => normNombre(nombre).includes('DIURN');
 
 export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   isOpen,
@@ -226,52 +232,85 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     );
   };
 
-  // Bandas de turno para una agenda: solo turnos usados por las entries,
-  // orden Mañana → Tarde → Noche; bloques huérfanos en banda extra.
-  const bandasDe = (lista: HorarioEntry[]) => {
-    const ids = new Set(lista.map((e) => e.turno_id));
-    const usados = turnos.filter((t) => ids.has(t.id));
-    const lista2 = (usados.length > 0 ? usados : [])
+  // Bandas de una agenda con mezcla de turno Diurno: una clase diurna se
+  // coloca en la banda (Mañana/Tarde/Noche) cuyos bloques coincidan con sus
+  // horas. La banda 'Diurno' solo aparece si no existe turno equivalente
+  // para esas horas. Las filas de cada banda son sus propios bloques.
+  interface BandaRep {
+    nombre: string;
+    bloques: { id: number; hora_inicio: string; hora_fin: string; es_receso: number }[];
+    items: HorarioEntry[];
+  }
+  const bandasDe = (lista: HorarioEntry[]): BandaRep[] => {
+    // Turnos configurados, orden Mañana → Tarde → Noche → otros (Diurno cae
+    // al final por ordenTurno, solo se muestra como fallback).
+    const cfg = turnos
       .map((t) => ({ turno: t, bloques: [...t.bloques].sort((a, b) => a.orden - b.orden) }))
-      .filter((b) => b.bloques.length > 0);
-    lista2.sort(
-      (a, b) =>
-        ordenTurno(a.turno.nombre) - ordenTurno(b.turno.nombre) ||
-        minutos(a.bloques[0].hora_inicio) - minutos(b.bloques[0].hora_inicio)
-    );
-    // Entries cuyo bloque ya no existe en la configuración de turnos
-    const bloqueIds = new Set(lista2.flatMap((b) => b.bloques.map((x) => x.id)));
-    const resto = lista.filter((e) => !bloqueIds.has(e.bloque_id));
-    if (resto.length > 0) {
-      const rangos = new Map<string, { inicio: string; fin: string }>();
-      for (const e of resto)
-        rangos.set(`${e.hora_inicio}-${e.hora_fin}`, { inicio: e.hora_inicio, fin: e.hora_fin });
-      const bloques = [...rangos.values()]
-        .sort((a, b) => minutos(a.inicio) - minutos(b.inicio))
-        .map((r, i) => ({
-          id: -(i + 1),
-          turno_id: 0,
-          orden: i,
-          hora_inicio: r.inicio,
-          hora_fin: r.fin,
-          es_receso: 0,
-        }));
-      lista2.push({ turno: { id: 0, nombre: 'Otras horas' } as unknown as Turno, bloques });
+      .filter((b) => b.bloques.length > 0)
+      .sort(
+        (a, b) =>
+          ordenTurno(a.turno.nombre) - ordenTurno(b.turno.nombre) ||
+          minutos(a.bloques[0].hora_inicio) - minutos(b.bloques[0].hora_inicio)
+      );
+    const porTurno = new Map(turnos.map((t) => [t.id, t]));
+    const asignadas = new Map<number, HorarioEntry[]>();
+    const otras: HorarioEntry[] = [];
+    for (const e of lista) {
+      const propio = porTurno.get(e.turno_id);
+      let destino: Turno | undefined = propio;
+      if (propio && esDiurno(propio.nombre)) {
+        const eq = cfg.find(
+          (c) =>
+            !esDiurno(c.turno.nombre) &&
+            c.bloques.some((b) =>
+              traslapan(e.hora_inicio, e.hora_fin, b.hora_inicio, b.hora_fin)
+            )
+        );
+        if (eq) destino = eq.turno;
+      }
+      if (destino && cfg.some((c) => c.turno.id === destino!.id)) {
+        const arr = asignadas.get(destino.id) || [];
+        arr.push(e);
+        asignadas.set(destino.id, arr);
+      } else {
+        otras.push(e);
+      }
     }
-    return lista2;
+    const bandas: BandaRep[] = cfg
+      .filter((c) => (asignadas.get(c.turno.id) ?? []).length > 0)
+      .map((c) => ({ nombre: c.turno.nombre, bloques: c.bloques, items: asignadas.get(c.turno.id)! }));
+    if (otras.length > 0) {
+      const rangos = new Map<string, { inicio: string; fin: string }>();
+      for (const e of otras)
+        rangos.set(`${e.hora_inicio}-${e.hora_fin}`, { inicio: e.hora_inicio, fin: e.hora_fin });
+      bandas.push({
+        nombre: 'Otras horas',
+        bloques: [...rangos.values()]
+          .sort((a, b) => minutos(a.inicio) - minutos(b.inicio))
+          .map((r, i) => ({
+            id: -(i + 1),
+            hora_inicio: r.inicio,
+            hora_fin: r.fin,
+            es_receso: 0,
+          })),
+        items: otras,
+      });
+    }
+    return bandas;
   };
 
-  const diasAgenda = (bandas: ReturnType<typeof bandasDe>, lista: HorarioEntry[]): number[] => {
+  const diasAgenda = (bandas: BandaRep[], lista: HorarioEntry[]): number[] => {
     const set = new Set<number>();
-    for (const b of bandas) {
-      if (!b.turno.dias_semana) continue;
-      String(b.turno.dias_semana)
-        .split(',')
-        .map(Number)
-        .filter(Boolean)
-        .forEach((d) => set.add(d));
-    }
     for (const e of lista) set.add(e.dia_semana);
+    for (const t of turnos) {
+      if (bandas.some((b) => b.nombre === t.nombre)) {
+        String(t.dias_semana)
+          .split(',')
+          .map(Number)
+          .filter(Boolean)
+          .forEach((d) => set.add(d));
+      }
+    }
     const arr = [...set].sort((a, b) => a - b);
     return arr.length > 0 ? arr : [1, 2, 3, 4, 5];
   };
@@ -334,17 +373,10 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     );
     const bandas = bandasDe(lista);
     const dias = diasAgenda(bandas, lista);
-    const porCelda = new Map<string, HorarioEntry[]>();
-    for (const e of lista) {
-      const k = `${e.bloque_id}:${e.dia_semana}`;
-      const arr = porCelda.get(k) || [];
-      arr.push(e);
-      porCelda.set(k, arr);
-    }
     const filas: FilaRep[] = [];
-    for (const { turno, bloques } of bandas) {
-      filas.push({ kind: 'sep', texto: turno.nombre.toUpperCase() });
-      for (const b of bloques) {
+    for (const banda of bandas) {
+      filas.push({ kind: 'sep', texto: banda.nombre.toUpperCase() });
+      for (const b of banda.bloques) {
         const hora = `${fmtHoraCfg(b.hora_inicio, formato12)}-${fmtHoraCfg(b.hora_fin, formato12)}`;
         if (b.es_receso) {
           filas.push({ kind: 'rec', texto: `${hora}  ·  RECESO` });
@@ -354,17 +386,27 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           kind: 'bloque',
           hora,
           celdas: dias.map((d) => {
-            const items = porCelda.get(`${b.id}:${d}`) ?? [];
+            const items = banda.items.filter(
+              (e) =>
+                e.dia_semana === d &&
+                traslapan(e.hora_inicio, e.hora_fin, b.hora_inicio, b.hora_fin)
+            );
             if (items.length === 0) return null;
             return items.map((e) =>
               recurso === 'aula'
                 ? {
                     mat: e.materia_nombre,
-                    subs: [`Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`, nomProf(e)],
+                    subs: [
+                      `Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`,
+                      nomProf(e),
+                    ],
                   }
                 : {
                     mat: e.materia_nombre,
-                    subs: [`Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`, `Aula: ${e.aula_codigo}`],
+                    subs: [
+                      `Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`,
+                      `Aula: ${e.aula_codigo}`,
+                    ],
                   }
             );
           }),
