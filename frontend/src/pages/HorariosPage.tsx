@@ -488,21 +488,27 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       ),
     [rows]
   );
-  const avisosParciales = useMemo(() => {
-    const m = new Map<number, string[]>();
-    if (lapso.tipo !== 'SEMESTRAL') return m;
+  const parciales = useMemo(() => {
+    const avisos = new Map<number, string[]>();
+    const parejas = new Map<number, number[]>();
+    if (lapso.tipo !== 'SEMESTRAL') return { avisos, parejas };
     const t2 = entries.filter(
       (e) => e.tipo_proyeccion === 'TRIMESTRAL' && e.trimestre === 2
     );
-    if (t2.length === 0) return m;
+    if (t2.length === 0) return { avisos, parejas };
     const esLadoSemestre = (e: HorarioEntry) =>
       e.tipo_proyeccion === 'SEMESTRAL'
         ? e.trimestre === lapso.n
         : e.trimestre !== 2 && seccionesSemestrales.has(e.seccion_id);
     const add = (id: number, txt: string) => {
-      const arr = m.get(id) ?? [];
+      const arr = avisos.get(id) ?? [];
       if (!arr.includes(txt)) arr.push(txt);
-      m.set(id, arr);
+      avisos.set(id, arr);
+    };
+    const addPar = (a: number, b: number) => {
+      const arr = parejas.get(a) ?? [];
+      if (!arr.includes(b)) arr.push(b);
+      parejas.set(a, arr);
     };
     const pnfDe = (e: HorarioEntry) =>
       pnfLabel(pnfOptions.find(([id]) => id === e.pnf_saga_id)?.[1]);
@@ -525,7 +531,9 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         const quien =
           `'${o.materia_nombre}' de la sección ${o.seccion_nombre} (${pnfDe(o)}), ` +
           `trimestre 2 — solapa solo la ${mitad}`;
+        let choca = false;
         if (o.aula_id === e.aula_id) {
+          choca = true;
           const txt =
             `Posible conflicto de aula: comparte el aula ` +
             `${e.aula_nombre || e.aula_codigo} con ${quien}, el ${donde}.`;
@@ -534,20 +542,28 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             `con '${e.materia_nombre}' de la sección ${e.seccion_nombre}, semestre ${lapso.n}, el ${donde}.`);
         }
         if (o.profesor_id && o.profesor_id === e.profesor_id) {
+          choca = true;
           const prof = `${o.prof_apellidos ?? ''}, ${o.prof_nombres ?? ''}`.replace(/^,\s*/, '');
           add(e.id, `Posible conflicto de profesor: ${prof} también da ${quien}, el ${donde}.`);
           add(o.id, `Posible conflicto de profesor: ${prof} también da '${e.materia_nombre}' ` +
             `de la sección ${e.seccion_nombre}, semestre ${lapso.n}, el ${donde}.`);
         }
         if (o.seccion_id === e.seccion_id) {
+          choca = true;
           add(e.id, `Posible conflicto de sección: ${quien} es de esta misma sección, el ${donde}.`);
           add(o.id, `Posible conflicto de sección: '${e.materia_nombre}' del semestre ${lapso.n} ` +
             `es de esta misma sección, el ${donde}.`);
         }
+        if (choca) {
+          addPar(e.id, o.id);
+          addPar(o.id, e.id);
+        }
       }
     }
-    return m;
+    return { avisos, parejas };
   }, [entries, lapso, usa12, pnfOptions, seccionesSemestrales]);
+  const avisosParciales = parciales.avisos;
+  const parejasParciales = parciales.parejas;
 
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
@@ -1041,6 +1057,8 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               enError={celdasEnError}
               advertencias={advertenciasPorEntry}
               avisosParciales={avisosParciales}
+              parejasParciales={parejasParciales}
+              seccionesSemestrales={seccionesSemestrales}
             />
           )}
 
@@ -1053,6 +1071,8 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               enError={celdasEnError}
               advertencias={advertenciasPorEntry}
               avisosParciales={avisosParciales}
+              parejasParciales={parejasParciales}
+              seccionesSemestrales={seccionesSemestrales}
             />
           )}
         </>

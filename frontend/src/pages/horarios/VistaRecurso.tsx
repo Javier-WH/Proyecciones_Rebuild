@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHoraCfg, minutos } from './types.js';
-import { ClaseCard } from './ClaseCard.js';
+import { HorarioEntry, Turno, ErrorClase, DIAS_NOMBRES, fmtHoraCfg, minutos, normMateria } from './types.js';
+import { ClaseCard, ClaseDividida } from './ClaseCard.js';
 import { Clock, Coffee } from 'lucide-react';
 
 // Vista de solo lectura: grilla días × bloques con las clases de un recurso
@@ -16,6 +16,8 @@ interface VistaRecursoProps {
   enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
   advertencias?: Map<number, string[]>; // entry.id → avisos (triángulo amarillo)
   avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
+  parejasParciales?: Map<number, number[]>; // entry.id → ids de las clases T2/semestre que le chocan
+  seccionesSemestrales?: Set<number>; // secciones cuyas clases trimestrales son de semestre
 }
 
 interface Banda {
@@ -23,7 +25,7 @@ interface Banda {
   bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales, parejasParciales, seccionesSemestrales }) => {
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -154,6 +156,69 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
     return { spans, cubiertas };
   }, [bandas, dias, porCelda]);
 
+  // Parejas del choque parcial T2↔semestre que están en ESTA vista del
+  // recurso (un choque de aula puede ser con otra sección/profesor que no
+  // aparece aquí → se ignora). Son exactamente los pares del icono verde.
+  const porId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const parejasDe = (e: HorarioEntry): HorarioEntry[] =>
+    (parejasParciales?.get(e.id) ?? [])
+      .map((id) => porId.get(id))
+      .filter((x): x is HorarioEntry => !!x);
+
+  // Identidad de materia dentro de la división: las parejas suelen ser
+  // varias entries de la MISMA clase (una por hora); deben formar un solo
+  // bloque, no una región por hora intercalada.
+  const claveMateria = (e: HorarioEntry) =>
+    `${e.seccion_id}|${normMateria(e.materia_nombre)}|${e.profesor_id ?? 0}`;
+
+  // Tarjetas a renderizar en una celda, agrupadas por materia: las propias
+  // de la celda más las parejas de choque parcial de todas ellas (pueden
+  // estar en otra banda/turno). Solo se divide cuando hay pareja real del
+  // icono verde.
+  const grupoDe = (items: HorarioEntry[]): HorarioEntry[][] => {
+    const map = new Map<string, HorarioEntry[]>();
+    for (const e of items) {
+      for (const x of [e, ...parejasDe(e)]) {
+        const k = claveMateria(x);
+        const g = map.get(k);
+        if (g) g.push(x);
+        else map.set(k, [x]);
+      }
+    }
+    return [...map.values()];
+  };
+
+  // Lapso a mostrar: las clases de secciones SEMESTRALES se registran como
+  // T1/T3 (cursan todo el semestre) → se etiquetan como el semestre real,
+  // no como el trimestre donde están archivadas.
+  const lapsoTexto = (e: HorarioEntry) =>
+    e.tipo_proyeccion === 'SEMESTRAL'
+      ? `Semestre ${e.trimestre}`
+      : seccionesSemestrales?.has(e.seccion_id)
+      ? `Semestre ${e.trimestre === 1 ? '1' : e.trimestre === 3 ? '2' : '1/2'}`
+      : `Trimestre ${e.trimestre}`;
+
+  // Indicadores de un grupo (unión de los de todas sus entries/horas) y su
+  // rango horario completo (primera hora de inicio → última hora de fin)
+  const itemDividido = (g: HorarioEntry[]) => ({
+    entry: g[0],
+    lapsoTexto: lapsoTexto(g[0]),
+    horas: (() => {
+      const ini = g.map((x) => x.hora_inicio).sort()[0];
+      const fin = g.map((x) => x.hora_fin).sort().slice(-1)[0];
+      return `${fmtHoraCfg(ini, formato12)}–${fmtHoraCfg(fin, formato12)}`;
+    })(),
+    errores: [
+      ...new Map(
+        g
+          .flatMap((x) => enError?.get(`${x.bloque_id}:${x.dia_semana}`) ?? [])
+          .map((t) => [`${t.titulo}|${t.texto}`, t])
+      ).values(),
+    ],
+    advertencias: [...new Set(g.flatMap((x) => advertencias?.get(x.id) ?? []))],
+    avisosParciales: [...new Set(g.flatMap((x) => avisosParciales?.get(x.id) ?? []))],
+  });
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-x-auto">
       <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold px-1 pb-2">{titulo}</div>
@@ -201,20 +266,27 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       {ocupada ? (
                         dias.map((d) => {
                           const items = ocupacion(d);
+                          const dividir = items.some((e) => parejasDe(e).length > 0);
                           return (
                             <td key={d} className="relative p-0 align-top" style={{ height: '1.75rem' }}>
-                              <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
-                                {items.map((e) => (
-                                  <ClaseCard
-                                    key={e.id}
-                                    entry={e}
-                                    compacto={items.length > 1}
-                                    usa12h={formato12}
-                                    errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
-                                    advertencias={advertencias?.get(e.id)}
-                                    avisosParciales={avisosParciales?.get(e.id)}
-                                  />
-                                ))}
+                              <div className="absolute inset-0 p-0.5">
+                                {!dividir ? (
+                                  <div className="h-full flex flex-col gap-1">
+                                    {items.map((e) => (
+                                      <ClaseCard
+                                        key={e.id}
+                                        entry={e}
+                                        compacto={items.length > 1}
+                                        usa12h={formato12}
+                                        errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
+                                        advertencias={advertencias?.get(e.id)}
+                                        avisosParciales={avisosParciales?.get(e.id)}
+                                      />
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <ClaseDividida items={grupoDe(items).map(itemDividido)} />
+                                )}
                               </div>
                             </td>
                           );
@@ -292,19 +364,45 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                           className="relative p-0 align-top"
                           style={{ height: '3.5rem' }}
                         >
-                          <div className="absolute inset-0 p-0.5 flex flex-col gap-1">
-                            {items.map((e) => (
-                              <ClaseCard
-                                key={e.id}
-                                entry={e}
-                                fin={fusion ? sp.fin : undefined}
-                                compacto={items.length > 1}
-                                usa12h={formato12}
-                                errores={items.length > 1 ? errsDe(e) : errsDe()}
-                                advertencias={advertencias?.get(e.id)}
-                                avisosParciales={parDe(items.length > 1 ? e : undefined)}
-                              />
-                            ))}
+                          <div className="absolute inset-0 p-0.5">
+                            {(() => {
+                              // Parejas del choque parcial de TODAS las celdas
+                              // que absorbe el rowspan: si alguna choca con el
+                              // trimestre 2, el bloque se divide.
+                              const itemsRun: HorarioEntry[] = [];
+                              for (let k = 0; k < (fusion ? sp!.n : 1); k++) {
+                                const bl = bloques[bIdx + k];
+                                if (!bl) break;
+                                const kk =
+                                  bl.id > 0 ? `${bl.id}:${d}` : `${bl.hora_inicio}-${bl.hora_fin}:${d}`;
+                                itemsRun.push(
+                                  ...((bl.id > 0 ? porCelda : huerfanasPorCelda).get(kk) ?? [])
+                                );
+                              }
+                              if (itemsRun.some((e) => parejasDe(e).length > 0)) {
+                                return (
+                                  <ClaseDividida
+                                    items={grupoDe(itemsRun.length > 0 ? itemsRun : items).map(itemDividido)}
+                                  />
+                                );
+                              }
+                              return (
+                                <div className="h-full flex flex-col gap-1">
+                                  {items.map((e) => (
+                                    <ClaseCard
+                                      key={e.id}
+                                      entry={e}
+                                      fin={fusion ? sp.fin : undefined}
+                                      compacto={items.length > 1}
+                                      usa12h={formato12}
+                                      errores={items.length > 1 ? errsDe(e) : errsDe()}
+                                      advertencias={advertencias?.get(e.id)}
+                                      avisosParciales={parDe(items.length > 1 ? e : undefined)}
+                                    />
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                       );
