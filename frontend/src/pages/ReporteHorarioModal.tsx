@@ -217,7 +217,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           .sort((a, b) => a.nombre.localeCompare(b.nombre)),
         aulas: aulas
           .filter((a) => aulaIds.has(a.id))
-          .map((a) => ({ id: a.id, codigo: a.codigo }))
+          .map((a) => ({ id: a.id, codigo: a.nombre || a.codigo }))
           .sort((a, b) => a.codigo.localeCompare(b.codigo)),
       });
     }
@@ -339,7 +339,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
         hora,
         celdas: dias.map((d) => {
           const e = porCelda.get(`${b.id}:${d}`);
-          return e ? [{ mat: e.materia_nombre, subs: [nomProf(e), `Aula: ${e.aula_codigo}`] }] : null;
+          return e ? [{ mat: e.materia_nombre, subs: [nomProf(e), `Aula: ${e.aula_nombre}`] }] : null;
         }),
       };
     });
@@ -403,10 +403,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
                   }
                 : {
                     mat: e.materia_nombre,
-                    subs: [
-                      `Sección ${e.seccion_nombre} (${labelLapso(e.trimestre, e.tipo_proyeccion)})`,
-                      `Aula: ${e.aula_codigo}`,
-                    ],
+                    subs: [`Sección ${e.seccion_nombre}`, e.aula_nombre],
                   }
             );
           }),
