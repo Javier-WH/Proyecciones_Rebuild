@@ -565,6 +565,53 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const avisosParciales = parciales.avisos;
   const parejasParciales = parciales.parejas;
 
+  // Parejas de CUALQUIER solape visible entre clases distintas — solo en
+  // vistas semestrales, donde conviven clases de varios lapsos (T1, T2 y el
+  // semestre mismo). La partición por franjas las muestra todas a tiempo
+  // real; si la relación es 'total' además llevan el punto rojo de error, y
+  // si es T2↔semestre el icono verde. Solo se ignora la misma entrada
+  // (misma clase lógica en el mismo lapso).
+  const parejasTotales = useMemo(() => {
+    const parejas = new Map<number, number[]>();
+    if (lapso.tipo !== 'SEMESTRAL') return parejas;
+    const clave = (e: HorarioEntry) =>
+      `${e.seccion_id}|${normMateria(e.materia_nombre)}|${e.profesor_id ?? 0}|` +
+      `${e.tipo_proyeccion}:${e.trimestre}`;
+    const addPar = (a: number, b: number) => {
+      const arr = parejas.get(a) ?? [];
+      if (!arr.includes(b)) arr.push(b);
+      parejas.set(a, arr);
+    };
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const a = entries[i];
+        const b = entries[j];
+        if (a.dia_semana !== b.dia_semana) continue;
+        if (!traslapan(a.hora_inicio, a.hora_fin, b.hora_inicio, b.hora_fin)) continue;
+        if (clave(a) === clave(b)) continue;
+        addPar(a.id, b.id);
+        addPar(b.id, a.id);
+      }
+    }
+    return parejas;
+  }, [entries, lapso]);
+
+  // Parejas que disparan la partición visual en vistas de recurso:
+  // choques parciales (T2↔semestre) + choques reales entre clases distintas.
+  const parejasConflicto = useMemo(() => {
+    const m = new Map<number, number[]>();
+    const merge = (src: Map<number, number[]>) => {
+      for (const [k, ids] of src) {
+        const arr = m.get(k) ?? [];
+        for (const id of ids) if (!arr.includes(id)) arr.push(id);
+        m.set(k, arr);
+      }
+    };
+    merge(parejasParciales);
+    merge(parejasTotales);
+    return m;
+  }, [parejasParciales, parejasTotales]);
+
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
     setVista('seccion');
@@ -1057,7 +1104,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               enError={celdasEnError}
               advertencias={advertenciasPorEntry}
               avisosParciales={avisosParciales}
-              parejasParciales={parejasParciales}
+              parejasParciales={parejasConflicto}
               seccionesSemestrales={seccionesSemestrales}
             />
           )}
@@ -1071,7 +1118,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               enError={celdasEnError}
               advertencias={advertenciasPorEntry}
               avisosParciales={avisosParciales}
-              parejasParciales={parejasParciales}
+              parejasParciales={parejasConflicto}
               seccionesSemestrales={seccionesSemestrales}
             />
           )}

@@ -120,9 +120,11 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
 
   // Identidad de materia dentro de la división: las parejas suelen ser
   // varias entries de la MISMA clase (una por hora); deben formar un solo
-  // bloque, no una región por hora intercalada.
+  // bloque, no una región por hora intercalada. Incluye el lapso: la misma
+  // clase registrada en T1 y T2 son dos regiones distintas.
   const claveMateria = (e: HorarioEntry) =>
-    `${e.seccion_id}|${normMateria(e.materia_nombre)}|${e.profesor_id ?? 0}`;
+    `${e.seccion_id}|${normMateria(e.materia_nombre)}|${e.profesor_id ?? 0}|` +
+    `${e.tipo_proyeccion}:${e.trimestre}`;
 
   // Conjunto de clases del slot: propias + parejas del choque parcial (pueden
   // estar en otra banda). Se usa para conectar celdas contiguas.
