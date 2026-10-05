@@ -213,9 +213,14 @@ export const CargaDocentePage: React.FC = () => {
         // Toggle "Solo PNF": solo profesores del PNF de referencia
         if (soloPnf && pnfReferencia != null && Number(p.pnf_saga_id) !== pnfReferencia) continue;
         // Con texto: incluir si coincide el profesor O alguna de sus materias
-        const susRows = rowsPorFiltro.filter(
-          (r) => r.profesor_id === p.id && (coincideTextoProfesor(p) || coincideTextoMateria(r))
-        );
+        const susRows = rowsPorFiltro
+          .filter((r) => r.profesor_id === p.id && (coincideTextoProfesor(p) || coincideTextoMateria(r)))
+          .sort((a, b) =>
+            a.materia_nombre.localeCompare(b.materia_nombre, 'es', {
+              numeric: true,
+              sensitivity: 'base',
+            })
+          );
         // El profesor siempre aparece si coincide con el texto de búsqueda;
         // con texto solo se oculta si ni él ni sus materias coinciden
         if (susRows.length === 0 && !coincideTextoProfesor(p)) continue;
