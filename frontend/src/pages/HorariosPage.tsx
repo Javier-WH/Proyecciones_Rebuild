@@ -15,6 +15,7 @@ import {
   SeccionRef,
   Turno,
   seccionesDe,
+  sortAulas,
   fmtHora,
   fmtHoraCfg,
   formatearHorasEnTexto,

@@ -178,8 +178,40 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       return aDeEste - bDeEste;
     });
 
-  const handleAssign = async (r: MateriaAsignableRow, quitar = false) => {
-    const key = `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`;
+  // Con 'Todos los lapsos' la misma materia+sección aparece una vez por cada
+  // lapso en que se dicta, y la asignación se aplica a todos ellos: se agrupan
+  // en una sola card con el detalle de horas por lapso (T1:4/T2:4/T3:6 o
+  // S1:X/S2:X según el régimen).
+  const lista = (() => {
+    if (lapso !== 'todos') {
+      return filtradas.map((r) => ({
+        rep: r,
+        lapsosTxt: '',
+        key: `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`,
+      }));
+    }
+    const grupos = new Map<string, MateriaAsignableRow[]>();
+    for (const r of filtradas) {
+      const k = `${r.proyeccion_id}-${r.materia_id}-${r.seccion_id}`;
+      const arr = grupos.get(k);
+      if (arr) arr.push(r);
+      else grupos.set(k, [r]);
+    }
+    return [...grupos.values()].map((arr) => {
+      const rep =
+        arr.find((r) => r.profesor_id === profesor.id) ??
+        arr.find((r) => r.profesor_id === null) ??
+        arr[0];
+      const lapsos = [...new Map(arr.map((r) => [r.trimestre, r.horas_semanales])).entries()].sort(
+        (a, b) => a[0] - b[0]
+      );
+      const letra = rep.tipo_proyeccion === 'SEMESTRAL' ? 'S' : 'T';
+      const lapsosTxt = lapsos.map(([n, h]) => `${letra}${n}:${h}`).join('/');
+      return { rep, lapsosTxt, key: `${rep.materia_id}-${rep.seccion_id}-todos` };
+    });
+  })();
+
+  const handleAssign = async (r: MateriaAsignableRow, key: string, quitar = false) => {
     setBusyKey(key);
     setErrorMsg(null);
     const res = await apiFetch('/proyecciones/asignaciones', {
@@ -338,7 +370,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
             </div>
           )}
 
-          {filtradas.length === 0 ? (
+          {lista.length === 0 ? (
             <div className="py-8 text-center text-slate-500 text-xs">
               {soloPerfil
                 ? 'Ninguna materia coincide con el perfil del profesor. Desactive el filtro para ver todas.'
@@ -347,8 +379,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                   : 'Sin materias que coincidan con la búsqueda.'}
             </div>
           ) : (
-            filtradas.map((r) => {
-              const key = `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`;
+            lista.map(({ rep: r, lapsosTxt, key }) => {
               const esDeEste = r.profesor_id === profesor.id;
               const esDeOtro = r.profesor_id !== null && !esDeEste;
               const esDePerfil = matchPerfil(r);
@@ -374,7 +405,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       {r.pnf_nombre} · {r.trayecto_nombre} · Sec. {r.seccion_nombre} · {r.turno_nombre} ·{' '}
-                      {labelLapso(r.trimestre, r.tipo_proyeccion)}
+                      {lapsosTxt || labelLapso(r.trimestre, r.tipo_proyeccion)}
                     </div>
                     {esDePerfil && (
                       <div className="text-[10px] text-amber-400/90 mt-0.5">
@@ -388,11 +419,16 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                     )}
                   </div>
 
-                  <span className="text-[11px] font-bold text-blue-300 shrink-0">{r.horas_semanales} hrs</span>
+                  <span
+                    className="text-[11px] font-bold text-blue-300 shrink-0"
+                    title={lapsosTxt ? 'Horas por lapso' : undefined}
+                  >
+                    {lapsosTxt || `${r.horas_semanales} hrs`}
+                  </span>
 
                   {esDeEste ? (
                     <button
-                      onClick={() => handleAssign(r, true)}
+                      onClick={() => handleAssign(r, key, true)}
                       disabled={busyKey === key}
                       className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-red-500/15 border border-emerald-500/30 hover:border-red-500/40 text-emerald-300 hover:text-red-300 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                       title="Quitar materia de este profesor"
@@ -402,7 +438,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                     </button>
                   ) : (
                     <button
-                      onClick={() => handleAssign(r)}
+                      onClick={() => handleAssign(r, key)}
                       disabled={busyKey === key}
                       className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                       title={esDeOtro ? 'Reasignar a este profesor' : 'Asignar a este profesor'}
