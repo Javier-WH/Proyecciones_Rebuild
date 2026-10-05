@@ -187,6 +187,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       return filtradas.map((r) => ({
         rep: r,
         lapsosTxt: '',
+        lapsoLabel: labelLapso(r.trimestre, r.tipo_proyeccion),
         key: `${r.materia_id}-${r.seccion_id}-${r.tipo_proyeccion}-${r.trimestre}`,
       }));
     }
@@ -202,12 +203,19 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
         arr.find((r) => r.profesor_id === profesor.id) ??
         arr.find((r) => r.profesor_id === null) ??
         arr[0];
-      const lapsos = [...new Map(arr.map((r) => [r.trimestre, r.horas_semanales])).entries()].sort(
-        (a, b) => a[0] - b[0]
-      );
-      const letra = rep.tipo_proyeccion === 'SEMESTRAL' ? 'S' : 'T';
-      const lapsosTxt = lapsos.map(([n, h]) => `${letra}${n}:${h}`).join('/');
-      return { rep, lapsosTxt, key: `${rep.materia_id}-${rep.seccion_id}-todos` };
+      const esSemestral = rep.tipo_proyeccion === 'SEMESTRAL';
+      // Horas por lapso con 0 donde no se dicta: X/X/X trimestral, X/X semestral
+      const horasPorLapso = new Map(arr.map((r) => [r.trimestre, r.horas_semanales]));
+      const lapsosTxt = Array.from(
+        { length: esSemestral ? 2 : 3 },
+        (_, i) => horasPorLapso.get(i + 1) ?? 0
+      ).join('/');
+      return {
+        rep,
+        lapsosTxt,
+        lapsoLabel: `Todos los ${esSemestral ? 'semestres' : 'trimestres'}`,
+        key: `${rep.materia_id}-${rep.seccion_id}-todos`,
+      };
     });
   })();
 
@@ -379,7 +387,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                   : 'Sin materias que coincidan con la búsqueda.'}
             </div>
           ) : (
-            lista.map(({ rep: r, lapsosTxt, key }) => {
+            lista.map(({ rep: r, lapsosTxt, lapsoLabel, key }) => {
               const esDeEste = r.profesor_id === profesor.id;
               const esDeOtro = r.profesor_id !== null && !esDeEste;
               const esDePerfil = matchPerfil(r);
@@ -405,7 +413,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       {r.pnf_nombre} · {r.trayecto_nombre} · Sec. {r.seccion_nombre} · {r.turno_nombre} ·{' '}
-                      {lapsosTxt || labelLapso(r.trimestre, r.tipo_proyeccion)}
+                      {lapsoLabel}
                     </div>
                     {esDePerfil && (
                       <div className="text-[10px] text-amber-400/90 mt-0.5">
@@ -419,12 +427,21 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                     )}
                   </div>
 
-                  <span
-                    className="text-[11px] font-bold text-blue-300 shrink-0"
-                    title={lapsosTxt ? 'Horas por lapso' : undefined}
-                  >
-                    {lapsosTxt || `${r.horas_semanales} hrs`}
-                  </span>
+                  {lapsosTxt ? (
+                    <span
+                      className="text-right shrink-0"
+                      title={`Horas por ${r.tipo_proyeccion === 'SEMESTRAL' ? 'semestre' : 'trimestre'}`}
+                    >
+                      <span className="block text-[9px] uppercase tracking-wide text-slate-500 font-semibold">
+                        {r.tipo_proyeccion === 'SEMESTRAL' ? 'Semestral' : 'Trimestral'}
+                      </span>
+                      <span className="block text-[11px] font-bold text-blue-300">{lapsosTxt}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-blue-300 shrink-0">
+                      {r.horas_semanales} hrs
+                    </span>
+                  )}
 
                   {esDeEste ? (
                     <button
