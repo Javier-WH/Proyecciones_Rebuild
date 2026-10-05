@@ -51,7 +51,17 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
       FROM proyecciones pr
       JOIN proyeccion_materias m ON m.proyeccion_id = pr.id AND m.eliminada = 0
       JOIN proyeccion_secciones s
-        ON s.proyeccion_id = pr.id AND (m.seccion_id IS NULL OR m.seccion_id = s.id)
+        ON s.proyeccion_id = pr.id
+        AND (
+          m.seccion_id = s.id
+          OR (
+            m.seccion_id IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM proyeccion_materias pm
+              WHERE pm.proyeccion_id = pr.id AND pm.seccion_id = s.id AND pm.eliminada = 0
+            )
+          )
+        )
       WHERE pr.activa = 1 AND pr.periodo_academico = ?
     `;
     const params: any[] = [periodoCodigo];
