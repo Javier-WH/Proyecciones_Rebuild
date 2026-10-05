@@ -108,6 +108,14 @@ const PALETA = [
 ];
 export const colorMateria = (id: number): string => PALETA[id % PALETA.length];
 
+// Orden natural por nombre: "Aula 9" antes que "Aula 10"; desempate por código
+export const sortAulas = (aulas: Aula[]): Aula[] =>
+  [...aulas].sort(
+    (a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', { numeric: true, sensitivity: 'base' }) ||
+      a.codigo.localeCompare(b.codigo, 'es', { numeric: true, sensitivity: 'base' })
+  );
+
 export const fmtHora = (h: string): string => h?.slice(0, 5) ?? '';
 
 // Antepone 'PNF' solo si el nombre no lo trae ya (p. ej. 'P.N.F. en Informática')

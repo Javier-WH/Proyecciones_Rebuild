@@ -658,7 +658,8 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       setErrorMsg(rCarga.message || 'Error cargando la carga docente.');
     }
     if (rTurnos.success && rTurnos.data) setTurnos(rTurnos.data);
-    if (rAulas.success && rAulas.data) setAulas(rAulas.data);
+    // Orden natural por nombre: Aula 2 antes que Aula 10
+    if (rAulas.success && rAulas.data) setAulas(sortAulas(rAulas.data));
     if (rProf.success && rProf.data) setProfesores(rProf.data);
     if (rPnfs.success && rPnfs.data) setPnfOptions(rPnfs.data.map((p) => [p.id, p.nombre]));
     if (rConfig.success && rConfig.data) setConfig(rConfig.data);

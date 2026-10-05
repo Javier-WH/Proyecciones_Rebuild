@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
-import { Aula, normMateria } from './types.js';
+import { Aula, normMateria, sortAulas } from './types.js';
 import {
   MateriaOpcion,
   precargarCatalogoMaterias,
@@ -43,6 +43,9 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
   const [pickerQ, setPickerQ] = useState('');
   const [materiasOpts, setMateriasOpts] = useState<MateriaOpcion[] | null>(null);
   const [pickerLoading, setPickerLoading] = useState(false);
+
+  // Orden natural por nombre: Aula 9 antes que Aula 10
+  const aulasOrdenadas = useMemo(() => sortAulas(aulas), [aulas]);
 
   // La misma materia puede venir en varias mallas/PNFs del catálogo: se agrupa
   // por nombre para que el picker la liste una sola vez, mostrando todas sus
@@ -175,14 +178,14 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
-            {aulas.length === 0 && (
+            {aulasOrdenadas.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-5 py-8 text-center text-slate-500 italic">
                   No hay aulas registradas.
                 </td>
               </tr>
             )}
-            {aulas.map((a) => (
+            {aulasOrdenadas.map((a) => (
               <tr key={a.id} className={a.activa ? '' : 'opacity-50'}>
                 <td className="px-5 py-3 font-bold text-white">{a.codigo}</td>
                 <td className="px-5 py-3 text-slate-300">{a.nombre}</td>
