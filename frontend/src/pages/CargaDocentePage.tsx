@@ -185,12 +185,9 @@ export const CargaDocentePage: React.FC = () => {
     [rows, filterLapso, filterPnf, filterProyeccion]
   );
 
-  // PNF de referencia para el toggle "Solo PNF": el seleccionado en el filtro,
-  // o el PNF propio del usuario si el filtro está en "Todos los PNF"
-  const pnfReferencia = useMemo(
-    () => (filterPnf !== 'todos' ? Number(filterPnf) : user?.pnf_saga_id ?? null),
-    [filterPnf, user]
-  );
+  // PNF de referencia para el toggle "Mis profesores": el PNF asociado
+  // a la cuenta del usuario
+  const pnfReferencia = useMemo(() => user?.pnf_saga_id ?? null, [user]);
 
   // Grupos: TODOS los profesores activos + pseudo-grupo "SIN ASIGNAR"
   const { grupos, sinAsignar } = useMemo(() => {
@@ -210,7 +207,7 @@ export const CargaDocentePage: React.FC = () => {
     const lista: ProfesorGrupo[] = [];
     if (!soloSinAsignar) {
       for (const p of profesores) {
-        // Toggle "Solo PNF": solo profesores del PNF de referencia
+        // Toggle "Mis profesores": solo profesores del PNF del usuario
         if (soloPnf && pnfReferencia != null && Number(p.pnf_saga_id) !== pnfReferencia) continue;
         // Con texto: incluir si coincide el profesor O alguna de sus materias
         const susRows = rowsPorFiltro
@@ -690,37 +687,35 @@ export const CargaDocentePage: React.FC = () => {
           ))}
         </select>
 
-        {/* Toggle Solo PNF / Todos */}
-        <div
-          className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1"
-          title={
-            soloPnf && pnfReferencia == null
-              ? 'Sin PNF de referencia: se muestran todos los profesores'
-              : 'Solo PNF: profesores del PNF seleccionado (o el suyo); Todos: todos los profesores'
-          }
-        >
-          <button
-            onClick={() => setSoloPnf(true)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              soloPnf
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
+        {/* Toggle Mis profesores / Todos los profesores: solo si el usuario tiene PNF asociado */}
+        {pnfReferencia != null && (
+          <div
+            className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1"
+            title="Mis profesores: solo profesores de su PNF; Todos los profesores: todos"
           >
-            <Check className="w-3.5 h-3.5" />
-            <span>Solo PNF</span>
-          </button>
-          <button
-            onClick={() => setSoloPnf(false)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              !soloPnf
-                ? 'bg-slate-700 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>Todos</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setSoloPnf(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                soloPnf
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Mis profesores</span>
+            </button>
+            <button
+              onClick={() => setSoloPnf(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                !soloPnf
+                  ? 'bg-slate-700 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>Todos los profesores</span>
+            </button>
+          </div>
+        )}
 
         <button
           onClick={() => setSoloSinAsignar(!soloSinAsignar)}

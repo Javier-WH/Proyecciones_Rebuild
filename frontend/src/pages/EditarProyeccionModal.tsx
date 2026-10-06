@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
-import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning } from './CrearProyeccionModal.js';
+import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning, resolverTurnoSeccion } from './CrearProyeccionModal.js';
 import {
   X,
   BookOpen,
@@ -404,18 +404,16 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                           <select
                             value={sec.turno_nombre}
                             onChange={(e) => {
-                              const selectedNombre = e.target.value;
-                              const foundTurno = turnosList.find(
-                                (t) => t.turno.toLowerCase() === selectedNombre.toLowerCase()
-                              );
+                              const resuelto = resolverTurnoSeccion(e.target.value, turnosList, turnosLocales);
                               const newArr = [...secciones];
-                              newArr[idx].turno_nombre = selectedNombre;
-                              newArr[idx].turno_saga_id = foundTurno ? foundTurno.id : 1;
+                              newArr[idx].turno_nombre = resuelto.turno_nombre;
+                              newArr[idx].turno_saga_id = resuelto.turno_saga_id;
                               setSecciones(applySectionNamingConvention(newArr));
                             }}
                             className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
                           >
-                            {['Mañana', 'Tarde', 'Noche', 'Diurno'].includes(sec.turno_nombre) ? null : (
+                            {['Mañana', 'Tarde', 'Noche', 'Diurno'].includes(sec.turno_nombre) ||
+                            turnosList.some((t) => t.turno === sec.turno_nombre) ? null : (
                               <option value={sec.turno_nombre}>{sec.turno_nombre}</option>
                             )}
                             <option value="Mañana">Mañana</option>

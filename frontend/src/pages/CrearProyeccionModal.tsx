@@ -120,6 +120,26 @@ export function jornadaDeSeccion(
   return turnosLocales.find((t) => normTurno(t.nombre) === normTurno(turnoNombre))?.horas_jornada ?? null;
 }
 
+// SAGA registra la jornada nocturna como 'Nocturno'; la UI la ofrece como 'Noche'
+const TURNO_EQUIV: Record<string, string> = { noche: 'nocturno' };
+
+// Resuelve el turno elegido en el selector a su turno real: por nombre en
+// SAGA y, si no está (o SAGA caído), en los turnos locales sincronizados.
+// Devuelve el nombre canónico del turno; saga_id 0 si no hay equivalente —
+// nunca se asume Mañana: un id equivocado agenda la sección en otro turno.
+export function resolverTurnoSeccion(
+  nombre: string,
+  turnosList: Array<{ id: number; turno: string }>,
+  turnosLocales: TurnoJornada[]
+): { turno_saga_id: number; turno_nombre: string } {
+  const clave = TURNO_EQUIV[normTurno(nombre)] ?? normTurno(nombre);
+  const saga = turnosList.find((t) => normTurno(t.turno) === clave);
+  if (saga) return { turno_saga_id: saga.id, turno_nombre: saga.turno };
+  const local = turnosLocales.find((t) => t.saga_id != null && normTurno(t.nombre) === clave);
+  if (local) return { turno_saga_id: local.saga_id!, turno_nombre: local.nombre };
+  return { turno_saga_id: 0, turno_nombre: nombre };
+}
+
 // Horas semanales que una sección cursa en cada lapso, vs la jornada del turno.
 // Materias: las del pensum propio de la sección si existe, si no las generales.
 export interface ExcesoJornada {
@@ -973,17 +993,18 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                               <select
                                 value={sec.turno_nombre}
                                 onChange={(e) => {
-                                  const selectedNombre = e.target.value;
-                                  const foundTurno = turnosList.find(
-                                    (t) => t.turno.toLowerCase() === selectedNombre.toLowerCase()
-                                  );
+                                  const resuelto = resolverTurnoSeccion(e.target.value, turnosList, turnosLocales);
                                   const newArr = [...secciones];
-                                  newArr[idx].turno_nombre = selectedNombre;
-                                  newArr[idx].turno_saga_id = foundTurno ? foundTurno.id : 1;
+                                  newArr[idx].turno_nombre = resuelto.turno_nombre;
+                                  newArr[idx].turno_saga_id = resuelto.turno_saga_id;
                                   setSecciones(applySectionNamingConvention(newArr));
                                 }}
                                 className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
                               >
+                                {['Mañana', 'Tarde', 'Noche', 'Diurno'].includes(sec.turno_nombre) ||
+                                turnosList.some((t) => t.turno === sec.turno_nombre) ? null : (
+                                  <option value={sec.turno_nombre}>{sec.turno_nombre}</option>
+                                )}
                                 <option value="Mañana">Mañana</option>
                                 <option value="Tarde">Tarde</option>
                                 <option value="Noche">Noche</option>

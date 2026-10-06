@@ -1,6 +1,34 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
 
+const normTurno = (s: any): string =>
+  String(s ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+
+// 'Noche' en la UI equivale al turno SAGA 'Nocturno'
+const TURNO_EQUIV: Record<string, string> = { noche: 'nocturno' };
+
+// Resuelve el turno de una sección contra los turnos sincronizados de SAGA:
+// por saga_id si viene, si no por nombre (con equivalencias). Devuelve
+// (saga_id, nombre canónico); null si no hay equivalente — nunca se asume
+// Mañana: un id equivocado agenda la sección en bloques de otro turno.
+function turnoCanonico(
+  rows: Array<{ saga_id: number; nombre: string }>,
+  sagaId: any,
+  nombre: any
+): { saga_id: number; nombre: string } | null {
+  const sid = Number(sagaId) || 0;
+  if (sid) {
+    const byId = rows.find((r) => Number(r.saga_id) === sid);
+    if (byId) return byId;
+  }
+  const clave = TURNO_EQUIV[normTurno(nombre)] ?? normTurno(nombre);
+  return rows.find((r) => normTurno(r.nombre) === clave) ?? null;
+}
+
 interface CreateProyeccionBody {
   codigo: string;
   nombre: string;
@@ -111,15 +139,19 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
 
     // 2. Insertar secciones si fueron enviadas (cada una puede tener su propia maya y materias)
     if (body.secciones && body.secciones.length > 0) {
+      const turnosDb = await query<any[]>(
+        'SELECT saga_id, nombre FROM turnos WHERE saga_id IS NOT NULL'
+      );
       for (const sec of body.secciones) {
+        const t = turnoCanonico(turnosDb, sec.turno_saga_id, sec.turno_nombre);
         const secResult: any = await query(
           `INSERT INTO proyeccion_secciones (proyeccion_id, nombre, turno_saga_id, turno_nombre, estudiantes_estimados, maya_id, maya_descripcion)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             proyeccionId,
             sec.nombre,
-            sec.turno_saga_id || 1,
-            sec.turno_nombre || 'Mañana',
+            t?.saga_id ?? (Number(sec.turno_saga_id) || 0),
+            t?.nombre ?? sec.turno_nombre ?? 'Mañana',
             sec.estudiantes_estimados || 30,
             sec.maya_id || null,
             sec.maya_descripcion || null,
@@ -376,13 +408,24 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
         'SELECT id, nombre, turno_saga_id FROM proyeccion_secciones WHERE proyeccion_id = ?',
         [id]
       );
+      const [turnosDb] = await conn.query<any[]>(
+        'SELECT saga_id, nombre FROM turnos WHERE saga_id IS NOT NULL'
+      );
+      // Turno canónico por sección (saga_id y nombre resueltos contra SAGA)
+      const turnoSecs = body.secciones.map((sec: any) => {
+        const t = turnoCanonico(turnosDb, sec.turno_saga_id, sec.turno_nombre);
+        return {
+          sagaId: t?.saga_id ?? (Number(sec.turno_saga_id) || 0),
+          nombre: t?.nombre ?? sec.turno_nombre ?? 'Mañana',
+        };
+      });
       const secByKey = new Map<string, any>(existingSecs.map((s) => [`${s.nombre}|${s.turno_saga_id}`, s]));
       const usedSecIds = new Set<number>();
       const secDbIds: (number | undefined)[] = new Array(body.secciones.length);
 
       // 1) Match por clave (nombre + turno)
       body.secciones.forEach((sec, i) => {
-        const ex = secByKey.get(`${sec.nombre}|${sec.turno_saga_id || 1}`);
+        const ex = secByKey.get(`${sec.nombre}|${turnoSecs[i].sagaId}`);
         if (ex && !usedSecIds.has(ex.id)) {
           secDbIds[i] = ex.id;
           usedSecIds.add(ex.id);
@@ -408,8 +451,8 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
             `UPDATE proyeccion_secciones SET nombre = ?, turno_saga_id = ?, turno_nombre = ?, estudiantes_estimados = ?, maya_id = ?, maya_descripcion = ? WHERE id = ?`,
             [
               sec.nombre,
-              sec.turno_saga_id || 1,
-              sec.turno_nombre || 'Mañana',
+              turnoSecs[i].sagaId,
+              turnoSecs[i].nombre,
               sec.estudiantes_estimados || 30,
               sec.maya_id || null,
               sec.maya_descripcion || null,
@@ -423,8 +466,8 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
             [
               id,
               sec.nombre,
-              sec.turno_saga_id || 1,
-              sec.turno_nombre || 'Mañana',
+              turnoSecs[i].sagaId,
+              turnoSecs[i].nombre,
               sec.estudiantes_estimados || 30,
               sec.maya_id || null,
               sec.maya_descripcion || null,
