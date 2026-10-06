@@ -70,6 +70,7 @@ interface Violacion {
   detalle: string;
   error: string;
   titulo?: string; // línea destacada en el panel/tooltip (choques)
+  lineas?: string[]; // viñetas con la ficha de cada clase involucrada
 }
 
 // Slot en que un profesor NO está disponible (tabla profesor_disponibilidad = bloqueos)
@@ -212,12 +213,6 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       e.profesor_id
         ? `${e.prof_apellidos ?? ''}, ${e.prof_nombres ?? ''}`.replace(/^,\s*/, '')
         : 'sin profesor asignado';
-    const detalle = (e: HorarioEntry) => {
-      const s = secById.get(e.seccion_id);
-      return `La materia '${e.materia_nombre}' del ${pnfLabel(s?.pnf_nombre)}, ` +
-        `sección ${e.seccion_nombre} (${s?.proyeccion_nombre ?? '—'}), ` +
-        `turno ${e.turno_nombre}, ${profDe(e)},`;
-    };
     const cuando = (e: HorarioEntry) =>
       `el ${DIAS_NOMBRES[e.dia_semana]} ${fmtHoraCfg(e.hora_inicio, usa12)}–${fmtHoraCfg(e.hora_fin, usa12)}`;
 
@@ -226,6 +221,16 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // solo a las del lapso actual.
     const esLocal = (e: HorarioEntry) =>
       e.tipo_proyeccion === lapso.tipo && e.trimestre === lapso.n;
+
+    const pnfDe = (e: HorarioEntry) => secById.get(e.seccion_id)?.pnf_nombre ?? '—';
+    const lapsoTag = (e: HorarioEntry) =>
+      e.tipo_proyeccion === 'SEMESTRAL' ? `semestre ${e.trimestre}` : `trimestre ${e.trimestre}`;
+    // Ficha de una línea que identifica la clase en las viñetas del panel.
+    const ficha = (e: HorarioEntry) =>
+      `'${e.materia_nombre}' — ${pnfLabel(pnfDe(e))} · Sección ${e.seccion_nombre} · ` +
+      `Turno ${e.turno_nombre}` +
+      (e.profesor_id ? ` · ${profDe(e)}` : '') +
+      (esLocal(e) ? '' : ` · ${lapsoTag(e)}`);
 
     // Clase en bloque de receso o en día no habilitado para el turno.
     // Los recesos de 10 min o menos se ignoran (son pausas entre horas).
@@ -237,11 +242,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           seccion_id: e.seccion_id,
           dia: e.dia_semana,
           bloques: [e.bloque_id],
-          detalle: detalle(e),
+          detalle: '',
           titulo: 'Clase en receso',
-          error:
-            `Se está colocando la Materia '${e.materia_nombre}' en un bloque de receso ` +
-            `superior a 10 minutos, el ${DIAS_NOMBRES[e.dia_semana]} a las ${fmtHoraCfg(e.hora_inicio, usa12)}.`,
+          error: 'La clase quedó en un bloque de receso de más de 10 minutos:',
+          lineas: [ficha(e), cuando(e)],
         });
         continue;
       }
@@ -251,8 +255,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           seccion_id: e.seccion_id,
           dia: e.dia_semana,
           bloques: [e.bloque_id],
-          detalle: detalle(e),
-          error: `el ${DIAS_NOMBRES[e.dia_semana]} no es un día habilitado del turno '${t.nombre}'.`,
+          detalle: '',
+          titulo: 'Día no habilitado',
+          error: `El turno '${t.nombre}' no tiene habilitado ese día:`,
+          lineas: [ficha(e), cuando(e)],
         });
       }
       // Profesor en un slot que marcó como no disponible (traslapa por hora real)
@@ -269,25 +275,27 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             seccion_id: e.seccion_id,
             dia: e.dia_semana,
             bloques: [e.bloque_id],
-            detalle: detalle(e),
+            detalle: '',
             titulo: 'Profesor no disponible',
             error:
               `El profesor ${profDe(e)} no está disponible el ${DIAS_NOMBRES[e.dia_semana]} ` +
-              `de ${fmtHoraCfg(hit.hora_inicio, usa12)} a ${fmtHoraCfg(hit.hora_fin, usa12)}, ` +
-              `y la materia '${e.materia_nombre}' está agendada ${cuando(e)}.`,
+              `de ${fmtHoraCfg(hit.hora_inicio, usa12)} a ${fmtHoraCfg(hit.hora_fin, usa12)}:`,
+            lineas: [ficha(e), cuando(e)],
           });
         }
       }
     }
 
     // Choques: dos clases traslapadas compartiendo sección, profesor o aula.
-    // Mensaje en dos líneas: título del conflicto + descripción con ambas materias.
-    const pnfDe = (e: HorarioEntry) => secById.get(e.seccion_id)?.pnf_nombre ?? '—';
-    const lapsoTag = (e: HorarioEntry) =>
-      e.tipo_proyeccion === 'SEMESTRAL' ? `semestre ${e.trimestre}` : `trimestre ${e.trimestre}`;
-    const lado = (e: HorarioEntry) =>
-      `'${e.materia_nombre}' del ${pnfLabel(pnfDe(e))} del turno ${e.turno_nombre}` +
-      (esLocal(e) ? '' : ` (${lapsoTag(e)})`);
+    // Formato: título + frase corta con el recurso compartido + viñetas con la
+    // ficha de cada clase y la ventana de solape.
+    const solape = (a: HorarioEntry, b: HorarioEntry) => {
+      const ini = Math.max(minutos(a.hora_inicio), minutos(b.hora_inicio));
+      const fin = Math.min(minutos(a.hora_fin), minutos(b.hora_fin));
+      const h = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      return `${DIAS_NOMBRES[a.dia_semana]} ${fmtHoraCfg(h(ini), usa12)}–${fmtHoraCfg(h(fin), usa12)}`;
+    };
     const choques: [
       string,
       (b: HorarioEntry, a: HorarioEntry) => string,
@@ -295,23 +303,19 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     ][] = [
       [
         'Conflicto de Sección',
-        (b, a) =>
-          `La materia ${lado(b)} está agendada a la misma hora que la materia ${lado(a)} ` +
-          `en la sección ${b.seccion_nombre}, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHoraCfg(b.hora_inicio, usa12)}.`,
+        (b) => `La sección ${b.seccion_nombre} tiene dos clases solapadas:`,
         (e) => `s:${e.seccion_id}:${e.dia_semana}`,
       ],
       [
         'Conflicto de Profesor',
-        (b, a) =>
-          `La materia ${lado(b)} tiene un profesor que ya está dando la materia ${lado(a)} ` +
-          `a la misma hora, el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHoraCfg(b.hora_inicio, usa12)}.`,
+        (b) => `El profesor ${profDe(b)} tiene dos clases solapadas:`,
         (e) => (e.profesor_id ? `p:${e.profesor_id}:${e.dia_semana}` : null),
       ],
       [
         'Conflicto de Aula',
-        (b, a) =>
-          `La materia ${lado(b)} tiene asignada un aula que ya está ocupando la materia ${lado(a)}, ` +
-          `el ${DIAS_NOMBRES[b.dia_semana]} a las ${fmtHoraCfg(b.hora_inicio, usa12)}.`,
+        (b) =>
+          `El aula ${b.aula_codigo || b.aula_nombre} está ocupada por dos clases ` +
+          `a la misma hora:`,
         (e) => `a:${e.aula_id}:${e.dia_semana}`,
       ],
     ];
@@ -336,13 +340,15 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             // Se marcan las celdas de AMBAS clases (los bloque_id son únicos
             // por turno, así no hay colisiones entre lapsos).
             const local = esLocal(b) ? b : esLocal(a) ? a : b;
+            const otro = local === b ? a : b;
             out.push({
               seccion_id: local.seccion_id,
               dia: a.dia_semana,
               bloques: [...new Set([a.bloque_id, b.bloque_id])],
               detalle: '',
               titulo,
-              error: descFn(b, a),
+              error: descFn(local, otro),
+              lineas: [ficha(local), ficha(otro), solape(a, b)],
             });
           }
         }
@@ -366,8 +372,12 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           seccion_id: ord[0].seccion_id,
           dia,
           bloques: ord.map((e) => e.bloque_id),
-          detalle: detalle(ord[0]),
-          error: `tiene ${ord.length}h el ${DIAS_NOMBRES[dia]} (máximo ${config.max_horas_dia}h por día).`,
+          detalle: '',
+          titulo: 'Regla de generación',
+          error:
+            `La materia tiene ${ord.length}h el ${DIAS_NOMBRES[dia]} ` +
+            `(máximo ${config.max_horas_dia}h por día):`,
+          lineas: [ficha(ord[0])],
         });
       }
       // Sesiones = runs de bloques consecutivos por orden (un receso corta el run)
@@ -378,10 +388,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             seccion_id: run[0].seccion_id,
             dia,
             bloques: run.map((e) => e.bloque_id),
-            detalle: detalle(run[0]),
-            error: `tiene una sesión suelta de ${run.length}h el ${DIAS_NOMBRES[dia]} ` +
+            detalle: '',
+            titulo: 'Regla de generación',
+            error:
+              `Sesión suelta de ${run.length}h el ${DIAS_NOMBRES[dia]} ` +
               `${fmtHoraCfg(run[0].hora_inicio, usa12)}–${fmtHoraCfg(run[run.length - 1].hora_fin, usa12)} ` +
-              `(mínimo ${config.min_horas_bloque}h seguidas).`,
+              `(mínimo ${config.min_horas_bloque}h seguidas):`,
+            lineas: [ficha(run[0])],
           });
         }
       };
@@ -405,7 +418,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       for (const b of v.bloques) {
         const k = `${b}:${v.dia}`;
         const arr = m.get(k) ?? [];
-        arr.push({ titulo: v.titulo, texto: v.error });
+        arr.push({
+          titulo: v.titulo,
+          texto: v.lineas?.length ? `${v.error} ${v.lineas.join(' · ')}` : v.error,
+        });
         m.set(k, arr);
       }
     }
@@ -849,6 +865,19 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                               {v.detalle && <>{v.detalle} </>}
                               <span className="text-red-300 font-semibold">{v.error}</span>
                             </div>
+                            {v.lineas && v.lineas.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {v.lineas.map((l, i) => (
+                                  <li
+                                    key={i}
+                                    className="flex items-start gap-1.5 text-[11px] text-slate-300 leading-snug"
+                                  >
+                                    <span className="text-red-400 shrink-0">•</span>
+                                    <span className="min-w-0">{l}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                           <button
                             onClick={() => irAViolacion(v)}
