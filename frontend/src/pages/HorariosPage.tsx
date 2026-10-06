@@ -46,6 +46,7 @@ import {
   Square,
   CheckSquare,
   ShieldAlert,
+  Wand2,
 } from 'lucide-react';
 
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
@@ -115,6 +116,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [aulaId, setAulaId] = useState<number | null>(null);
   const [profesorId, setProfesorId] = useState<number | null>(null);
   const [generando, setGenerando] = useState(false);
+  const [resolviendo, setResolviendo] = useState(false);
   const [reporteOpen, setReporteOpen] = useState(false);
   const [erroresOpen, setErroresOpen] = useState(false);
   const [forzar, setForzar] = useState(false); // mover clases ignorando solapes de aula/profesor/sección
@@ -719,6 +721,23 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lapso.tipo, lapso.n, rows]);
 
+  // Reubica los bloques de materia que chocan por aula en aulas libres
+  // (preferidas de la materia → del PNF → libres), respetando el run contiguo.
+  const resolverAulas = async () => {
+    setResolviendo(true);
+    const res = await apiFetch<{ runs: number; movidas: number; sin_solucion: number }>(
+      '/horarios/entries/resolver-aulas',
+      { method: 'POST' }
+    );
+    setResolviendo(false);
+    if (res.success) {
+      mostrarAviso(res.message || 'Conflictos de aula resueltos.');
+      fetchEntries();
+    } else {
+      mostrarAviso(res.message || 'No se pudieron resolver los conflictos.', true);
+    }
+  };
+
   const generar = async (modo: 'completar' | 'regenerar') => {
     if (modo === 'regenerar' && !confirm('Esto borrará todas las clases agendadas del lapso y las recalculará. ¿Continuar?')) {
       return;
@@ -831,17 +850,34 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setErroresOpen(false)} />
                   <div className="absolute right-0 mt-2 w-[30rem] max-w-[90vw] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/50 z-50 overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                    <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between gap-2">
                       <span>Violaciones del lapso</span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded-md text-[10px] ${
-                          violaciones.length > 0
-                            ? 'bg-red-500/20 text-red-300'
-                            : 'bg-emerald-500/20 text-emerald-300'
-                        }`}
-                      >
-                        {violaciones.length}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {puedeEditar && violaciones.length > 0 && (
+                          <button
+                            onClick={resolverAulas}
+                            disabled={resolviendo}
+                            title="Reubica en aulas libres los bloques de materia que chocan por aula: primero aulas preferidas de la materia, luego las del PNF, luego cualquier aula libre"
+                            className="px-2 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold normal-case tracking-normal flex items-center gap-1 cursor-pointer disabled:opacity-50 transition-colors"
+                          >
+                            {resolviendo ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Wand2 className="w-3 h-3" />
+                            )}
+                            Autosolucionar aulas
+                          </button>
+                        )}
+                        <span
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] ${
+                            violaciones.length > 0
+                              ? 'bg-red-500/20 text-red-300'
+                              : 'bg-emerald-500/20 text-emerald-300'
+                          }`}
+                        >
+                          {violaciones.length}
+                        </span>
+                      </div>
                     </div>
                     <div className="max-h-80 overflow-y-auto p-2 space-y-2">
                       {violaciones.length === 0 && (

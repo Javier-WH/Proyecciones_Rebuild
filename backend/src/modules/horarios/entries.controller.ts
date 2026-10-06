@@ -9,6 +9,7 @@ import {
   elegirAula,
   lapsosRivales,
   lapsosTotales,
+  seTraslapan,
   LapsoRef,
   TipoProyeccion,
   EntryRow,
@@ -1849,5 +1850,258 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
     return reply
       .status(500)
       .send({ success: false, message: 'Error interno\nNo se pudo generar el horario.' });
+  }
+}
+
+// POST /api/horarios/entries/resolver-aulas — autosoluciona los conflictos de
+// aula del período activo. Por cada par de clases que chocan en el mismo aula
+// se conserva el run "mejor ubicado" (materia preferida del aula, PNF dueño,
+// run más largo) y el otro run se mueve COMPLETO (misma materia+sección+
+// profesor en bloques contiguos del día) a un aula libre, eligiendo primero
+// aulas preferidas de la materia, luego las del PNF de la clase y por último
+// AULA_REGULAR con balanceo de uso — el mismo orden que usa el generador.
+export async function resolverAulasHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const user = request.userPayload!;
+    const periodo = await periodoActivo();
+    if (!periodo) {
+      return reply.send({ success: false, message: 'No hay período académico activo.' });
+    }
+    const [aulas, rows, bloquesTurno] = await Promise.all([
+      cargarAulasActivas(),
+      query<any[]>(
+        `SELECT e.id, e.tipo_proyeccion, e.trimestre, e.materia_id, e.seccion_id,
+                e.profesor_id, e.dia_semana, e.bloque_id, e.aula_id,
+                b.turno_id, b.orden, b.es_receso, b.hora_inicio, b.hora_fin,
+                pr.pnf_saga_id, m.nombre AS materia_nombre, s.nombre AS seccion_nombre
+         FROM horario_entries e
+         JOIN turno_bloques b ON b.id = e.bloque_id
+         JOIN proyeccion_materias m ON m.id = e.materia_id
+         JOIN proyeccion_secciones s ON s.id = e.seccion_id
+         JOIN proyecciones pr ON pr.id = m.proyeccion_id
+         WHERE e.periodo_academico = ?`,
+        [periodo]
+      ),
+      query<any[]>('SELECT id, turno_id, orden, es_receso FROM turno_bloques'),
+    ]);
+    const aulaPorId = new Map(aulas.map((a: any) => [Number(a.id), a]));
+
+    // Relación de traslape TOTAL entre lapsos (mismo criterio que la auditoría)
+    const total = (x: any, y: any) =>
+      lapsosTotales(x.tipo_proyeccion as TipoProyeccion, Number(x.trimestre)).some(
+        (l) => l.tipo === y.tipo_proyeccion && l.n === Number(y.trimestre)
+      );
+
+    // Bloques no-receso de cada turno ordenados, para expandir runs contiguos.
+    const ordenPorTurno = new Map<number, number[]>();
+    {
+      const porTurno = new Map<number, any[]>();
+      for (const b of bloquesTurno) {
+        if (b.es_receso) continue;
+        const arr = porTurno.get(Number(b.turno_id)) ?? [];
+        arr.push(b);
+        porTurno.set(Number(b.turno_id), arr);
+      }
+      for (const [t, arr] of porTurno) {
+        ordenPorTurno.set(
+          t,
+          arr.sort((x, y) => x.orden - y.orden).map((x) => Number(x.id))
+        );
+      }
+    }
+
+    // Grupo agendable: misma materia+sección+profesor ese día y lapso. El run
+    // son sus bloques contiguos (sin receso) — lo mismo que mueve aula-grupo.
+    const grupoDe = (e: any) =>
+      `${e.tipo_proyeccion}|${e.trimestre}|${e.dia_semana}|${e.materia_id}|${e.seccion_id}|${e.profesor_id ?? 'x'}`;
+    const porGrupo = new Map<string, Map<number, any>>();
+    for (const e of rows) {
+      let m = porGrupo.get(grupoDe(e));
+      if (!m) porGrupo.set(grupoDe(e), (m = new Map()));
+      m.set(Number(e.bloque_id), e);
+    }
+    const runCache = new Map<number, any[]>();
+    const runDe = (entry: any): any[] => {
+      const hit = runCache.get(Number(entry.id));
+      if (hit) return hit;
+      const porBloque = porGrupo.get(grupoDe(entry));
+      const orden = ordenPorTurno.get(Number(entry.turno_id)) ?? [];
+      const idx = orden.indexOf(Number(entry.bloque_id));
+      const run = [entry];
+      if (porBloque && idx >= 0) {
+        for (let i = idx - 1; i >= 0; i--) {
+          const c = porBloque.get(orden[i]);
+          if (!c) break;
+          run.unshift(c);
+        }
+        for (let i = idx + 1; i < orden.length; i++) {
+          const c = porBloque.get(orden[i]);
+          if (!c) break;
+          run.push(c);
+        }
+      }
+      for (const c of run) runCache.set(Number(c.id), run);
+      return run;
+    };
+
+    const matDe = (run: any[]) => normMateria(run[0].materia_nombre);
+    const pnfDe = (run: any[]) =>
+      run[0].pnf_saga_id != null ? Number(run[0].pnf_saga_id) : null;
+
+    // ¿Está el aula libre en TODOS los slots del run? Solo bloquean las clases
+    // de lapsos con traslape total; las parciales/sin relación no estorban.
+    const aulaLibrePara = (aulaId: number, run: any[]) => {
+      const ids = new Set(run.map((x) => Number(x.id)));
+      for (const e of run) {
+        for (const o of rows) {
+          if (ids.has(Number(o.id))) continue;
+          if (Number(o.aula_id) !== aulaId || o.dia_semana !== e.dia_semana) continue;
+          if (!total(e, o)) continue;
+          if (seTraslapan(e.hora_inicio, e.hora_fin, o.hora_inicio, o.hora_fin)) return false;
+        }
+      }
+      return true;
+    };
+
+    const usoPorAula = new Map<number, number>();
+    for (const e of rows) {
+      const id = Number(e.aula_id);
+      usoPorAula.set(id, (usoPorAula.get(id) ?? 0) + 1);
+    }
+
+    // Mejor aula libre para el run: preferida de la materia → del PNF →
+    // AULA_REGULAR → menos uso → código (mismo orden que elegirAula).
+    const aulaPara = (run: any[]): number | null => {
+      const mat = matDe(run);
+      const pnf = pnfDe(run);
+      const libres = aulas.filter((a: any) => aulaLibrePara(Number(a.id), run));
+      if (libres.length === 0) return null;
+      libres.sort((x: any, y: any) => {
+        const mx = x.materias_pref?.has(mat) ? 0 : 1;
+        const my = y.materias_pref?.has(mat) ? 0 : 1;
+        if (mx !== my) return mx - my;
+        const px = pnf != null && Number(x.pnf_saga_id) === pnf ? 0 : 1;
+        const py = pnf != null && Number(y.pnf_saga_id) === pnf ? 0 : 1;
+        if (px !== py) return px - py;
+        const tx = x.tipo === 'AULA_REGULAR' ? 0 : 1;
+        const ty = y.tipo === 'AULA_REGULAR' ? 0 : 1;
+        if (tx !== ty) return tx - ty;
+        const ux = usoPorAula.get(Number(x.id)) ?? 0;
+        const uy = usoPorAula.get(Number(y.id)) ?? 0;
+        if (ux !== uy) return ux - uy;
+        return String(x.codigo).localeCompare(String(y.codigo));
+      });
+      return Number(libres[0].id);
+    };
+
+    // Qué tan "bien ubicado" está un run en su aula actual: la materia la
+    // prefiere, es de su PNF, o el run es largo (mover menos bloques).
+    const bienUbicado = (run: any[], aulaId: number) => {
+      const a = aulaPorId.get(aulaId);
+      return (
+        (a?.materias_pref?.has(matDe(run)) ? 4 : 0) +
+        (pnfDe(run) != null && Number(a?.pnf_saga_id) === pnfDe(run) ? 2 : 0) +
+        Math.min(run.length, 9) / 10
+      );
+    };
+
+    // Primer par de clases que chocan por aula (mismo aula+día, solape real y
+    // lapsos de traslape total), saltando los ya marcados como sin solución.
+    const trabados = new Set<string>();
+    const buscarChoque = (): [any, any] | null => {
+      const porSlot = new Map<string, any[]>();
+      for (const e of rows) {
+        const k = `${e.aula_id}|${e.dia_semana}`;
+        const g = porSlot.get(k);
+        if (g) g.push(e);
+        else porSlot.set(k, [e]);
+      }
+      for (const g of porSlot.values()) {
+        for (let i = 0; i < g.length; i++) {
+          for (let j = i + 1; j < g.length; j++) {
+            const [a, b] = [g[i], g[j]];
+            if (!total(a, b)) continue;
+            if (!seTraslapan(a.hora_inicio, a.hora_fin, b.hora_inicio, b.hora_fin)) continue;
+            const k = Number(a.id) < Number(b.id) ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+            if (trabados.has(k)) continue;
+            return [a, b];
+          }
+        }
+      }
+      return null;
+    };
+
+    const detalles: string[] = [];
+    let movidas = 0;
+    let runsMovidos = 0;
+    for (let iter = 0; iter < 500; iter++) {
+      const par = buscarChoque();
+      if (!par) break;
+      const [a, b] = par;
+      const pk = Number(a.id) < Number(b.id) ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+      const ra = runDe(a);
+      const rb = runDe(b);
+      if (ra === rb) {
+        trabados.add(pk);
+        continue;
+      }
+      const aulaId = Number(a.aula_id);
+      const sa = bienUbicado(ra, aulaId);
+      const sb = bienUbicado(rb, aulaId);
+      // Se mueve el run peor ubicado; en empate, el más corto.
+      let candidatos =
+        sa === sb
+          ? ra.length <= rb.length
+            ? [ra, rb]
+            : [rb, ra]
+          : sa < sb
+            ? [ra, rb]
+            : [rb, ra];
+      if (user.role === 'REGULAR' && user.pnf_saga_id) {
+        candidatos = candidatos.filter((r) => pnfDe(r) === Number(user.pnf_saga_id));
+      }
+      let movido = false;
+      for (const r of candidatos) {
+        const destino = aulaPara(r);
+        if (destino == null) continue;
+        const ids = r.map((x) => Number(x.id));
+        await query(
+          `UPDATE horario_entries SET aula_id = ? WHERE id IN (${ids.map(() => '?').join(',')})`,
+          [destino, ...ids]
+        );
+        for (const x of r) x.aula_id = destino;
+        usoPorAula.set(destino, (usoPorAula.get(destino) ?? 0) + ids.length);
+        movidas += ids.length;
+        runsMovidos++;
+        movido = true;
+        break;
+      }
+      if (movido) {
+        // Un movimiento puede liberar el aula que faltaba a un choque trabado.
+        trabados.clear();
+      } else {
+        trabados.add(pk);
+        detalles.push(
+          `'${a.materia_nombre}' (${a.seccion_nombre}) vs '${b.materia_nombre}' ` +
+            `(${b.seccion_nombre}) en ${aulaPorId.get(aulaId)?.codigo ?? aulaId}, ` +
+            `${DIAS[a.dia_semana] || a.dia_semana} ${hhmm(a.hora_inicio)}`
+        );
+      }
+    }
+
+    return reply.send({
+      success: true,
+      message:
+        movidas === 0 && detalles.length === 0
+          ? 'No había conflictos de aula.'
+          : `Se reubicaron ${runsMovidos} bloque(s) de materia (${movidas} clases)` +
+            (detalles.length > 0 ? `; ${detalles.length} conflicto(s) quedaron sin aula libre.` : '.'),
+      data: { movidas, runs: runsMovidos, sin_solucion: detalles.length, detalles },
+    });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply
+      .status(500)
+      .send({ success: false, message: 'Error interno\nNo se pudieron resolver los conflictos.' });
   }
 }

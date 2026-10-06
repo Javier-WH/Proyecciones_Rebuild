@@ -26,6 +26,7 @@ import {
   unscheduleEntriesHandler,
   deleteEntryHandler,
   generarHorarioHandler,
+  resolverAulasHandler,
 } from './entries.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
@@ -74,4 +75,5 @@ export async function horariosRoutes(fastify: FastifyInstance) {
   fastify.post('/entries/schedule-group', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, scheduleGroupHandler);
   fastify.delete('/entries/:id', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, deleteEntryHandler);
   fastify.post('/generar', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, generarHorarioHandler);
+  fastify.post('/entries/resolver-aulas', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, resolverAulasHandler);
 }
