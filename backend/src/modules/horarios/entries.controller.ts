@@ -951,48 +951,66 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
           .map((e) => Number(e.aula_id))
       );
 
-    const foraneoPorSlot = new Map<number, any>(foraneos.map((f) => [Number(f.bloque_id), f]));
-    const asignRun: { id: number; aula: number }[] = [];
-    for (const [i, r] of run.entries()) {
-      const dest = destinos[i];
-      const fora = foraneoPorSlot.get(Number(dest.id));
-      const ocupadas = aulasOcupadas(resto, dia, dest.hora_inicio, dest.hora_fin);
-      // En slot ocupado: el aula del foráneo (intercambio). En slot vacío:
-      // conservar la propia si sigue libre, si no, auto-asignar la menos usada.
-      // Con `forzar` se conservan las aulas aunque queden solapadas (la
-      // auditoría marca el conflicto) y el fallback toma la menos usada.
-      let aulaId: number | null = fora ? Number(fora.aula_id) : null;
-      if (aulaId !== null && ocupadas.has(aulaId) && !forzar) aulaId = null;
-      if (aulaId === null && (!ocupadas.has(Number(r.aula_id)) || forzar)) {
-        aulaId = Number(r.aula_id);
+    // Aula ÚNICA para todo el run: debe quedar libre (traslape real) en
+    // TODOS los slots destino y sin choque exacto en ninguno. Si el aula
+    // actual del run no cumple, se elige otra que sí — nunca se reparte
+    // el run entre aulas distintas.
+    const ocupadasRun = new Set<number>();
+    const exactasRun = new Set<number>();
+    for (const dest of destinos) {
+      for (const a of aulasOcupadas(resto, dia, dest.hora_inicio, dest.hora_fin)) {
+        ocupadasRun.add(a);
       }
-      if (aulaId === null) {
-        aulaId = elegirAula(
-          aulas,
-          forzar ? new Set<number>() : ocupadas,
-          usoPorAula,
-          run[0].pnf_saga_id,
-          r.materia_nombre
-        );
-        if (aulaId === null) {
-          return reply.status(409).send({
-            success: false,
-            message: `No hay aula libre para el bloque ${i + 1} del grupo.`,
-          });
-        }
-      }
-      // Evita crear duplicados exactos de aula (uq_aula ya no existe): si el
-      // aula elegida está ocupada en ese mismo bloque del mismo lapso se
-      // toma otra (idealmente libre; si no, la menos usada — el solape lo
-      // marca la auditoría).
-      const exactas = exactOcup(dia, Number(dest.id));
-      if (exactas.has(aulaId)) {
-        aulaId =
-          elegirAula(aulas, exactas, usoPorAula, run[0].pnf_saga_id, r.materia_nombre) ?? aulaId;
-      }
-      asignRun.push({ id: Number(r.id), aula: aulaId });
-      usoPorAula.set(aulaId, (usoPorAula.get(aulaId) ?? 0) + 1);
+      for (const a of exactOcup(dia, Number(dest.id))) exactasRun.add(a);
     }
+    // Aula propia del run: la más usada entre sus bloques (normalmente una sola)
+    const cuentaAula = new Map<number, number>();
+    for (const r of run) {
+      const aid = Number(r.aula_id);
+      cuentaAula.set(aid, (cuentaAula.get(aid) ?? 0) + 1);
+    }
+    const aulaPropia =
+      [...cuentaAula.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+
+    let aulaRun: number | null = null;
+    if (
+      aulaPropia !== null &&
+      !exactasRun.has(aulaPropia) &&
+      (forzar || !ocupadasRun.has(aulaPropia))
+    ) {
+      aulaRun = aulaPropia;
+    }
+    if (aulaRun === null) {
+      const excl = new Set<number>(exactasRun);
+      if (!forzar) for (const a of ocupadasRun) excl.add(a);
+      aulaRun = elegirAula(
+        aulas,
+        excl,
+        usoPorAula,
+        run[0].pnf_saga_id,
+        run[0].materia_nombre
+      );
+      // Con `forzar` y todas ocupadas: la menos usada aunque quede solapada
+      // (la auditoría marca el conflicto con el punto rojo).
+      if (aulaRun === null && forzar) {
+        aulaRun =
+          elegirAula(
+            aulas,
+            new Set<number>(),
+            usoPorAula,
+            run[0].pnf_saga_id,
+            run[0].materia_nombre
+          ) ?? aulaPropia;
+      }
+      if (aulaRun === null) {
+        return reply.status(409).send({
+          success: false,
+          message: 'No hay aula libre que cubra todos los bloques del grupo.',
+        });
+      }
+    }
+    const asignRun = run.map((r) => ({ id: Number(r.id), aula: aulaRun as number }));
+    usoPorAula.set(aulaRun, (usoPorAula.get(aulaRun) ?? 0) + run.length);
 
     // Choque exacto de profesor (mismo lapso, día y bloque): uq_profesor ya no
     // existe como clave única — se valida en código. Sin `forzar` se rechaza;
