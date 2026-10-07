@@ -18,6 +18,7 @@ interface VistaRecursoProps {
   avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
   parejasParciales?: Map<number, number[]>; // entry.id → ids de las clases T2/semestre que le chocan
   seccionesSemestrales?: Set<number>; // secciones cuyas clases trimestrales son de semestre
+  ocultarAula?: boolean; // vista por aula: no repetir el aula en cada tarjeta
 }
 
 interface Banda {
@@ -25,7 +26,7 @@ interface Banda {
   bloques: { id: number; orden: number; hora_inicio: string; hora_fin: string; es_receso: number | boolean }[];
 }
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales, parejasParciales, seccionesSemestrales }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales, parejasParciales, seccionesSemestrales, ocultarAula }) => {
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -316,6 +317,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                         errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
                                         advertencias={advertencias?.get(e.id)}
                                         avisosParciales={avisosParciales?.get(e.id)}
+                                        ocultarAula={ocultarAula}
                                       />
                                     ))}
                                   </div>
@@ -324,6 +326,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     items={grupoDe(items).map(itemDividido)}
                                     rangoInicio={minutos(b.hora_inicio)}
                                     rangoFin={minutos(b.hora_fin)}
+                                    ocultarAula={ocultarAula}
                                   />
                                 )}
                               </div>
@@ -424,6 +427,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     items={grupoDe(itemsRun.length > 0 ? itemsRun : items).map(itemDividido)}
                                     rangoInicio={minutos(b.hora_inicio)}
                                     rangoFin={minutos(fusion ? sp!.fin : b.hora_fin)}
+                                    ocultarAula={ocultarAula}
                                   />
                                 );
                               }
@@ -439,6 +443,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                       errores={items.length > 1 ? errsDe(e) : errsDe()}
                                       advertencias={advertencias?.get(e.id)}
                                       avisosParciales={parDe(items.length > 1 ? e : undefined)}
+                                      ocultarAula={ocultarAula}
                                     />
                                   ))}
                                 </div>

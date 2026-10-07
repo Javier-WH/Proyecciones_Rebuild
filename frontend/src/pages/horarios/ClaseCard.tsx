@@ -18,8 +18,9 @@ export const ClaseCard: React.FC<{
   errores?: ErrorClase[];
   advertencias?: string[]; // avisos (no errores): triángulo amarillo bajo la tarjeta
   avisosParciales?: string[]; // choques parciales T2↔semestre: icono verde abajo a la derecha
+  ocultarAula?: boolean; // vista por aula: la línea del aula es redundante
   className?: string;
-}> = ({ entry, fin, compacto, usa12h, errores, advertencias, avisosParciales, className = '' }) => {
+}> = ({ entry, fin, compacto, usa12h, errores, advertencias, avisosParciales, ocultarAula, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const [tipAdv, setTipAdv] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const [tipPar, setTipPar] = useState<{ x: number; y: number; flip: boolean } | null>(null);
@@ -173,8 +174,12 @@ export const ClaseCard: React.FC<{
         </span>
       </div>
       {compacto ? (
-        <div className="text-[9px] opacity-80 leading-tight truncate" title={`${profesor} · ${aula} · ${hora}`}>
-          {profesor} · {aula} · {hora}
+        <div
+          className="text-[9px] opacity-80 leading-tight truncate"
+          title={`${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`}
+        >
+          {profesor}
+          {ocultarAula ? '' : ` · ${aula}`} · {hora}
         </div>
       ) : (
         <div className="text-[9px] opacity-80 leading-tight mt-0.5 space-y-px">
@@ -182,10 +187,12 @@ export const ClaseCard: React.FC<{
             <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
             <span className="truncate">{profesor}</span>
           </div>
-          <div className="flex items-center gap-1 truncate" title={`${entry.aula_codigo} — ${entry.aula_nombre}`}>
-            <MapPin className="w-2.5 h-2.5 shrink-0 opacity-70" />
-            <span className="truncate">{aula}</span>
-          </div>
+          {!ocultarAula && (
+            <div className="flex items-center gap-1 truncate" title={`${entry.aula_codigo} — ${entry.aula_nombre}`}>
+              <MapPin className="w-2.5 h-2.5 shrink-0 opacity-70" />
+              <span className="truncate">{aula}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1 truncate">
             <Clock className="w-2.5 h-2.5 shrink-0 opacity-70" />
             <span className="truncate">{hora}</span>
@@ -246,7 +253,7 @@ const lapsoCorto = (it: ItemDividido) => {
 // Cuerpo de un item dividido con el mismo formato de ClaseCard: materia en
 // negrita con punto del PNF y líneas pequeñas con icono (sección·lapso,
 // profesor, aula y hora).
-const DetalleItem: React.FC<{ it: ItemDividido }> = ({ it }) => {
+const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean }> = ({ it, ocultarAula }) => {
   const e = it.entry;
   const profesor = e.profesor_id
     ? `${e.prof_nombres ?? ''} ${e.prof_apellidos ?? ''}`.trim()
@@ -272,13 +279,15 @@ const DetalleItem: React.FC<{ it: ItemDividido }> = ({ it }) => {
           <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
           <span className="truncate">{profesor}</span>
         </div>
-        <div
-          className="flex items-center gap-1 truncate"
-          title={`${e.aula_codigo} — ${e.aula_nombre}`}
-        >
-          <MapPin className="w-2.5 h-2.5 shrink-0 opacity-70" />
-          <span className="truncate">{aula}</span>
-        </div>
+        {!ocultarAula && (
+          <div
+            className="flex items-center gap-1 truncate"
+            title={`${e.aula_codigo} — ${e.aula_nombre}`}
+          >
+            <MapPin className="w-2.5 h-2.5 shrink-0 opacity-70" />
+            <span className="truncate">{aula}</span>
+          </div>
+        )}
         {it.horas && (
           <div className="flex items-center gap-1 truncate">
             <Clock className="w-2.5 h-2.5 shrink-0 opacity-70" />
@@ -293,7 +302,8 @@ const DetalleItem: React.FC<{ it: ItemDividido }> = ({ it }) => {
 export const ClaseDividida: React.FC<{
   items: ItemDividido[];
   onItemClick?: (entry: HorarioEntry) => void;
-}> = ({ items, onItemClick }) => {
+  ocultarAula?: boolean;
+}> = ({ items, onItemClick, ocultarAula }) => {
   if (items.length < 2) return null;
 
   // 2 materias: dos bloques lado a lado (izquierda / derecha)
@@ -309,7 +319,7 @@ export const ClaseDividida: React.FC<{
             onClick={() => onItemClick?.(it.entry)}
           >
             <div className="absolute inset-0 flex flex-col justify-center p-1.5 pb-4 overflow-hidden">
-              <DetalleItem it={it} />
+              <DetalleItem it={it} ocultarAula={ocultarAula} />
             </div>
             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
               <MiniAvisos item={it} horizontal />
@@ -366,7 +376,8 @@ export const ClaseCascada: React.FC<{
   rangoInicio: number; // minutos
   rangoFin: number; // minutos
   onItemClick?: (entry: HorarioEntry) => void;
-}> = ({ items, rangoInicio, rangoFin, onItemClick }) => {
+  ocultarAula?: boolean;
+}> = ({ items, rangoInicio, rangoFin, onItemClick, ocultarAula }) => {
   if (items.length === 0) return null;
   const span = Math.max(1, rangoFin - rangoInicio);
   const orden = [...items].sort(
@@ -519,7 +530,7 @@ export const ClaseCascada: React.FC<{
             >
               {!x.relleno && mejorFranja.get(x.it) === fi && (
                 <div className="absolute inset-0 flex flex-col justify-center p-1 pb-3 overflow-hidden">
-                  <DetalleItem it={x.it} />
+                  <DetalleItem it={x.it} ocultarAula={ocultarAula} />
                   <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
                     <MiniAvisos item={x.it} horizontal />
                   </div>

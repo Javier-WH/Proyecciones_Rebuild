@@ -1165,6 +1165,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           {vista === 'aula' && (
             <VistaRecurso
               titulo={`Ocupación del aula ${aulas.find((a) => a.id === (aulaId ?? aulas[0]?.id))?.codigo ?? ''}`}
+              ocultarAula
               entries={entries.filter((e) => e.aula_id === (aulaId ?? aulas[0]?.id))}
               turnos={turnos}
               formato12={usa12}
