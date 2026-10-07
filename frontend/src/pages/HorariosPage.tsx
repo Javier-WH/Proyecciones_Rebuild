@@ -134,6 +134,16 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       else n.add(t);
       return n;
     });
+  // Semestres ocultos viendo el trimestre 2 por aula/profesor: S1 y S2 son
+  // rivales parciales de T2 (aviso verde, no conflicto duro).
+  const [semsOcultos, setSemsOcultos] = useState<Set<number>>(new Set());
+  const toggleSemOculto = (t: number) =>
+    setSemsOcultos((s) => {
+      const n = new Set(s);
+      if (n.has(t)) n.delete(t);
+      else n.add(t);
+      return n;
+    });
 
   const lapsos = useMemo(() => {
     const set = new Set<string>();
@@ -658,9 +668,15 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           e.tipo_proyeccion === 'TRIMESTRAL' &&
           !seccionesSemestrales.has(e.seccion_id) &&
           trisOcultos.has(e.trimestre)
+        ) &&
+        !(
+          lapso.tipo === 'TRIMESTRAL' &&
+          lapso.n === 2 &&
+          e.tipo_proyeccion === 'SEMESTRAL' &&
+          semsOcultos.has(e.trimestre)
         )
     );
-  }, [entries, aulaId, aulas, lapso.tipo, trisOcultos, seccionesSemestrales]);
+  }, [entries, aulaId, aulas, lapso.tipo, lapso.n, trisOcultos, semsOcultos, seccionesSemestrales]);
 
   // Lo mismo para la vista por profesor.
   const entriesProfesor = useMemo(() => {
@@ -673,9 +689,24 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           e.tipo_proyeccion === 'TRIMESTRAL' &&
           !seccionesSemestrales.has(e.seccion_id) &&
           trisOcultos.has(e.trimestre)
+        ) &&
+        !(
+          lapso.tipo === 'TRIMESTRAL' &&
+          lapso.n === 2 &&
+          e.tipo_proyeccion === 'SEMESTRAL' &&
+          semsOcultos.has(e.trimestre)
         )
     );
-  }, [entries, profesorId, profesores, lapso.tipo, trisOcultos, seccionesSemestrales]);
+  }, [
+    entries,
+    profesorId,
+    profesores,
+    lapso.tipo,
+    lapso.n,
+    trisOcultos,
+    semsOcultos,
+    seccionesSemestrales,
+  ]);
 
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
@@ -1108,6 +1139,38 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                   })}
                 </div>
               )}
+              {(vista === 'aula' || vista === 'profesor') &&
+                lapso.tipo === 'TRIMESTRAL' &&
+                lapso.n === 2 && (
+                  <div className="flex items-center gap-1">
+                    {[1, 2].map((t) => {
+                      const on = !semsOcultos.has(t);
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => toggleSemOculto(t)}
+                          title={
+                            on
+                              ? `Ocultar las clases del semestre ${t}`
+                              : `Mostrar las clases del semestre ${t}`
+                          }
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer ${
+                            on
+                              ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-200'
+                              : 'bg-slate-950 border-slate-700 text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          {on ? (
+                            <CheckSquare className="w-3.5 h-3.5" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5" />
+                          )}
+                          Semestre {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
             </div>
             <div className="h-5 w-px bg-slate-700" />
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-lg">
