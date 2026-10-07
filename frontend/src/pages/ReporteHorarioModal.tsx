@@ -23,6 +23,7 @@ import {
   fmtHoraCfg,
   minutos,
   traslapan,
+  pnfLabel,
 } from './horarios/types.js';
 
 interface ReporteHorarioModalProps {
@@ -163,6 +164,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   const [selAula, setSelAula] = useState<Set<string>>(new Set());
   const [selProf, setSelProf] = useState<Set<string>>(new Set());
   const [profQuery, setProfQuery] = useState('');
+  const [pnfTab, setPnfTab] = useState('');
   const [ocupReal, setOcupReal] = useState(false);
   const [entradas, setEntradas] = useState<Map<string, HorarioEntry[]>>(new Map());
   const [cargando, setCargando] = useState(false);
@@ -174,6 +176,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     if (!isOpen) return;
     setLapsoTab(lapsos.includes(lapsoActual) ? lapsoActual : lapsos[0] ?? '');
     setProfQuery('');
+    setPnfTab('');
     if (profesorPreseleccionado != null) {
       setSelSec(new Set());
       setSelProf(new Set(lapsos.map((lk) => `${lk}:${profesorPreseleccionado}`)));
@@ -901,6 +904,7 @@ td.clase { vertical-align: middle; }
                     onClick={() => {
                       setLapsoTab(lk);
                       setProfQuery('');
+                      setPnfTab('');
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                       activo
@@ -933,12 +937,61 @@ td.clase { vertical-align: middle; }
                 {!soloProfesores && (
                   <div className="mb-4">
                     {grupoTitulo('Secciones', <CalendarClock className="w-3.5 h-3.5" />)}
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-56 overflow-y-auto">
-                      {subGrupo(lkActivo, 'Todas las secciones', g.secciones.map((s) => s.seccion_id), selSec, setSelSec,
-                        g.secciones.map((s) =>
-                          itemCheck(`${lkActivo}:${s.seccion_id}`, `${s.seccion_nombre} · ${s.proyeccion_nombre} (${s.turno_nombre})`, selSec, setSelSec)
-                        )
-                      )}
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                      {(() => {
+                        const pnfs = [...new Set(g.secciones.map((s) => s.pnf_nombre))].sort();
+                        const pnfAct = pnfs.includes(pnfTab) ? pnfTab : pnfs[0];
+                        const secPnf = g.secciones.filter((s) => s.pnf_nombre === pnfAct);
+                        return (
+                          <>
+                            {pnfs.length > 1 && (
+                              <div className="flex flex-wrap gap-1 mb-2.5 p-1 bg-slate-900/80 border border-slate-800 rounded-lg w-fit max-w-full">
+                                {pnfs.map((pnf) => {
+                                  const nSel = g.secciones.filter(
+                                    (s) => s.pnf_nombre === pnf && selSec.has(`${lkActivo}:${s.seccion_id}`)
+                                  ).length;
+                                  const act = pnf === pnfAct;
+                                  return (
+                                    <button
+                                      key={pnf}
+                                      onClick={() => setPnfTab(pnf)}
+                                      className={`px-2.5 py-1 rounded-md text-[10px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                        act
+                                          ? 'bg-indigo-600 text-white shadow'
+                                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                                      }`}
+                                      title={pnfLabel(pnf)}
+                                    >
+                                      {pnfLabel(pnf)}
+                                      {nSel > 0 && (
+                                        <span
+                                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                                            act ? 'bg-white/20 text-white' : 'bg-indigo-500/15 text-indigo-300'
+                                          }`}
+                                        >
+                                          {nSel}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div className="h-56 overflow-y-auto">
+                              {subGrupo(lkActivo, 'Todas las secciones', secPnf.map((s) => s.seccion_id), selSec, setSelSec,
+                                secPnf.map((s) =>
+                                  itemCheck(
+                                    `${lkActivo}:${s.seccion_id}`,
+                                    `${s.trayecto_nombre} · ${s.seccion_nombre} (${s.turno_nombre})`,
+                                    selSec,
+                                    setSelSec
+                                  )
+                                )
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
