@@ -53,7 +53,7 @@ const ordenTrayecto = (p: ProyeccionItem): number => {
 
 export const ProyeccionesPage: React.FC = () => {
   const { user } = useAuth();
-  const { pnfColors } = usePnfColors();
+  const { colorDePnf } = usePnfColors();
   const [proyecciones, setProyecciones] = useState<ProyeccionItem[]>([]);
   const [periodoActivo, setPeriodoActivo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -250,7 +250,7 @@ export const ProyeccionesPage: React.FC = () => {
       ) : (
         <div className="space-y-8">
           {gruposPorPnf.map((grupo) => {
-            const colorPnf = pnfColors[grupo.pnfSagaId] || null;
+            const colorPnf = colorDePnf(grupo.pnfSagaId);
             const esMio = user?.pnf_saga_id === grupo.pnfSagaId;
             return (
               <section key={grupo.pnfSagaId}>

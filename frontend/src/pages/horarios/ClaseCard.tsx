@@ -214,6 +214,22 @@ export interface ItemDividido {
   avisosParciales?: string[];
 }
 
+// Punto con el color del PNF (igual que el de ClaseCard) para las tarjetas
+// divididas/cascada, donde el nombre de la materia va centrado o vertical.
+const PuntoPnf: React.FC<{ pnfSagaId: number | null | undefined }> = ({ pnfSagaId }) => {
+  const { colorDePnf, catalogo } = usePnfColors();
+  const color = colorDePnf(pnfSagaId);
+  if (!color) return null;
+  const nombre = catalogo.find((c) => c.id === pnfSagaId)?.nombre;
+  return (
+    <span
+      title={nombre ?? 'PNF'}
+      className="inline-block w-2 h-2 rounded-full shrink-0 ring-1 ring-white/20 mr-1 align-baseline"
+      style={{ backgroundColor: color }}
+    />
+  );
+};
+
 // 'TRIMESTRAL',2 → 'Trimestre 2' · 'SEMESTRAL',1 → 'Semestre 1'
 const lapsoLabel = (e: HorarioEntry) =>
   `${e.tipo_proyeccion === 'SEMESTRAL' ? 'Semestre' : 'Trimestre'} ${e.trimestre}`;
@@ -225,6 +241,53 @@ const lapsoDe = (it: ItemDividido) => it.lapsoTexto ?? lapsoLabel(it.entry);
 const lapsoCorto = (it: ItemDividido) => {
   const t = lapsoDe(it);
   return `${t[0]}${t.replace(/\D/g, '')}`;
+};
+
+// Cuerpo de un item dividido con el mismo formato de ClaseCard: materia en
+// negrita con punto del PNF y líneas pequeñas con icono (sección·lapso,
+// profesor, aula y hora).
+const DetalleItem: React.FC<{ it: ItemDividido }> = ({ it }) => {
+  const e = it.entry;
+  const profesor = e.profesor_id
+    ? `${e.prof_nombres ?? ''} ${e.prof_apellidos ?? ''}`.trim()
+    : 'Sin profesor';
+  const aula = e.aula_nombre || e.aula_codigo;
+  return (
+    <>
+      <div
+        className="text-[10px] font-bold leading-tight line-clamp-2"
+        title={`${e.materia_nombre} · ${e.seccion_nombre}`}
+      >
+        <PuntoPnf pnfSagaId={e.pnf_saga_id} />
+        {e.materia_nombre}
+      </div>
+      <div className="text-[8px] opacity-80 leading-tight mt-0.5 space-y-px">
+        <div
+          className="truncate"
+          title={`${e.seccion_nombre} · ${lapsoDe(it)} · ${e.turno_nombre}`}
+        >
+          {e.seccion_nombre} · {lapsoDe(it)}
+        </div>
+        <div className="flex items-center gap-1 truncate" title={profesor}>
+          <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
+          <span className="truncate">{profesor}</span>
+        </div>
+        <div
+          className="flex items-center gap-1 truncate"
+          title={`${e.aula_codigo} — ${e.aula_nombre}`}
+        >
+          <MapPin className="w-2.5 h-2.5 shrink-0 opacity-70" />
+          <span className="truncate">{aula}</span>
+        </div>
+        {it.horas && (
+          <div className="flex items-center gap-1 truncate">
+            <Clock className="w-2.5 h-2.5 shrink-0 opacity-70" />
+            <span className="truncate">{it.horas}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
 };
 
 export const ClaseDividida: React.FC<{
@@ -245,24 +308,8 @@ export const ClaseDividida: React.FC<{
             } ${onItemClick ? 'cursor-pointer' : ''}`}
             onClick={() => onItemClick?.(it.entry)}
           >
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-1 pb-4">
-              <span
-                className="text-[10px] font-bold leading-tight text-center line-clamp-3"
-                title={`${it.entry.materia_nombre} · ${it.entry.seccion_nombre}`}
-              >
-                {it.entry.materia_nombre}
-              </span>
-              <span className="text-[8px] opacity-80 leading-tight text-center truncate max-w-full mt-0.5">
-                {it.entry.seccion_nombre} · {lapsoDe(it)}
-              </span>
-              <span className="text-[8px] opacity-80 leading-tight text-center truncate max-w-full">
-                {it.entry.turno_nombre}
-              </span>
-              {it.horas && (
-                <span className="text-[8px] opacity-80 leading-tight text-center truncate max-w-full">
-                  {it.horas}
-                </span>
-              )}
+            <div className="absolute inset-0 flex flex-col justify-center p-1.5 pb-4 overflow-hidden">
+              <DetalleItem it={it} />
             </div>
             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
               <MiniAvisos item={it} horizontal />
@@ -294,6 +341,7 @@ export const ClaseDividida: React.FC<{
               style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
               title={`${it.entry.materia_nombre} · ${it.entry.seccion_nombre} · ${lapsoDe(it)} · ${it.entry.turno_nombre}${it.horas ? ` · ${it.horas}` : ''}`}
             >
+              <PuntoPnf pnfSagaId={it.entry.pnf_saga_id} />
               {it.entry.materia_nombre}
             </span>
           </div>
@@ -470,21 +518,8 @@ export const ClaseCascada: React.FC<{
               )} ${onItemClick ? 'cursor-pointer' : ''}`}
             >
               {!x.relleno && mejorFranja.get(x.it) === fi && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-1 pb-3 text-center">
-                  <span
-                    className="text-[10px] font-bold leading-tight line-clamp-2"
-                    title={`${x.it.entry.materia_nombre} · ${x.it.entry.seccion_nombre}`}
-                  >
-                    {x.it.entry.materia_nombre}
-                  </span>
-                  <span className="text-[8px] opacity-80 leading-tight truncate max-w-full mt-0.5">
-                    {x.it.entry.seccion_nombre} · {lapsoDe(x.it)} · {x.it.entry.turno_nombre}
-                  </span>
-                  {x.it.horas && (
-                    <span className="text-[8px] opacity-80 leading-tight truncate max-w-full">
-                      {x.it.horas}
-                    </span>
-                  )}
+                <div className="absolute inset-0 flex flex-col justify-center p-1 pb-3 overflow-hidden">
+                  <DetalleItem it={x.it} />
                   <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
                     <MiniAvisos item={x.it} horizontal />
                   </div>

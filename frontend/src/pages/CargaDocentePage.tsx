@@ -45,14 +45,14 @@ interface ProfesorGrupo {
 
 export const CargaDocentePage: React.FC = () => {
   const { user } = useAuth();
-  const { pnfColors } = usePnfColors();
+  const { colorDePnf } = usePnfColors();
   const puedeAsignar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
 
   // Punto discreto con el color identificativo del PNF (slate si no tiene)
   const pnfDot = (sagaId: number | null | undefined) => (
     <span
       className="inline-block w-2 h-2 rounded-full shrink-0"
-      style={{ backgroundColor: (sagaId != null && pnfColors[sagaId]) || '#475569' }}
+      style={{ backgroundColor: colorDePnf(sagaId) ?? '#475569' }}
     />
   );
 

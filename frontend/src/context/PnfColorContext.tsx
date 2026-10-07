@@ -8,6 +8,11 @@ export interface PnfCatalogItem {
   color: string | null;
 }
 
+// Color determinista de respaldo para PNFs sin color asignado: el ángulo
+// áureo dispersa los tonos para que cada PNF tenga un punto distinguible.
+const colorFallbackPnf = (sagaId: number): string =>
+  `hsl(${Math.round(Math.abs(sagaId) * 137.508) % 360}, 70%, 55%)`;
+
 interface PnfColorContextType {
   // Mapa pnf_saga_id -> color '#RRGGBB' (solo los que tienen color asignado)
   pnfColors: Record<number, string>;
@@ -41,7 +46,8 @@ export const PnfColorProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [catalogo]);
 
   const colorDePnf = useCallback(
-    (pnfSagaId: number | null | undefined) => (pnfSagaId == null ? null : pnfColors[pnfSagaId] ?? null),
+    (pnfSagaId: number | null | undefined) =>
+      pnfSagaId == null ? null : pnfColors[pnfSagaId] ?? colorFallbackPnf(pnfSagaId),
     [pnfColors]
   );
 
