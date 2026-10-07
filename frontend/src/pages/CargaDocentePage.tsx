@@ -164,8 +164,11 @@ export const CargaDocentePage: React.FC = () => {
   // 'Trimestre' o 'Semestre' si todas las filas son de un mismo régimen; 'Lapso' si se mezclan
   const lapsoTermino = useMemo(() => terminoLapso(rows.map((r) => r.tipo_proyeccion)), [rows]);
 
-  // Vista agrupada por materia (una columna por lapso) cuando el filtro muestra todos
-  const pivoted = filterLapso === 'todos';
+  // Vista agrupada por materia (una columna por lapso) cuando el filtro es
+  // "todos" o un régimen completo ('TRIMESTRAL' = todos los trimestres,
+  // 'SEMESTRAL' = todos los semestres)
+  const pivoted =
+    filterLapso === 'todos' || filterLapso === 'TRIMESTRAL' || filterLapso === 'SEMESTRAL';
   // Columnas de lapsos por régimen: primero TRIMESTRAL (1-3), luego SEMESTRAL (1-2),
   // solo de los regímenes presentes en los datos
   const lapsoCols = useMemo(() => {
@@ -181,7 +184,11 @@ export const CargaDocentePage: React.FC = () => {
   const rowsPorFiltro = useMemo(
     () =>
       rows.filter((r) => {
-        if (filterLapso !== 'todos' && lapsoKey(r.tipo_proyeccion, r.trimestre) !== filterLapso) return false;
+        if (filterLapso === 'TRIMESTRAL' || filterLapso === 'SEMESTRAL') {
+          if (r.tipo_proyeccion !== filterLapso) return false;
+        } else if (filterLapso !== 'todos' && lapsoKey(r.tipo_proyeccion, r.trimestre) !== filterLapso) {
+          return false;
+        }
         if (filterPnf !== 'todos' && r.pnf_saga_id !== Number(filterPnf)) return false;
         if (filterProyeccion !== 'todas' && r.proyeccion_id !== Number(filterProyeccion)) return false;
         return true;
@@ -254,8 +261,11 @@ export const CargaDocentePage: React.FC = () => {
         .sort((a, b) => a - b)
         .map((n) => ({ n, tipo }))
     );
-    return cols.length > 0 ? cols : [1, 2, 3].map((n) => ({ n, tipo: 'TRIMESTRAL' as const }));
-  }, [grupos, sinAsignar]);
+    if (cols.length > 0) return cols;
+    return filterLapso === 'SEMESTRAL'
+      ? [1, 2].map((n) => ({ n, tipo: 'SEMESTRAL' as const }))
+      : [1, 2, 3].map((n) => ({ n, tipo: 'TRIMESTRAL' as const }));
+  }, [grupos, sinAsignar, filterLapso]);
 
   const sobrecargaColor = (total: number, contrato: number | null | undefined) => {
     if (!contrato) return 'text-slate-300';
@@ -654,6 +664,12 @@ export const CargaDocentePage: React.FC = () => {
           className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
           <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
+          {lapsoCols.some((l) => l.tipo === 'TRIMESTRAL') && (
+            <option value="TRIMESTRAL">Todos los trimestres</option>
+          )}
+          {lapsoCols.some((l) => l.tipo === 'SEMESTRAL') && (
+            <option value="SEMESTRAL">Todos los semestres</option>
+          )}
           {lapsoCols.map((l) => (
             <option key={lapsoKey(l.tipo, l.n)} value={lapsoKey(l.tipo, l.n)}>
               {labelLapso(l.n, l.tipo)}
@@ -898,7 +914,7 @@ export const CargaDocentePage: React.FC = () => {
         isOpen={modalMaterias.open}
         profesor={modalMaterias.profesor}
         rows={rows}
-        lapsoInicial={filterLapso !== 'todos' ? filterLapso : null}
+        lapsoInicial={!pivoted ? filterLapso : null}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}
       />
