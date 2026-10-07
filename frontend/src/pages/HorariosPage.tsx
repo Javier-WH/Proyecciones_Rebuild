@@ -123,6 +123,17 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [dispProfs, setDispProfs] = useState<Map<number, DispSlot[]>>(new Map()); // bloqueos por profesor
   const [resaltar, setResaltar] = useState<Set<string> | null>(null);
   const [profEdit, setProfEdit] = useState<Profesor | null>(null);
+  // Trimestres ocultos en la vista por aula de un lapso semestral (ambos
+  // activos por defecto). Las clases de secciones semestrales — que se
+  // registran como T1/T3 — no se ocultan: SON la clase del semestre.
+  const [trisOcultos, setTrisOcultos] = useState<Set<number>>(new Set());
+  const toggleTriOculto = (t: number) =>
+    setTrisOcultos((s) => {
+      const n = new Set(s);
+      if (n.has(t)) n.delete(t);
+      else n.add(t);
+      return n;
+    });
 
   const lapsos = useMemo(() => {
     const set = new Set<string>();
@@ -631,6 +642,26 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     return m;
   }, [parejasParciales, parejasTotales]);
 
+  // Trimestres que conviven con el semestre visto: S1 ↔ T1,T2 · S2 ↔ T2,T3
+  const trisDelSemestre = lapso.n === 1 ? [1, 2] : [2, 3];
+
+  // Entries de la vista por aula, aplicando el filtro de trimestres cuando
+  // el lapso es semestral. Como las parejas parciales se resuelven contra
+  // las entries mostradas, ocultar un trimestre también desarma su cascada.
+  const entriesAula = useMemo(() => {
+    const aid = aulaId ?? aulas[0]?.id;
+    return entries.filter(
+      (e) =>
+        e.aula_id === aid &&
+        !(
+          lapso.tipo === 'SEMESTRAL' &&
+          e.tipo_proyeccion === 'TRIMESTRAL' &&
+          !seccionesSemestrales.has(e.seccion_id) &&
+          trisOcultos.has(e.trimestre)
+        )
+    );
+  }, [entries, aulaId, aulas, lapso.tipo, trisOcultos, seccionesSemestrales]);
+
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
     setVista('seccion');
@@ -999,9 +1030,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         <>
           {/* Selectores: lapso, vista y recurso */}
           <div className="flex flex-wrap items-center gap-3 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Lapso</label>
-              <select
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Lapso</label>
+                <select
                 value={lapsoSel || `${lapso.tipo}:${lapso.n}`}
                 onChange={(e) => {
                   setLapsoSel(e.target.value);
@@ -1029,7 +1061,38 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                     })}
                   </optgroup>
                 )}
-              </select>
+                </select>
+              </div>
+              {vista === 'aula' && lapso.tipo === 'SEMESTRAL' && (
+                <div className="flex items-center gap-1">
+                  {trisDelSemestre.map((t) => {
+                    const on = !trisOcultos.has(t);
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => toggleTriOculto(t)}
+                        title={
+                          on
+                            ? `Ocultar las clases del trimestre ${t}`
+                            : `Mostrar las clases del trimestre ${t}`
+                        }
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold border transition-colors cursor-pointer ${
+                          on
+                            ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-200'
+                            : 'bg-slate-950 border-slate-700 text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        {on ? (
+                          <CheckSquare className="w-3.5 h-3.5" />
+                        ) : (
+                          <Square className="w-3.5 h-3.5" />
+                        )}
+                        Trimestre {t}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="h-5 w-px bg-slate-700" />
             <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-lg">
@@ -1166,7 +1229,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             <VistaRecurso
               titulo={`Ocupación del aula ${aulas.find((a) => a.id === (aulaId ?? aulas[0]?.id))?.codigo ?? ''}`}
               ocultarAula
-              entries={entries.filter((e) => e.aula_id === (aulaId ?? aulas[0]?.id))}
+              entries={entriesAula}
               turnos={turnos}
               formato12={usa12}
               enError={celdasEnError}
