@@ -11,6 +11,7 @@ export interface MateriaAsignableRow {
   tipo_proyeccion: 'TRIMESTRAL' | 'SEMESTRAL';
   pnf_saga_id?: number;
   pnf_nombre: string;
+  trayecto_saga_id?: number;
   trayecto_nombre: string;
   materia_id: number;
   subject_saga_id?: number;

@@ -27,6 +27,7 @@ import {
   ErrorClase,
   pnfLabel,
   normMateria,
+  ordenTrayecto,
 } from './horarios/types.js';
 import {
   CalendarClock,
@@ -172,11 +173,21 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     [secciones]
   );
   const pnfEff = pnfOpts.includes(pnfSel) ? pnfSel : pnfOpts[0];
-  const trayectoOpts = useMemo(
-    () =>
-      [...new Set(secciones.filter((s) => s.pnf_nombre === pnfEff).map((s) => s.trayecto_nombre))].sort(),
-    [secciones, pnfEff]
-  );
+  const trayectoOpts = useMemo(() => {
+    // Inicial primero, luego I..V (ordenTrayecto) — no orden alfabético
+    const sagaPorNombre = new Map<string, number>();
+    for (const s of secciones) {
+      if (s.pnf_nombre !== pnfEff) continue;
+      if (!sagaPorNombre.has(s.trayecto_nombre)) {
+        sagaPorNombre.set(s.trayecto_nombre, s.trayecto_saga_id ?? 999);
+      }
+    }
+    return [...sagaPorNombre.keys()].sort(
+      (a, b) =>
+        ordenTrayecto(a, sagaPorNombre.get(a)) - ordenTrayecto(b, sagaPorNombre.get(b)) ||
+        a.localeCompare(b)
+    );
+  }, [secciones, pnfEff]);
   const trayectoEff = trayectoOpts.includes(trayectoSel) ? trayectoSel : trayectoOpts[0];
   const turnoOpts = useMemo(
     () =>

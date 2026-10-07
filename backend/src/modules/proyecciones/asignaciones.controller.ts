@@ -52,7 +52,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
     let sql = `
       SELECT
         pr.id AS proyeccion_id, pr.nombre AS proyeccion_nombre, pr.tipo_proyeccion,
-        pr.pnf_saga_id, pr.pnf_nombre, pr.trayecto_nombre,
+        pr.pnf_saga_id, pr.pnf_nombre, pr.trayecto_saga_id, pr.trayecto_nombre,
         m.id AS materia_id, m.nombre AS materia_nombre, m.horas_semanales,
         m.q1, m.q2, m.q3, m.semestre1, m.semestre2, m.seccion_id AS materia_seccion_id,
         s.id AS seccion_id, s.nombre AS seccion_nombre, s.turno_saga_id, s.turno_nombre
@@ -117,6 +117,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
           proyeccion_nombre: f.proyeccion_nombre,
           pnf_saga_id: f.pnf_saga_id,
           pnf_nombre: f.pnf_nombre,
+          trayecto_saga_id: f.trayecto_saga_id,
           trayecto_nombre: f.trayecto_nombre,
           materia_id: f.materia_id,
           subject_saga_id: f.subject_saga_id,

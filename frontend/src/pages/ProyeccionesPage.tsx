@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { CrearProyeccionModal } from './CrearProyeccionModal.js';
 import { EditarProyeccionModal } from './EditarProyeccionModal.js';
+import { ordenTrayecto } from './horarios/types.js';
 import {
   Calendar,
   Plus,
@@ -42,14 +43,8 @@ interface ProyeccionItem {
 
 // Orden de trayectos: Inicial primero, luego I, II, III, IV, V.
 // Fallback: trayecto_saga_id (los IDs de SAGA suelen seguir ese orden).
-const ordenTrayecto = (p: ProyeccionItem): number => {
-  const t = (p.trayecto_nombre || '').toLowerCase();
-  if (t.includes('inicial')) return 0;
-  const romanos: Record<string, number> = { v: 5, iv: 4, iii: 3, ii: 2, i: 1 };
-  const m = t.match(/\b(v|iv|iii|ii|i)\b/);
-  if (m) return romanos[m[1]] ?? 99;
-  return 50 + p.trayecto_saga_id; // desconocidos al final, por saga_id
-};
+const ordenTrayectoProy = (p: ProyeccionItem): number =>
+  ordenTrayecto(p.trayecto_nombre, p.trayecto_saga_id);
 
 export const ProyeccionesPage: React.FC = () => {
   const { user } = useAuth();
@@ -156,7 +151,7 @@ export const ProyeccionesPage: React.FC = () => {
     const grupos = [...mapa.entries()].map(([pnfSagaId, items]) => ({
       pnfSagaId,
       nombre: items[0].pnf_nombre,
-      items: items.sort((a, b) => ordenTrayecto(a) - ordenTrayecto(b) || a.nombre.localeCompare(b.nombre)),
+      items: items.sort((a, b) => ordenTrayectoProy(a) - ordenTrayectoProy(b) || a.nombre.localeCompare(b.nombre)),
     }));
     return grupos.sort((a, b) => {
       if (user?.pnf_saga_id != null) {

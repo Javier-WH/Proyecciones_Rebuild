@@ -80,8 +80,23 @@ export interface SeccionRef {
   turno_nombre: string;
   pnf_nombre: string;
   proyeccion_nombre: string;
+  trayecto_saga_id?: number;
   trayecto_nombre: string;
 }
+
+// Orden de trayectos: Inicial primero, luego I, II, III, IV, V.
+// Fallback: saga_id (los IDs de SAGA suelen seguir ese orden), luego nombre.
+export const ordenTrayecto = (
+  nombre: string | null | undefined,
+  sagaId?: number | null
+): number => {
+  const t = (nombre || '').toLowerCase();
+  if (t.includes('inicial')) return 0;
+  const romanos: Record<string, number> = { v: 5, iv: 4, iii: 3, ii: 2, i: 1 };
+  const m = t.match(/\b(v|iv|iii|ii|i)\b/);
+  if (m) return romanos[m[1]] ?? 99;
+  return 50 + (sagaId ?? 999); // desconocidos al final, por saga_id
+};
 
 // Mensaje de conflicto para el punto rojo / panel de errores:
 // `titulo` opcional se muestra en línea más grande, `texto` es la descripción.
@@ -217,6 +232,7 @@ export function seccionesDe(rows: MateriaAsignableRow[]): SeccionRef[] {
         turno_nombre: r.turno_nombre,
         pnf_nombre: r.pnf_nombre,
         proyeccion_nombre: r.proyeccion_nombre,
+        trayecto_saga_id: r.trayecto_saga_id,
         trayecto_nombre: r.trayecto_nombre,
       });
     }
