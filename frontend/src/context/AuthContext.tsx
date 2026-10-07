@@ -12,6 +12,7 @@ export interface User {
   profesor_cedula?: string | null;
   pnf_nombre?: string | null;
   profesor_nombre?: string | null;
+  profesor_id?: number | null;
   invitado?: boolean;
 }
 

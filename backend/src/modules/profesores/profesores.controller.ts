@@ -739,9 +739,27 @@ export async function profesorDisponibleEn(
   return rows.length === 0;
 }
 
+// id del profesor que corresponde a la cédula del token (rol PROFESOR),
+// o null si el usuario no es docente o no tiene cédula vinculada.
+async function profesorIdDelToken(request: FastifyRequest): Promise<number | null> {
+  const user = request.userPayload;
+  if (!user || user.role !== 'PROFESOR' || !user.profesor_cedula) return null;
+  const rows = await query<any[]>('SELECT id FROM profesores WHERE cedula = ? LIMIT 1', [
+    user.profesor_cedula,
+  ]);
+  return rows[0]?.id ?? null;
+}
+
 // GET /api/profesores/:id/disponibilidad — slots bloqueados del profesor
 export async function getDisponibilidadHandler(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  // Un docente solo puede ver su propia disponibilidad
+  if (request.userPayload?.role === 'PROFESOR') {
+    const propio = await profesorIdDelToken(request);
+    if (propio == null || propio !== Number(id)) {
+      return reply.status(403).send({ success: false, message: 'Solo puedes consultar tu propia disponibilidad.' });
+    }
+  }
   try {
     const rows = await query<any[]>(
       `SELECT dia_semana, TIME_FORMAT(hora_inicio, '%H:%i') AS hora_inicio,
@@ -775,6 +793,14 @@ export async function setDisponibilidadSlotHandler(request: FastifyRequest, repl
   }
   if (!HORA_RE.test(ini) || !HORA_RE.test(fin) || normHora(ini) >= normHora(fin)) {
     return reply.status(400).send({ success: false, message: 'Rango horario inválido (HH:MM, inicio < fin).' });
+  }
+
+  // Un docente solo puede editar su propia disponibilidad
+  if (request.userPayload?.role === 'PROFESOR') {
+    const propio = await profesorIdDelToken(request);
+    if (propio == null || propio !== Number(id)) {
+      return reply.status(403).send({ success: false, message: 'Solo puedes editar tu propia disponibilidad.' });
+    }
   }
 
   try {

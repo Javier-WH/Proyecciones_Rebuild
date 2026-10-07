@@ -49,7 +49,8 @@ export async function profesoresRoutes(fastify: FastifyInstance) {
 
   // Disponibilidad horaria del profesor (slots bloqueados)
   fastify.get('/:id/disponibilidad', { preHandler: [authenticate] }, getDisponibilidadHandler);
-  fastify.put('/:id/disponibilidad', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, setDisponibilidadSlotHandler);
+  // PROFESOR también puede entrar: el handler verifica que solo edite la suya
+  fastify.put('/:id/disponibilidad', { preHandler: [authenticate, authorizeRoles(...GESTORES, 'PROFESOR')] }, setDisponibilidadSlotHandler);
 
   // Foto del profesor (base64, máx ~4.5 MB de payload ≈ 3 MB de imagen)
   fastify.put(

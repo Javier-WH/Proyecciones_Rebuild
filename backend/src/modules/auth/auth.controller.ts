@@ -15,6 +15,7 @@ interface UserRow {
   profesor_cedula: string | null;
   pnf_nombre?: string | null;
   profesor_nombre?: string | null;
+  profesor_id?: number | null;
   activo: number;
 }
 
@@ -37,7 +38,8 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
                 (SELECT x.pnf_nombre FROM profesores x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1),
                 (SELECT x.pnf_nombre FROM aulas x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1)
               ) AS pnf_nombre,
-              NULLIF(TRIM(CONCAT(COALESCE(pr.nombres, ''), ' ', COALESCE(pr.apellidos, ''))), '') AS profesor_nombre
+              NULLIF(TRIM(CONCAT(COALESCE(pr.nombres, ''), ' ', COALESCE(pr.apellidos, ''))), '') AS profesor_nombre,
+              pr.id AS profesor_id
        FROM users u
        LEFT JOIN pnf p ON p.saga_id = u.pnf_saga_id
        LEFT JOIN profesores pr ON pr.cedula = u.profesor_cedula
@@ -97,6 +99,7 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
           profesor_cedula: user.profesor_cedula,
           pnf_nombre: user.pnf_nombre ?? null,
           profesor_nombre: user.profesor_nombre ?? null,
+          profesor_id: user.profesor_id ?? null,
         },
       },
     });
@@ -163,6 +166,7 @@ export async function profesorLoginHandler(request: FastifyRequest, reply: Fasti
           profesor_cedula: p.cedula,
           pnf_nombre: p.pnf_nombre ?? null,
           profesor_nombre: profesorNombre,
+          profesor_id: p.id,
           invitado: true,
         },
       },
@@ -205,6 +209,7 @@ export async function meHandler(request: FastifyRequest, reply: FastifyReply) {
             profesor_cedula: p.cedula,
             pnf_nombre: p.pnf_nombre ?? null,
             profesor_nombre: `${p.nombres} ${p.apellidos}`.trim(),
+            profesor_id: p.id,
             invitado: true,
           },
         },
@@ -224,7 +229,8 @@ export async function meHandler(request: FastifyRequest, reply: FastifyReply) {
                 (SELECT x.pnf_nombre FROM profesores x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1),
                 (SELECT x.pnf_nombre FROM aulas x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1)
               ) AS pnf_nombre,
-              NULLIF(TRIM(CONCAT(COALESCE(pr.nombres, ''), ' ', COALESCE(pr.apellidos, ''))), '') AS profesor_nombre
+              NULLIF(TRIM(CONCAT(COALESCE(pr.nombres, ''), ' ', COALESCE(pr.apellidos, ''))), '') AS profesor_nombre,
+              pr.id AS profesor_id
        FROM users u
        LEFT JOIN pnf p ON p.saga_id = u.pnf_saga_id
        LEFT JOIN profesores pr ON pr.cedula = u.profesor_cedula

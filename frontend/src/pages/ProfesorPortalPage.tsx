@@ -3,9 +3,11 @@ import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { HorarioEntry, HorarioConfig, Turno, pnfLabel } from './horarios/types.js';
 import { HorarioReadonlyGrid } from './horarios/HorarioReadonlyGrid.js';
+import { DisponibilidadGrid } from './DisponibilidadGrid.js';
 import { labelLapso, lapsoKey } from './AgregarMateriaModal.js';
 import {
   CalendarClock,
+  CalendarCheck,
   ClipboardList,
   Loader2,
   AlertCircle,
@@ -36,7 +38,8 @@ export const ProfesorPortalPage: React.FC = () => {
   const [periodoNombre, setPeriodoNombre] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [vista, setVista] = useState<'horario' | 'materias'>('horario');
+  const [vista, setVista] = useState<'horario' | 'materias' | 'disponibilidad'>('horario');
+  const profesorId = user?.profesor_id ?? (user?.invitado ? -user.id : null);
   const [lapsoSel, setLapsoSel] = useState<string | null>(null);
   const [entries, setEntries] = useState<HorarioEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
@@ -193,6 +196,15 @@ export const ProfesorPortalPage: React.FC = () => {
                 <ClipboardList className="w-3.5 h-3.5" />
                 <span>Mis Materias</span>
               </button>
+              <button
+                onClick={() => setVista('disponibilidad')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
+                  vista === 'disponibilidad' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <CalendarCheck className="w-3.5 h-3.5" />
+                <span>Mi Disponibilidad</span>
+              </button>
             </div>
             {vista === 'horario' && (
               <div className="flex items-center gap-2">
@@ -249,6 +261,30 @@ export const ProfesorPortalPage: React.FC = () => {
                 )}
               </div>
             )
+          ) : vista === 'disponibilidad' ? (
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5">
+              <div className="mb-4 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-start gap-3 text-blue-200/90 text-xs leading-relaxed">
+                <AlertCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                <span>
+                  Tu disponibilidad será tenida en cuenta por el sistema de generación automática de
+                  horarios al programar tus clases. Ten en cuenta que se considera una preferencia y
+                  no una garantía absoluta: si por la carga académica no existe una forma viable de
+                  respetarla, la coordinación podrá ajustar la asignación.
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4">
+                Click en una celda para alternar entre{' '}
+                <span className="text-emerald-300 font-semibold">disponible</span> y{' '}
+                <span className="text-red-300 font-semibold">no disponible</span>.
+              </p>
+              {profesorId != null ? (
+                <DisponibilidadGrid profesorId={profesorId} />
+              ) : (
+                <div className="py-14 text-center text-slate-500 text-xs italic">
+                  Tu cuenta no está vinculada a un registro de docente.
+                </div>
+              )}
+            </div>
           ) : (
             <div className="space-y-5">
               {grupos.map((g) => (
