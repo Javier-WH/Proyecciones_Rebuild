@@ -1075,7 +1075,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       {tab === 'horario' && (
         <>
           {/* Selectores: lapso, vista y recurso */}
-          <div className="flex flex-wrap items-center gap-3 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3">
+          <div className="flex flex-wrap items-start gap-3 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
                 <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Lapso</label>
