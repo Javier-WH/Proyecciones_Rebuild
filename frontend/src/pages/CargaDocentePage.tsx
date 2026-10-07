@@ -741,7 +741,7 @@ export const CargaDocentePage: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-start gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
           <input
