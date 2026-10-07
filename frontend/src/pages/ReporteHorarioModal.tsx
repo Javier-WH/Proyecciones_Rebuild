@@ -33,6 +33,11 @@ interface ReporteHorarioModalProps {
   aulas: Aula[];
   turnos: Turno[];
   formato12?: boolean;
+  // Modo docente: pre-selecciona este profesor en cada lapso y muestra solo el
+  // grupo "Profesores" (las secciones/aulas ocultas producirían hojas parciales
+  // porque los entries del invitado ya vienen filtrados del servidor).
+  profesorPreseleccionado?: number;
+  soloProfesores?: boolean;
 }
 
 // Contenido de una celda del reporte: materia en negrita + líneas secundarias
@@ -148,6 +153,8 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   aulas,
   turnos,
   formato12,
+  profesorPreseleccionado,
+  soloProfesores,
 }) => {
   const [selSec, setSelSec] = useState<Set<string>>(new Set());
   const [selAula, setSelAula] = useState<Set<string>>(new Set());
@@ -161,13 +168,18 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   // lapsos (el endpoint devuelve también los lapsos rivales).
   useEffect(() => {
     if (!isOpen) return;
-    const [tipo, n] = lapsoActual.split(':');
-    const secActual = seccionesDe(
-      rows.filter((r) => r.tipo_proyeccion === tipo && r.trimestre === Number(n))
-    );
-    setSelSec(new Set(secActual.map((s) => `${lapsoActual}:${s.seccion_id}`)));
+    if (profesorPreseleccionado != null) {
+      setSelSec(new Set());
+      setSelProf(new Set(lapsos.map((lk) => `${lk}:${profesorPreseleccionado}`)));
+    } else {
+      const [tipo, n] = lapsoActual.split(':');
+      const secActual = seccionesDe(
+        rows.filter((r) => r.tipo_proyeccion === tipo && r.trimestre === Number(n))
+      );
+      setSelSec(new Set(secActual.map((s) => `${lapsoActual}:${s.seccion_id}`)));
+      setSelProf(new Set());
+    }
     setSelAula(new Set());
-    setSelProf(new Set());
     setOcupReal(false);
 
     setCargando(true);
@@ -606,8 +618,9 @@ body { font-family: Calibri, Arial, sans-serif; font-size: 9pt; color: #000; }
 .hoja { page-break-after: always; }
 .hoja:last-child { page-break-after: auto; }
 .hline { text-align: center; font-weight: bold; line-height: 1.35; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th, td { border: 1px solid #000; padding: 3px 4px; font-size: 8pt; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+th, td { border: 1px solid #000; padding: 3px 4px; font-size: 8pt; vertical-align: top; overflow-wrap: break-word; }
+th:first-child { width: 64px; }
 th { text-align: center; vertical-align: middle; font-weight: bold; }
 td.hora { text-align: center; vertical-align: middle; font-size: 7.5pt; white-space: nowrap; }
 td.receso { text-align: center; font-weight: bold; letter-spacing: 0.3em; color: #666; font-size: 7.5pt; }
@@ -745,9 +758,10 @@ td.clase { vertical-align: middle; }
             </div>
           )}
 
-          {grupoCheck(
-            'Secciones',
-            <CalendarClock className="w-3.5 h-3.5" />,
+          {!soloProfesores &&
+            grupoCheck(
+              'Secciones',
+              <CalendarClock className="w-3.5 h-3.5" />,
             selSec,
             setSelSec,
             (lk, g) =>
@@ -758,9 +772,10 @@ td.clase { vertical-align: middle; }
               )
           )}
 
-          {grupoCheck(
-            'Aulas',
-            <Building2 className="w-3.5 h-3.5" />,
+          {!soloProfesores &&
+            grupoCheck(
+              'Aulas',
+              <Building2 className="w-3.5 h-3.5" />,
             selAula,
             setSelAula,
             (lk, g) =>

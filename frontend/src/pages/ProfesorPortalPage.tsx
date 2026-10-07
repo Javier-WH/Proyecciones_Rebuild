@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
-import { HorarioEntry, HorarioConfig, Turno, pnfLabel } from './horarios/types.js';
+import { HorarioEntry, HorarioConfig, Turno, Aula, pnfLabel } from './horarios/types.js';
 import { HorarioReadonlyGrid } from './horarios/HorarioReadonlyGrid.js';
 import { DisponibilidadGrid } from './DisponibilidadGrid.js';
-import { labelLapso, lapsoKey } from './AgregarMateriaModal.js';
+import { ReporteHorarioModal } from './ReporteHorarioModal.js';
+import { labelLapso, lapsoKey, MateriaAsignableRow } from './AgregarMateriaModal.js';
 import {
   CalendarClock,
   CalendarCheck,
@@ -14,27 +15,15 @@ import {
   GraduationCap,
   Clock,
   BookOpen,
+  Printer,
 } from 'lucide-react';
-
-interface MateriaRow {
-  materia_id: number;
-  materia_nombre: string;
-  horas_semanales: number;
-  tipo_proyeccion: 'TRIMESTRAL' | 'SEMESTRAL';
-  trimestre: number;
-  seccion_id: number;
-  seccion_nombre: string;
-  turno_nombre: string;
-  pnf_nombre: string;
-  trayecto_nombre: string;
-  proyeccion_nombre: string;
-}
 
 const ordenTipo = (t: string) => (t === 'TRIMESTRAL' ? 0 : 1);
 
 export const ProfesorPortalPage: React.FC = () => {
   const { user } = useAuth();
-  const [rows, setRows] = useState<MateriaRow[]>([]);
+  const [rows, setRows] = useState<MateriaAsignableRow[]>([]);
+  const [periodoCodigo, setPeriodoCodigo] = useState<string | null>(null);
   const [periodoNombre, setPeriodoNombre] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -44,7 +33,9 @@ export const ProfesorPortalPage: React.FC = () => {
   const [entries, setEntries] = useState<HorarioEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [aulas, setAulas] = useState<Aula[]>([]);
   const [usa12, setUsa12] = useState(false);
+  const [reporteOpen, setReporteOpen] = useState(false);
 
   // Lapsos en los que el docente tiene materias asignadas
   const lapsos = useMemo(() => {
@@ -60,21 +51,24 @@ export const ProfesorPortalPage: React.FC = () => {
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
-      const [res, rTurnos, rConfig] = await Promise.all([
-        apiFetch<{ periodo_nombre: string | null; rows: MateriaRow[] }>(
+      const [res, rTurnos, rConfig, rAulas] = await Promise.all([
+        apiFetch<{ periodo: string | null; periodo_nombre: string | null; rows: MateriaAsignableRow[] }>(
           '/proyecciones/carga-docente'
         ),
         apiFetch<Turno[]>('/horarios/turnos'),
         apiFetch<HorarioConfig>('/horarios/config'),
+        apiFetch<Aula[]>('/horarios/aulas'),
       ]);
       if (res.success && res.data) {
         setRows(res.data.rows ?? []);
+        setPeriodoCodigo(res.data.periodo ?? null);
         setPeriodoNombre(res.data.periodo_nombre ?? null);
       } else {
         setErrorMsg(res.message || 'No se pudo cargar tu carga académica.');
       }
       if (rTurnos.success && rTurnos.data) setTurnos(rTurnos.data);
       if (rConfig.success && rConfig.data) setUsa12(!!rConfig.data.formato_12h);
+      if (rAulas.success && rAulas.data) setAulas(rAulas.data);
       setLoading(false);
     };
     cargar();
@@ -117,7 +111,7 @@ export const ProfesorPortalPage: React.FC = () => {
 
   // Materias agrupadas por lapso
   const grupos = useMemo(() => {
-    const map = new Map<string, { tipo: string; n: number; label: string; rows: MateriaRow[] }>();
+    const map = new Map<string, { tipo: string; n: number; label: string; rows: MateriaAsignableRow[] }>();
     for (const r of rows) {
       const k = lapsoKey(r.tipo_proyeccion, r.trimestre);
       if (!map.has(k)) {
@@ -221,6 +215,15 @@ export const ProfesorPortalPage: React.FC = () => {
                   ))}
                 </select>
               </div>
+            )}
+            {vista === 'horario' && profesorId != null && (
+              <button
+                onClick={() => setReporteOpen(true)}
+                className="ml-auto px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimir / Excel</span>
+              </button>
             )}
           </div>
 
@@ -336,6 +339,20 @@ export const ProfesorPortalPage: React.FC = () => {
           )}
         </>
       )}
+
+      <ReporteHorarioModal
+        isOpen={reporteOpen}
+        onClose={() => setReporteOpen(false)}
+        periodo={periodoCodigo}
+        lapsoActual={lapsoSel ?? lapsos[0]?.[0] ?? 'TRIMESTRAL:1'}
+        lapsos={lapsos.map(([k]) => k)}
+        rows={rows}
+        aulas={aulas}
+        turnos={turnos}
+        formato12={usa12}
+        profesorPreseleccionado={profesorId ?? undefined}
+        soloProfesores
+      />
     </div>
   );
 };
