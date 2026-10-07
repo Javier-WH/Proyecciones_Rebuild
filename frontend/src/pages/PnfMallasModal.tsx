@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
-import { precargarCatalogoMaterias, MateriaOpcion } from './horarios/catalogoMaterias.js';
+import {
+  precargarCatalogoMaterias,
+  invalidarCatalogoMaterias,
+  MateriaOpcion,
+} from './horarios/catalogoMaterias.js';
 import {
   X,
   Loader2,
@@ -12,6 +16,7 @@ import {
   ChevronRight,
   BookOpen,
   Layers,
+  RefreshCw,
 } from 'lucide-react';
 
 interface Maya {
@@ -65,6 +70,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
   const [catalogo, setCatalogo] = useState<MateriaOpcion[] | null>(null);
 
   const [guardandoColor, setGuardandoColor] = useState<number | null>(null);
+  const [refrescando, setRefrescando] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -83,6 +89,22 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     };
     cargar();
   }, [isOpen]);
+
+  // Invalida el caché del catálogo y vuelve a pedirlo a SAGA, junto con la
+  // lista de PNF. Las expansiones del árbol se conservan.
+  const refrescarCatalogo = async () => {
+    setRefrescando(true);
+    setErrorMsg(null);
+    invalidarCatalogoMaterias();
+    const [cat, res] = await Promise.all([
+      precargarCatalogoMaterias(),
+      apiFetch<PnfItem[]>('/horarios/pnfs'),
+    ]);
+    setCatalogo(cat);
+    if (res.success && res.data) setPnfs(res.data);
+    else if (!res.success) setErrorMsg(res.message || 'Error cargando los PNF.');
+    setRefrescando(false);
+  };
 
   // Árbol derivado del catálogo cacheado
   const arbol = useMemo(() => {
@@ -153,9 +175,19 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
             <GraduationCap className="w-5 h-5 text-indigo-400" />
             PNF y Mallas Curriculares
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={refrescarCatalogo}
+              disabled={refrescando}
+              title="Actualizar catálogo desde SAGA"
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-4.5 h-4.5 ${refrescando ? 'animate-spin' : ''}`} />
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-2.5">
