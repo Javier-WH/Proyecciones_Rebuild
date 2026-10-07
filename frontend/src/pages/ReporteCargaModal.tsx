@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import ExcelJS from 'exceljs';
 import { Profesor } from './ProfesorModal.js';
+import { imprimirHtml } from '../utils/print.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import { X, FileSpreadsheet, Printer, Users } from 'lucide-react';
 
@@ -437,17 +438,7 @@ td.tot { font-weight: bold; font-size: 11pt; vertical-align: middle; }
 td.ded { text-align: center; vertical-align: middle; }
 </style></head><body>${secciones}</body></html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) {
-      alert('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes e inténtalo de nuevo.');
-      return;
-    }
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => {
-      win.focus();
-      win.print();
-    };
+    imprimirHtml(html);
   };
 
   if (!isOpen) return null;

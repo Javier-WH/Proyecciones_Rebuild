@@ -12,6 +12,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { imprimirHtml } from '../utils/print.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import {
   HorarioEntry,
@@ -631,17 +632,7 @@ td.clase { vertical-align: middle; }
 .cardsep { border-top: 1px dashed #999; margin: 3px 0; }
 </style></head><body>${seccionesHtml}</body></html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) {
-      alert('El navegador bloqueó la ventana de impresión. Permite ventanas emergentes.');
-      return;
-    }
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => {
-      win.focus();
-      win.print();
-    };
+    imprimirHtml(html);
   };
 
   if (!isOpen) return null;
