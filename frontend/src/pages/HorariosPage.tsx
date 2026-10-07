@@ -1111,7 +1111,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               >
                 {aulas.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.codigo} — {a.nombre}
+                    {a.nombre}
                   </option>
                 ))}
               </select>
