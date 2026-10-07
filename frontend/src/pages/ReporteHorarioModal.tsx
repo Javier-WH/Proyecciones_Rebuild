@@ -782,83 +782,84 @@ td.clase { vertical-align: middle; }
           </span>
         </label>
 
-        {todosMarcados ? (
-          <p className="text-[10px] text-slate-600 italic px-1 pt-1.5">
-            Se imprimirá la agenda de todos los profesores de este lapso.
-          </p>
-        ) : (
-          <div className="mt-2">
-            <div className="relative">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={profQuery}
-                    onChange={(e) => setProfQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && sugerencias.length > 0) {
-                        e.preventDefault();
-                        agregar(sugerencias[0].id);
-                      }
-                    }}
-                    placeholder="Buscar por nombre, apellido o cédula…"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <button
-                  onClick={() => sugerencias.length > 0 && agregar(sugerencias[0].id)}
-                  disabled={sugerencias.length === 0}
-                  className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Agregar
-                </button>
+        <div className="mt-2">
+          <div className="relative">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={profQuery}
+                  disabled={todosMarcados}
+                  onChange={(e) => setProfQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && sugerencias.length > 0) {
+                      e.preventDefault();
+                      agregar(sugerencias[0].id);
+                    }
+                  }}
+                  placeholder="Buscar por nombre, apellido o cédula…"
+                  className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                />
               </div>
-              {sugerencias.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl shadow-black/60 overflow-hidden">
-                  {sugerencias.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => agregar(p.id)}
-                      className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center justify-between gap-2 cursor-pointer transition-colors"
-                    >
-                      <span className="truncate">{p.nombre}</span>
-                      {p.cedula && <span className="text-[10px] text-slate-500 shrink-0">C.I. {p.cedula}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <button
+                onClick={() => sugerencias.length > 0 && agregar(sugerencias[0].id)}
+                disabled={todosMarcados || sugerencias.length === 0}
+                className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                Agregar
+              </button>
             </div>
-
-            <div className="mt-2 h-40 overflow-y-auto space-y-1 pr-1">
-              {agregados.length > 0 ? (
-                agregados.map((p) => (
-                  <div
+            {!todosMarcados && sugerencias.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl shadow-black/60 overflow-hidden">
+                {sugerencias.map((p) => (
+                  <button
                     key={p.id}
-                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/25 text-xs text-blue-200"
+                    onClick={() => agregar(p.id)}
+                    className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center justify-between gap-2 cursor-pointer transition-colors"
                   >
-                    <span className="truncate">
-                      {p.nombre}
-                      {p.cedula && <span className="text-blue-300/60"> · C.I. {p.cedula}</span>}
-                    </span>
-                    <button
-                      onClick={() => quitar(p.id)}
-                      className="text-blue-300/70 hover:text-white shrink-0 cursor-pointer"
-                      title="Quitar"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-[10px] text-slate-600 italic px-1 pt-2">
-                  — sin profesores agregados —
-                </p>
-              )}
-            </div>
+                    <span className="truncate">{p.nombre}</span>
+                    {p.cedula && <span className="text-[10px] text-slate-500 shrink-0">C.I. {p.cedula}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+
+          <div className="mt-2 h-40 overflow-y-auto space-y-1 pr-1">
+            {todosMarcados ? (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-[11px] text-slate-500 italic text-center px-4">
+                  Se imprimirá la agenda de todos los profesores de este lapso.
+                </p>
+              </div>
+            ) : agregados.length > 0 ? (
+              agregados.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/25 text-xs text-blue-200"
+                >
+                  <span className="truncate">
+                    {p.nombre}
+                    {p.cedula && <span className="text-blue-300/60"> · C.I. {p.cedula}</span>}
+                  </span>
+                  <button
+                    onClick={() => quitar(p.id)}
+                    className="text-blue-300/70 hover:text-white shrink-0 cursor-pointer"
+                    title="Quitar"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="text-[10px] text-slate-600 italic px-1 pt-2">
+                — sin profesores agregados —
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
