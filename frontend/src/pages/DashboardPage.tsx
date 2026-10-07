@@ -9,7 +9,7 @@ import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import { ConfigHorariosModal } from './ConfigHorariosModal.js';
 import { PnfMallasModal } from './PnfMallasModal.js';
-import logoProyecciones from '../images/Logo_transparent_outlined.png';
+import logoProyecciones from '../images/Gemini_back_transparent.png';
 import {
   LogOut,
   UserCheck,

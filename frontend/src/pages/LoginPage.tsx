@@ -47,7 +47,7 @@ export const LoginPage: React.FC = () => {
             <img
               src={logoUptll}
               alt="Logo UPTLL"
-              className="h-20 w-auto object-contain"
+              className="h-11 w-auto object-contain"
             />
             <div>
               <h1 className="font-bold text-base tracking-tight text-white">UPTLL "Juana Ramírez"</h1>
@@ -156,17 +156,7 @@ export const LoginPage: React.FC = () => {
               </button>
             </form>
 
-            {/* Quick Demo Credentials Info */}
-            <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-              <p className="text-xs text-slate-400">
-                Credenciales iniciales de prueba:
-              </p>
-              <div className="mt-2 inline-flex items-center gap-2 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono text-blue-300">
-                <span>Usuario: <strong className="text-white">admin</strong></span>
-                <span className="text-slate-600">|</span>
-                <span>Clave: <strong className="text-white">admin123</strong></span>
-              </div>
-            </div>
+
           </div>
         </div>
       </main>
