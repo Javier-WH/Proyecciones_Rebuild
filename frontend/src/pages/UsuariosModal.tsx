@@ -100,7 +100,6 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Usuario | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
-
   const fetchUsuarios = async () => {
     setLoading(true);
     const res = await apiFetch<Usuario[]>('/usuarios');
@@ -461,6 +460,7 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
           )}
         </div>
       </div>
+
     </div>
   );
 };
@@ -516,17 +516,19 @@ const ProfesorVinculoSelect: React.FC<{
           setOpen(true);
         }}
         placeholder="— Ninguno —"
-        className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-8 py-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-600"
+        className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-9 py-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-600"
       />
       {value && !open && (
-        <button
-          type="button"
-          onClick={() => onChange('')}
-          title="Quitar vinculación"
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            title="Quitar vinculación"
+            className="p-1 text-slate-500 hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
       {open && (
         <>

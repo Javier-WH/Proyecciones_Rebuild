@@ -20,15 +20,27 @@ import {
 
 const ordenTipo = (t: string) => (t === 'TRIMESTRAL' ? 0 : 1);
 
-export const ProfesorPortalPage: React.FC = () => {
-  const { user } = useAuth();
+// Vista del portal de un docente: horario, materias y disponibilidad.
+// Reutilizada por el portal del profesor y por el panel que ve el admin.
+export interface ProfesorPortalViewProps {
+  profesorId: number;
+  nombre: string;
+  cedula?: string | null;
+  pnfNombre?: string | null;
+}
+
+export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
+  profesorId,
+  nombre,
+  cedula,
+  pnfNombre,
+}) => {
   const [rows, setRows] = useState<MateriaAsignableRow[]>([]);
   const [periodoCodigo, setPeriodoCodigo] = useState<string | null>(null);
   const [periodoNombre, setPeriodoNombre] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [vista, setVista] = useState<'horario' | 'materias' | 'disponibilidad'>('horario');
-  const profesorId = user?.profesor_id ?? (user?.invitado ? -user.id : null);
   const [lapsoSel, setLapsoSel] = useState<string | null>(null);
   const [entries, setEntries] = useState<HorarioEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(false);
@@ -60,7 +72,8 @@ export const ProfesorPortalPage: React.FC = () => {
         apiFetch<Aula[]>('/horarios/aulas'),
       ]);
       if (res.success && res.data) {
-        setRows(res.data.rows ?? []);
+        // Para rol PROFESOR el backend ya filtra; para gestores filtramos aquí.
+        setRows((res.data.rows ?? []).filter((r) => r.profesor_id === profesorId));
         setPeriodoCodigo(res.data.periodo ?? null);
         setPeriodoNombre(res.data.periodo_nombre ?? null);
       } else {
@@ -89,7 +102,7 @@ export const ProfesorPortalPage: React.FC = () => {
         `/horarios/entries?tipo=${tipo}&trimestre=${n}`
       );
       if (res.success && res.data) {
-        setEntries(res.data.entries ?? []);
+        setEntries((res.data.entries ?? []).filter((e) => e.profesor_id === profesorId));
       } else {
         setEntries([]);
       }
@@ -139,11 +152,11 @@ export const ProfesorPortalPage: React.FC = () => {
             <span>Portal del Docente</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            {user?.nombre} {user?.apellido}
+            {nombre}
           </h2>
           <p className="text-slate-300 text-sm mt-2">
-            C.I. {user?.profesor_cedula ?? user?.username}
-            {user?.pnf_nombre ? ` · ${pnfLabel(user.pnf_nombre)}` : ''}
+            {cedula ? `C.I. ${cedula}` : ''}
+            {pnfNombre ? ` · ${pnfLabel(pnfNombre)}` : ''}
             {periodoNombre ? ` · ${periodoNombre}` : ''}
           </p>
         </div>
@@ -216,7 +229,7 @@ export const ProfesorPortalPage: React.FC = () => {
                 </select>
               </div>
             )}
-            {vista === 'horario' && profesorId != null && (
+            {vista === 'horario' && (
               <button
                 onClick={() => setReporteOpen(true)}
                 className="ml-auto px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors"
@@ -280,13 +293,7 @@ export const ProfesorPortalPage: React.FC = () => {
                 <span className="text-emerald-300 font-semibold">disponible</span> y{' '}
                 <span className="text-red-300 font-semibold">no disponible</span>.
               </p>
-              {profesorId != null ? (
-                <DisponibilidadGrid profesorId={profesorId} />
-              ) : (
-                <div className="py-14 text-center text-slate-500 text-xs italic">
-                  Tu cuenta no está vinculada a un registro de docente.
-                </div>
-              )}
+              <DisponibilidadGrid profesorId={profesorId} />
             </div>
           ) : (
             <div className="space-y-5">
@@ -350,9 +357,39 @@ export const ProfesorPortalPage: React.FC = () => {
         aulas={aulas}
         turnos={turnos}
         formato12={usa12}
-        profesorPreseleccionado={profesorId ?? undefined}
+        profesorPreseleccionado={profesorId}
         soloProfesores
       />
     </div>
+  );
+};
+
+// Portal propio del docente logueado (rol PROFESOR o invitado por cédula):
+// el ID viene de su sesión y el backend ya devuelve solo sus datos.
+export const ProfesorPortalPage: React.FC = () => {
+  const { user } = useAuth();
+  const profesorId = user?.profesor_id ?? (user?.invitado ? -user.id : null);
+
+  if (profesorId == null) {
+    return (
+      <div className="max-w-7xl mx-auto w-full">
+        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-10 text-center">
+          <AlertCircle className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-300 font-semibold">Cuenta sin docente vinculado</p>
+          <p className="text-slate-500 text-xs mt-1">
+            Tu cuenta de usuario no está asociada a un registro de docente.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ProfesorPortalView
+      profesorId={profesorId}
+      nombre={`${user?.nombre ?? ''} ${user?.apellido ?? ''}`.trim()}
+      cedula={user?.profesor_cedula ?? user?.username}
+      pnfNombre={user?.pnf_nombre}
+    />
   );
 };

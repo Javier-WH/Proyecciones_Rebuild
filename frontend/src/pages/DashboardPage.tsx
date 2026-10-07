@@ -12,6 +12,7 @@ import { ConfigHorariosModal } from './ConfigHorariosModal.js';
 import { PnfMallasModal } from './PnfMallasModal.js';
 import { TiposContratoModal } from './TiposContratoModal.js';
 import { PerfilesModal } from './PerfilesModal.js';
+import { ProfesorPanelModal } from './ProfesorPanelModal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
 import {
@@ -54,6 +55,11 @@ export const DashboardPage: React.FC = () => {
   const [perfilesOpen, setPerfilesOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [acercaOpen, setAcercaOpen] = useState(false);
+  const [panelProfesor, setPanelProfesor] = useState<{
+    id: number;
+    nombre: string;
+    cedula?: string | null;
+  } | null>(null);
 
   useEffect(() => {
     const checkSagaStatus = async () => {
@@ -499,13 +505,26 @@ export const DashboardPage: React.FC = () => {
                     <UserCheck className="w-[18px] h-[18px] text-amber-400 shrink-0" />
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Docente Vinculado</p>
-                      <p className="text-xs font-semibold text-slate-200">
-                        {user?.profesor_cedula
-                          ? user.profesor_nombre
+                      {user?.profesor_cedula && user?.profesor_id ? (
+                        <button
+                          onClick={() =>
+                            setPanelProfesor({
+                              id: user.profesor_id!,
+                              nombre:
+                                user.profesor_nombre ?? `C.I. ${user.profesor_cedula}`,
+                              cedula: user.profesor_cedula,
+                            })
+                          }
+                          title="Ver panel del docente"
+                          className="text-xs font-semibold text-slate-200 hover:text-blue-300 transition-colors cursor-pointer text-left"
+                        >
+                          {user.profesor_nombre
                             ? `${user.profesor_nombre} · C.I. ${user.profesor_cedula}`
-                            : `C.I. ${user.profesor_cedula}`
-                          : 'No vinculado'}
-                      </p>
+                            : `C.I. ${user.profesor_cedula}`}
+                        </button>
+                      ) : (
+                        <p className="text-xs font-semibold text-slate-200">No vinculado</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -563,6 +582,7 @@ export const DashboardPage: React.FC = () => {
       <PnfMallasModal isOpen={pnfMallasOpen} onClose={() => setPnfMallasOpen(false)} />
       <TiposContratoModal isOpen={tiposContratoOpen} onClose={() => setTiposContratoOpen(false)} />
       <PerfilesModal isOpen={perfilesOpen} onClose={() => setPerfilesOpen(false)} />
+      <ProfesorPanelModal profesor={panelProfesor} onClose={() => setPanelProfesor(null)} />
 
       {/* Acerca de — información del sistema */}
       {acercaOpen && (
