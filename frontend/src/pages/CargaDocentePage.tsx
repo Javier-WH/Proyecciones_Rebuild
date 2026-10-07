@@ -55,6 +55,7 @@ export const CargaDocentePage: React.FC = () => {
 
   const [rows, setRows] = useState<CargaRow[]>([]);
   const [periodo, setPeriodo] = useState<string | null>(null);
+  const [periodoNombre, setPeriodoNombre] = useState<string | null>(null);
   const [profesores, setProfesores] = useState<Profesor[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -83,10 +84,13 @@ export const CargaDocentePage: React.FC = () => {
   const fetchCarga = async () => {
     setLoading(true);
     setErrorMsg(null);
-    const res = await apiFetch<{ periodo: string; rows: CargaRow[] }>('/proyecciones/carga-docente');
+    const res = await apiFetch<{ periodo: string; periodo_nombre?: string | null; rows: CargaRow[] }>(
+      '/proyecciones/carga-docente'
+    );
     if (res.success && res.data) {
       setRows(res.data.rows);
       setPeriodo(res.data.periodo);
+      setPeriodoNombre(res.data.periodo_nombre ?? null);
     } else {
       setErrorMsg(res.message || 'Error cargando la carga docente.');
     }
@@ -904,6 +908,7 @@ export const CargaDocentePage: React.FC = () => {
         rows={rows}
         profesores={profesores}
         periodo={periodo}
+        periodoNombre={periodoNombre}
         onClose={() => setModalReporte(false)}
       />
 

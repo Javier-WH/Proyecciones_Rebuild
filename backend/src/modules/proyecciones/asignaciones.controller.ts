@@ -30,14 +30,22 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
 
   try {
     let periodoCodigo = periodo;
+    let periodoNombre: string | null = null;
     if (!periodoCodigo) {
       const activo = await query<any[]>(
-        "SELECT codigo FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
+        "SELECT codigo, nombre FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
       );
       if (activo.length === 0) {
-        return reply.send({ success: true, data: { periodo: null, rows: [] } });
+        return reply.send({ success: true, data: { periodo: null, periodo_nombre: null, rows: [] } });
       }
       periodoCodigo = activo[0].codigo;
+      periodoNombre = activo[0].nombre;
+    } else {
+      const encontrado = await query<any[]>(
+        'SELECT nombre FROM periodos_academicos WHERE codigo = ? LIMIT 1',
+        [periodoCodigo]
+      );
+      periodoNombre = encontrado[0]?.nombre ?? null;
     }
 
     // 1. Filas asignables: materias x secciones de proyecciones activas del periodo
@@ -134,7 +142,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
       }
     }
 
-    return reply.send({ success: true, data: { periodo: periodoCodigo, rows } });
+    return reply.send({ success: true, data: { periodo: periodoCodigo, periodo_nombre: periodoNombre, rows } });
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error cargando la carga docente.' });

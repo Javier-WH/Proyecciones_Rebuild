@@ -72,6 +72,7 @@ interface ReporteCargaModalProps {
   rows: ReporteRow[];
   profesores: Profesor[];
   periodo: string | null;
+  periodoNombre?: string | null;
 }
 
 export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
@@ -80,6 +81,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   rows,
   profesores,
   periodo,
+  periodoNombre,
 }) => {
   const [pnfSel, setPnfSel] = useState<number[]>([]); // vacío = reporte general
   const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
@@ -191,7 +193,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     tpl
       .replace(/\{PNF\}/gi, hoja.pnfTexto)
       .replace(/\{LAPSO\}/gi, hoja.lapsoLabel)
-      .replace(/\{PERIODO\}/gi, periodo || '');
+      .replace(/\{PERIODO\}/gi, periodoNombre || periodo || '');
 
   // ------------------------- EXCEL -------------------------
   const generarExcel = async () => {
