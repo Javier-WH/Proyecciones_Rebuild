@@ -1321,6 +1321,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           {vista === 'profesor' && (
             <VistaRecurso
               titulo="Agenda del profesor"
+              ocultarProfesor
               entries={entriesProfesor}
               turnos={turnos}
               formato12={usa12}

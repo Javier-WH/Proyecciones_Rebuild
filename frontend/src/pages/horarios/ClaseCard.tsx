@@ -18,9 +18,10 @@ export const ClaseCard: React.FC<{
   errores?: ErrorClase[];
   advertencias?: string[]; // avisos (no errores): triángulo amarillo bajo la tarjeta
   avisosParciales?: string[]; // choques parciales T2↔semestre: icono verde abajo a la derecha
-  ocultarAula?: boolean; // vista por aula: la línea del aula es redundante
+  ocultarAula?: boolean; // vista por aula: la línea del aula es redundante → PNF
+  ocultarProfesor?: boolean; // vista por profesor: la línea del profesor es redundante → PNF
   className?: string;
-}> = ({ entry, fin, compacto, usa12h, errores, advertencias, avisosParciales, ocultarAula, className = '' }) => {
+}> = ({ entry, fin, compacto, usa12h, errores, advertencias, avisosParciales, ocultarAula, ocultarProfesor, className = '' }) => {
   const [tip, setTip] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const [tipAdv, setTipAdv] = useState<{ x: number; y: number; flip: boolean } | null>(null);
   const [tipPar, setTipPar] = useState<{ x: number; y: number; flip: boolean } | null>(null);
@@ -33,6 +34,12 @@ export const ClaseCard: React.FC<{
     : 'Sin profesor';
   const aula = entry.aula_nombre || entry.aula_codigo;
   const hora = `${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(fin ?? entry.hora_fin, usa12h)}`;
+  const pnf = pnfLabel(pnfNombre);
+  // Línea resumida del modo compacto: en vista por aula se antepone el PNF;
+  // en vista por profesor el PNF sustituye al profesor (redundante ahí).
+  const resumen = ocultarProfesor
+    ? `${pnf} · ${aula} · ${hora}`
+    : `${ocultarAula ? `${pnf} · ` : ''}${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`;
 
   return (
     <div
@@ -174,24 +181,26 @@ export const ClaseCard: React.FC<{
         </span>
       </div>
       {compacto ? (
-        <div
-          className="text-[9px] opacity-80 leading-tight truncate"
-          title={`${ocultarAula ? `${pnfLabel(pnfNombre)} · ` : ''}${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`}
-        >
-          {ocultarAula ? `${pnfLabel(pnfNombre)} · ` : ''}
-          {profesor}
-          {ocultarAula ? '' : ` · ${aula}`} · {hora}
+        <div className="text-[9px] opacity-80 leading-tight truncate" title={resumen}>
+          {resumen}
         </div>
       ) : (
         <div className="text-[9px] opacity-80 leading-tight mt-0.5 space-y-px">
-          <div className="flex items-center gap-1 truncate" title={profesor}>
-            <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
-            <span className="truncate">{profesor}</span>
-          </div>
-          {ocultarAula ? (
-            <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
+          {ocultarProfesor ? (
+            <div className="flex items-center gap-1 truncate" title={pnf}>
               <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
-              <span className="truncate">{pnfLabel(pnfNombre)}</span>
+              <span className="truncate">{pnf}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 truncate" title={profesor}>
+              <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
+              <span className="truncate">{profesor}</span>
+            </div>
+          )}
+          {ocultarAula ? (
+            <div className="flex items-center gap-1 truncate" title={pnf}>
+              <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
+              <span className="truncate">{pnf}</span>
             </div>
           ) : (
             <div className="flex items-center gap-1 truncate" title={`${entry.aula_codigo} — ${entry.aula_nombre}`}>
@@ -259,7 +268,11 @@ const lapsoCorto = (it: ItemDividido) => {
 // Cuerpo de un item dividido con el mismo formato de ClaseCard: materia en
 // negrita con punto del PNF y líneas pequeñas con icono (sección·lapso,
 // profesor, aula y hora).
-const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean }> = ({ it, ocultarAula }) => {
+const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean; ocultarProfesor?: boolean }> = ({
+  it,
+  ocultarAula,
+  ocultarProfesor,
+}) => {
   const e = it.entry;
   const { catalogo } = usePnfColors();
   const pnfNombre = catalogo.find((c) => c.id === e.pnf_saga_id)?.nombre;
@@ -283,10 +296,17 @@ const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean }> = ({ it
         >
           {e.seccion_nombre} · {lapsoDe(it)}
         </div>
-        <div className="flex items-center gap-1 truncate" title={profesor}>
-          <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
-          <span className="truncate">{profesor}</span>
-        </div>
+        {ocultarProfesor ? (
+          <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
+            <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
+            <span className="truncate">{pnfLabel(pnfNombre)}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 truncate" title={profesor}>
+            <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
+            <span className="truncate">{profesor}</span>
+          </div>
+        )}
         {ocultarAula ? (
           <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
             <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
@@ -316,7 +336,8 @@ export const ClaseDividida: React.FC<{
   items: ItemDividido[];
   onItemClick?: (entry: HorarioEntry) => void;
   ocultarAula?: boolean;
-}> = ({ items, onItemClick, ocultarAula }) => {
+  ocultarProfesor?: boolean;
+}> = ({ items, onItemClick, ocultarAula, ocultarProfesor }) => {
   if (items.length < 2) return null;
 
   // 2 materias: dos bloques lado a lado (izquierda / derecha)
@@ -332,7 +353,7 @@ export const ClaseDividida: React.FC<{
             onClick={() => onItemClick?.(it.entry)}
           >
             <div className="absolute inset-0 flex flex-col justify-center p-1.5 pb-4 overflow-hidden">
-              <DetalleItem it={it} ocultarAula={ocultarAula} />
+              <DetalleItem it={it} ocultarAula={ocultarAula} ocultarProfesor={ocultarProfesor} />
             </div>
             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
               <MiniAvisos item={it} horizontal />
@@ -390,7 +411,8 @@ export const ClaseCascada: React.FC<{
   rangoFin: number; // minutos
   onItemClick?: (entry: HorarioEntry) => void;
   ocultarAula?: boolean;
-}> = ({ items, rangoInicio, rangoFin, onItemClick, ocultarAula }) => {
+  ocultarProfesor?: boolean;
+}> = ({ items, rangoInicio, rangoFin, onItemClick, ocultarAula, ocultarProfesor }) => {
   if (items.length === 0) return null;
   const span = Math.max(1, rangoFin - rangoInicio);
   const orden = [...items].sort(
@@ -543,7 +565,7 @@ export const ClaseCascada: React.FC<{
             >
               {!x.relleno && mejorFranja.get(x.it) === fi && (
                 <div className="absolute inset-0 flex flex-col justify-center p-1 pb-3 overflow-hidden">
-                  <DetalleItem it={x.it} ocultarAula={ocultarAula} />
+                  <DetalleItem it={x.it} ocultarAula={ocultarAula} ocultarProfesor={ocultarProfesor} />
                   <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 z-10">
                     <MiniAvisos item={x.it} horizontal />
                   </div>

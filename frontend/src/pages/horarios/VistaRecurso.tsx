@@ -19,6 +19,7 @@ interface VistaRecursoProps {
   parejasParciales?: Map<number, number[]>; // entry.id → ids de las clases T2/semestre que le chocan
   seccionesSemestrales?: Set<number>; // secciones cuyas clases trimestrales son de semestre
   ocultarAula?: boolean; // vista por aula: no repetir el aula en cada tarjeta
+  ocultarProfesor?: boolean; // vista por profesor: no repetir el profesor en cada tarjeta
 }
 
 // Fila de la grilla: un rango horario (puede ser la unión de rangos de varios
@@ -42,7 +43,7 @@ interface Banda {
 const minAHora = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
-export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales, parejasParciales, seccionesSemestrales, ocultarAula }) => {
+export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, turnos, formato12, enError, advertencias, avisosParciales, parejasParciales, seccionesSemestrales, ocultarAula, ocultarProfesor }) => {
   // Orden fijo de bandas: Mañana → Tarde → Noche. Turnos con otros nombres
   // van al final, ordenados por su hora de inicio.
   const ordenTurno = (nombre: string): number => {
@@ -389,6 +390,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                         advertencias={advertencias?.get(e.id)}
                                         avisosParciales={avisosParciales?.get(e.id)}
                                         ocultarAula={ocultarAula}
+                                        ocultarProfesor={ocultarProfesor}
                                       />
                                     ))}
                                   </div>
@@ -398,6 +400,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     rangoInicio={minutos(f.inicio)}
                                     rangoFin={minutos(f.fin)}
                                     ocultarAula={ocultarAula}
+                                    ocultarProfesor={ocultarProfesor}
                                   />
                                 )}
                               </div>
@@ -500,6 +503,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                     rangoInicio={minutos(f.inicio)}
                                     rangoFin={minutos(fusion ? sp!.fin : f.fin)}
                                     ocultarAula={ocultarAula}
+                                    ocultarProfesor={ocultarProfesor}
                                   />
                                 );
                               }
@@ -516,6 +520,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                       advertencias={advertencias?.get(e.id)}
                                       avisosParciales={parDe(items.length > 1 ? e : undefined)}
                                       ocultarAula={ocultarAula}
+                                      ocultarProfesor={ocultarProfesor}
                                     />
                                   ))}
                                 </div>
