@@ -438,14 +438,18 @@ export const CargaDocentePage: React.FC = () => {
     const p = grupo.profesor;
 
     // Colapsar filas por materia+sección+régimen guardando las horas de cada lapso
-    const mergedMap = new Map<string, { base: CargaRow; horas: Map<string, number> }>();
+    const mergedMap = new Map<
+      string,
+      { base: CargaRow; horas: Map<string, number>; sems: Set<number> }
+    >();
     for (const r of grupo.rows) {
       const k = `${r.materia_id}:${r.seccion_id}:${r.tipo_proyeccion}`;
       let e = mergedMap.get(k);
       if (!e) {
-        e = { base: r, horas: new Map() };
+        e = { base: r, horas: new Map(), sems: new Set() };
         mergedMap.set(k, e);
       }
+      if (r.orig) e.sems.add(r.orig.trimestre);
       const lk = lapsoKey(r.tipo_proyeccion, r.trimestre);
       e.horas.set(lk, (e.horas.get(lk) || 0) + (r.horas_semanales || 0));
     }
@@ -485,7 +489,9 @@ export const CargaDocentePage: React.FC = () => {
               {m.base.materia_nombre}
               {m.base.orig && (
                 <span className="ml-1.5 text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded font-bold align-middle whitespace-nowrap">
-                  {labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase()}
+                  {m.sems.size > 1
+                    ? 'SEMESTRAL'
+                    : labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase()}
                 </span>
               )}
             </td>
@@ -570,14 +576,18 @@ export const CargaDocentePage: React.FC = () => {
 
   // Grupo SIN ASIGNAR en vista agrupada: colapsa por materia×sección igual que los profesores
   const renderSinAsignarPivoted = () => {
-    const mergedMap = new Map<string, { base: CargaRow; horas: Map<string, number> }>();
+    const mergedMap = new Map<
+      string,
+      { base: CargaRow; horas: Map<string, number>; sems: Set<number> }
+    >();
     for (const r of sinAsignar) {
       const k = `${r.materia_id}:${r.seccion_id}:${r.tipo_proyeccion}`;
       let e = mergedMap.get(k);
       if (!e) {
-        e = { base: r, horas: new Map() };
+        e = { base: r, horas: new Map(), sems: new Set() };
         mergedMap.set(k, e);
       }
+      if (r.orig) e.sems.add(r.orig.trimestre);
       const lk = lapsoKey(r.tipo_proyeccion, r.trimestre);
       e.horas.set(lk, (e.horas.get(lk) || 0) + (r.horas_semanales || 0));
     }
@@ -587,6 +597,11 @@ export const CargaDocentePage: React.FC = () => {
       <Fragment key="sin-asignar-pivoted">
         {merged.map((m, idx) => {
           const rowObj = m.base.orig ?? m.base;
+          const badgeSem =
+            m.base.orig &&
+            (m.sems.size > 1
+              ? 'SEMESTRAL'
+              : labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase());
           return (
           <tr
             key={`sa-${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
@@ -607,9 +622,9 @@ export const CargaDocentePage: React.FC = () => {
             )}
             <td className="py-3 px-3 font-medium text-white">
               {m.base.materia_nombre}
-              {m.base.orig && (
+              {badgeSem && (
                 <span className="ml-1.5 text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded font-bold align-middle whitespace-nowrap">
-                  {labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase()}
+                  {badgeSem}
                 </span>
               )}
             </td>
