@@ -32,6 +32,9 @@ interface CargaRow extends AsignacionRow, MateriaAsignableRow {
   prof_activo: number | null;
   contrato_nombre: string | null;
   contrato_horas: number | null;
+  // En la vista de trimestres, fila semestral original de una copia expandida
+  // (S1 -> T1+T2, S2 -> T2+T3). Se conserva para las acciones de asignación.
+  orig?: CargaRow;
 }
 
 interface ProfesorGrupo {
@@ -61,6 +64,10 @@ export const CargaDocentePage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [filterLapso, setFilterLapso] = useState<string>('todos');
+  // Vista "Todos los trimestres": sumar horas de materias semestrales a los
+  // trimestres que cubren (S1 -> T1+T2, S2 -> T2+T3)
+  const [sumarSem1, setSumarSem1] = useState(false);
+  const [sumarSem2, setSumarSem2] = useState(false);
   const [filterPnf, setFilterPnf] = useState<string>('todos');
   const [filterProyeccion, setFilterProyeccion] = useState<string>('todas');
   const [filterText, setFilterText] = useState('');
@@ -196,6 +203,27 @@ export const CargaDocentePage: React.FC = () => {
     [rows, filterLapso, filterPnf, filterProyeccion]
   );
 
+  // En la vista "Todos los trimestres", cuando se pide sumar horas semestrales,
+  // cada materia semestral se expande a filas trimestrales sintéticas en los
+  // trimestres que cubre (S1 -> T1+T2, S2 -> T2+T3). Así aparece como una sola
+  // fila con horas en esas columnas y suma en el total del profesor.
+  const rowsVista = useMemo(() => {
+    if (filterLapso !== 'TRIMESTRAL' || (!sumarSem1 && !sumarSem2)) return rowsPorFiltro;
+    const extras = rows.filter(
+      (r) =>
+        r.tipo_proyeccion === 'SEMESTRAL' &&
+        ((r.trimestre === 1 && sumarSem1) || (r.trimestre === 2 && sumarSem2)) &&
+        (filterPnf === 'todos' || r.pnf_saga_id === Number(filterPnf)) &&
+        (filterProyeccion === 'todas' || r.proyeccion_id === Number(filterProyeccion))
+    );
+    const expandidas = extras.flatMap((r) =>
+      (r.trimestre === 1 ? [1, 2] : [2, 3]).map(
+        (t): CargaRow => ({ ...r, orig: r, tipo_proyeccion: 'TRIMESTRAL', trimestre: t })
+      )
+    );
+    return [...rowsPorFiltro, ...expandidas];
+  }, [rowsPorFiltro, rows, filterLapso, sumarSem1, sumarSem2, filterPnf, filterProyeccion]);
+
   // PNF de referencia para el toggle "Mis profesores": el PNF asociado
   // a la cuenta del usuario
   const pnfReferencia = useMemo(() => user?.pnf_saga_id ?? null, [user]);
@@ -221,7 +249,7 @@ export const CargaDocentePage: React.FC = () => {
         // Toggle "Mis profesores": solo profesores del PNF del usuario
         if (soloPnf && pnfReferencia != null && Number(p.pnf_saga_id) !== pnfReferencia) continue;
         // Con texto: incluir si coincide el profesor O alguna de sus materias
-        const susRows = rowsPorFiltro
+        const susRows = rowsVista
           .filter((r) => r.profesor_id === p.id && (coincideTextoProfesor(p) || coincideTextoMateria(r)))
           .sort((a, b) =>
             a.materia_nombre.localeCompare(b.materia_nombre, 'es', {
@@ -246,9 +274,9 @@ export const CargaDocentePage: React.FC = () => {
       });
     }
 
-    const sinAsignarRows = rowsPorFiltro.filter((r) => r.profesor_id === null && coincideTextoMateria(r));
+    const sinAsignarRows = rowsVista.filter((r) => r.profesor_id === null && coincideTextoMateria(r));
     return { grupos: lista, sinAsignar: sinAsignarRows };
-  }, [profesores, rowsPorFiltro, filterText, soloSinAsignar, soloPnf, pnfReferencia]);
+  }, [profesores, rowsVista, filterText, soloSinAsignar, soloPnf, pnfReferencia]);
 
   // Columnas de lapsos de la tabla agrupada: solo regímenes presentes en las
   // filas visibles (profesores mostrados + sin asignar). Sin datos visibles,
@@ -442,13 +470,25 @@ export const CargaDocentePage: React.FC = () => {
 
     return (
       <Fragment key={p.id}>
-        {merged.map((m, idx) => (
+        {merged.map((m, idx) => {
+          // Fila real para las acciones: si es una copia expandida de una
+          // materia semestral, se usa la original (régimen y lapsos reales)
+          const rowObj = m.base.orig ?? m.base;
+          const pluralRow = pluralLapso(terminoLapso([rowObj.tipo_proyeccion]));
+          return (
           <tr
             key={`${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
             className="hover:bg-slate-800/40 transition-colors"
           >
             {idx === 0 && profesorCell(p, span)}
-            <td className="py-3 px-3 font-medium text-white">{m.base.materia_nombre}</td>
+            <td className="py-3 px-3 font-medium text-white">
+              {m.base.materia_nombre}
+              {m.base.orig && (
+                <span className="ml-1.5 text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded font-bold align-middle whitespace-nowrap">
+                  {labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase()}
+                </span>
+              )}
+            </td>
             <td className="py-3 px-3 text-slate-400">
               <span className="inline-flex items-center gap-1.5">
                 {pnfDot(m.base.pnf_saga_id)}
@@ -474,9 +514,9 @@ export const CargaDocentePage: React.FC = () => {
               <td className="py-3 px-4">
                 <div className="flex items-center justify-center gap-1">
                   <button
-                    onClick={() => setModalAsignar({ open: true, row: m.base, todosLapsos: true })}
+                    onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
                     className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
-                    title={`Reasignar a otro profesor en todos los ${pluralLapso(lapsoTermino)}`}
+                    title={`Reasignar a otro profesor en todos los ${pluralRow}`}
                   >
                     <UserSearch className="w-4 h-4" />
                   </button>
@@ -484,14 +524,14 @@ export const CargaDocentePage: React.FC = () => {
                     onClick={() => {
                       if (
                         window.confirm(
-                          `¿Quitar "${m.base.materia_nombre}" en todos sus ${pluralLapso(lapsoTermino)}?`
+                          `¿Quitar "${m.base.materia_nombre}" en todos sus ${pluralRow}?`
                         )
                       ) {
-                        handleAssign(m.base, null, true);
+                        handleAssign(rowObj, null, true);
                       }
                     }}
                     className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                    title={`Quitar materia en todos los ${pluralLapso(lapsoTermino)}`}
+                    title={`Quitar materia en todos los ${pluralRow}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -499,7 +539,8 @@ export const CargaDocentePage: React.FC = () => {
               </td>
             )}
           </tr>
-        ))}
+          );
+        })}
 
         {/* Fila final del grupo: agregar materia (o fila única si no tiene materias) */}
         {(puedeAsignar || n === 0) && (
@@ -544,7 +585,9 @@ export const CargaDocentePage: React.FC = () => {
 
     return (
       <Fragment key="sin-asignar-pivoted">
-        {merged.map((m, idx) => (
+        {merged.map((m, idx) => {
+          const rowObj = m.base.orig ?? m.base;
+          return (
           <tr
             key={`sa-${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
             className="bg-amber-500/[0.03] hover:bg-amber-500/[0.07] transition-colors"
@@ -562,7 +605,14 @@ export const CargaDocentePage: React.FC = () => {
                 </div>
               </td>
             )}
-            <td className="py-3 px-3 font-medium text-white">{m.base.materia_nombre}</td>
+            <td className="py-3 px-3 font-medium text-white">
+              {m.base.materia_nombre}
+              {m.base.orig && (
+                <span className="ml-1.5 text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded font-bold align-middle whitespace-nowrap">
+                  {labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase()}
+                </span>
+              )}
+            </td>
             <td className="py-3 px-3 text-slate-400">
               <span className="inline-flex items-center gap-1.5">
                 {pnfDot(m.base.pnf_saga_id)}
@@ -595,7 +645,7 @@ export const CargaDocentePage: React.FC = () => {
             {puedeAsignar && (
               <td className="py-3 px-4 text-center">
                 <button
-                  onClick={() => setModalAsignar({ open: true, row: m.base, todosLapsos: true })}
+                  onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
                   className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <UserSearch className="w-3.5 h-3.5" />
@@ -604,7 +654,8 @@ export const CargaDocentePage: React.FC = () => {
               </td>
             )}
           </tr>
-        ))}
+          );
+        })}
       </Fragment>
     );
   };
@@ -676,6 +727,40 @@ export const CargaDocentePage: React.FC = () => {
             </option>
           ))}
         </select>
+
+        {/* En la vista de trimestres: sumar horas de materias semestrales */}
+        {filterLapso === 'TRIMESTRAL' && (
+          <div className="flex items-center gap-4 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2">
+            {lapsoCols.some((l) => l.tipo === 'SEMESTRAL' && l.n === 1) && (
+              <label
+                className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none"
+                title="Las materias de Semestre 1 se muestran y sus horas suman en Trimestre 1 y Trimestre 2"
+              >
+                <input
+                  type="checkbox"
+                  checked={sumarSem1}
+                  onChange={(e) => setSumarSem1(e.target.checked)}
+                  className="accent-emerald-500"
+                />
+                <span>Sumar horas de Semestre 1</span>
+              </label>
+            )}
+            {lapsoCols.some((l) => l.tipo === 'SEMESTRAL' && l.n === 2) && (
+              <label
+                className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none"
+                title="Las materias de Semestre 2 se muestran y sus horas suman en Trimestre 2 y Trimestre 3"
+              >
+                <input
+                  type="checkbox"
+                  checked={sumarSem2}
+                  onChange={(e) => setSumarSem2(e.target.checked)}
+                  className="accent-emerald-500"
+                />
+                <span>Sumar horas de Semestre 2</span>
+              </label>
+            )}
+          </div>
+        )}
 
         <select
           value={filterPnf}
