@@ -203,13 +203,19 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
       const thin: Partial<ExcelJS.Border> = { style: 'thin' };
       const borde: Partial<ExcelJS.Borders> = { top: thin, left: thin, bottom: thin, right: thin };
       const centrado: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle' };
+      const centradoWrap: Partial<ExcelJS.Alignment> = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true,
+      };
+      const fuenteDatos: Partial<ExcelJS.Font> = { size: 9 };
 
       for (const hoja of hojas) {
         const ws = wb.addWorksheet(hoja.nombreHoja);
         ws.columns = [
-          { width: 30 }, // A Profesor
-          { width: 44 }, // B Unidad Curricular
-          { width: 18 }, // C PNF
+          { width: 34 }, // A Profesor
+          { width: 46 }, // B Unidad Curricular
+          { width: 26 }, // C PNF
           { width: 13 }, // D Trayecto
           { width: 10 }, // E Sección
           { width: 10 }, // F Turno
@@ -274,7 +280,10 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
             r.getCell(6).value = item.turno_nombre;
             r.getCell(7).value = item.horas_semanales;
             r.getCell(2).alignment = { vertical: 'middle', wrapText: true };
-            for (const col of [3, 4, 5, 6, 7]) r.getCell(col).alignment = centrado;
+            for (const col of [3, 4, 5, 6, 7]) {
+              r.getCell(col).alignment = col === 3 ? centradoWrap : centrado;
+            }
+            for (const col of [2, 3, 4, 5, 6, 7]) r.getCell(col).font = fuenteDatos;
             fila++;
           }
           const fin = fila - 1;
@@ -285,14 +294,16 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           }
           const cNom = ws.getCell(inicio, 1);
           cNom.value = prof.nombre;
+          cNom.font = { size: 9, bold: true };
           cNom.alignment = { vertical: 'middle', wrapText: true };
           const cTotal = ws.getCell(inicio, 8);
           cTotal.value = prof.total;
-          cTotal.font = { bold: true };
+          cTotal.font = { bold: true, size: 10 };
           cTotal.alignment = centrado;
           const cDed = ws.getCell(inicio, 9);
           cDed.value = prof.dedicacion || null;
-          cDed.alignment = centrado;
+          cDed.font = fuenteDatos;
+          cDed.alignment = centradoWrap;
         }
         const ultima = fila - 1;
 
