@@ -13,6 +13,7 @@ import { PnfMallasModal } from './PnfMallasModal.js';
 import { TiposContratoModal } from './TiposContratoModal.js';
 import { PerfilesModal } from './PerfilesModal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
+import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
 import {
   GraduationCap,
   Briefcase,
@@ -34,7 +35,8 @@ import {
   CalendarClock,
   CalendarCog,
   IdCard,
-  ShieldCheck
+  ShieldCheck,
+  Info
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -51,6 +53,7 @@ export const DashboardPage: React.FC = () => {
   const [tiposContratoOpen, setTiposContratoOpen] = useState(false);
   const [perfilesOpen, setPerfilesOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [acercaOpen, setAcercaOpen] = useState(false);
 
   useEffect(() => {
     const checkSagaStatus = async () => {
@@ -399,6 +402,21 @@ export const DashboardPage: React.FC = () => {
                         <button
                           onClick={() => {
                             setConfigMenuOpen(false);
+                            setAcercaOpen(true);
+                          }}
+                          className={`w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer ${
+                            esAdmin ? '' : 'rounded-t-2xl'
+                          }`}
+                        >
+                          <Info className="w-4 h-4 text-cyan-400" />
+                          <div className="text-left">
+                            <div className="font-semibold text-xs">Acerca de</div>
+                            <div className="text-[10px] text-slate-500">Información del sistema</div>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setConfigMenuOpen(false);
                             setLogoutConfirmOpen(true);
                           }}
                           className="w-full px-4 py-3 flex items-center gap-3 text-sm text-red-300 hover:bg-red-500/10 hover:text-red-200 border-t border-slate-800 transition-colors cursor-pointer"
@@ -545,6 +563,51 @@ export const DashboardPage: React.FC = () => {
       <PnfMallasModal isOpen={pnfMallasOpen} onClose={() => setPnfMallasOpen(false)} />
       <TiposContratoModal isOpen={tiposContratoOpen} onClose={() => setTiposContratoOpen(false)} />
       <PerfilesModal isOpen={perfilesOpen} onClose={() => setPerfilesOpen(false)} />
+
+      {/* Acerca de — información del sistema */}
+      {acercaOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setAcercaOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/60 p-6 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center gap-5 mb-4">
+              <img src={logoUniversidad} alt="Logo UPTLL" className="h-16 w-auto object-contain" />
+              <div className="w-px h-14 bg-slate-700/70" />
+              <img src={logoProyecciones} alt="Logo Proyecciones UPTLL" className="h-16 w-auto object-contain" />
+            </div>
+            <h3 className="text-base font-extrabold text-white tracking-tight">
+              Proyecciones UPTLL
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              Plataforma para la creación de proyecciones académicas, asignación de carga docente y
+              generación automática de horarios de la UPTLL "Juana Ramírez".
+            </p>
+            <div className="mt-4 pt-4 border-t border-slate-800">
+              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">
+                Desarrollado por
+              </p>
+              <p className="text-sm font-semibold text-slate-200">
+                Francisco Javier Rodríguez Hernández
+              </p>
+              <a
+                href="https://javier-wh.github.io"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                javier-wh.github.io
+              </a>
+            </div>
+            <p className="text-[10px] text-slate-600 mt-4">
+              UPTLL Juana Ramírez — Sistema de Proyecciones Académicas © {new Date().getFullYear()}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Confirmación de cierre de sesión */}
       {logoutConfirmOpen && (
