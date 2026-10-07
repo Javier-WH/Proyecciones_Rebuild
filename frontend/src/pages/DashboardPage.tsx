@@ -9,8 +9,12 @@ import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import { ConfigHorariosModal } from './ConfigHorariosModal.js';
 import { PnfMallasModal } from './PnfMallasModal.js';
+import { TiposContratoModal } from './TiposContratoModal.js';
+import { PerfilesModal } from './PerfilesModal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import {
+  GraduationCap,
+  Briefcase,
   LogOut,
   UserCheck,
   Calendar,
@@ -22,13 +26,14 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Plus,
   LayoutDashboard,
   ClipboardList,
   Settings,
   UserCog,
   CalendarClock,
-  CalendarCog
+  CalendarCog,
+  IdCard,
+  ShieldCheck
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -42,6 +47,8 @@ export const DashboardPage: React.FC = () => {
   const [configHorariosOpen, setConfigHorariosOpen] = useState(false);
   const [horariosConfigTick, setHorariosConfigTick] = useState(0);
   const [pnfMallasOpen, setPnfMallasOpen] = useState(false);
+  const [tiposContratoOpen, setTiposContratoOpen] = useState(false);
+  const [perfilesOpen, setPerfilesOpen] = useState(false);
 
   useEffect(() => {
     const checkSagaStatus = async () => {
@@ -67,6 +74,158 @@ export const DashboardPage: React.FC = () => {
         return <span className="inline-block whitespace-nowrap bg-slate-700/60 text-slate-300/80 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">{role}</span>;
     }
   };
+
+  const esAdmin = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR';
+  const puedeGestionarDocentes = esAdmin || user?.role === 'REGULAR';
+
+  const moduloClases: Record<string, { icon: string; tag: string; hover: string; btn: string }> = {
+    blue:    { icon: 'bg-blue-500/10 border-blue-500/20 text-blue-400',       tag: 'text-blue-400 bg-blue-500/10',       hover: 'hover:border-blue-500/50',    btn: 'hover:bg-blue-600' },
+    indigo:  { icon: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400', tag: 'text-indigo-400 bg-indigo-500/10', hover: 'hover:border-indigo-500/50',  btn: 'hover:bg-indigo-600' },
+    cyan:    { icon: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',       tag: 'text-cyan-400 bg-cyan-500/10',       hover: 'hover:border-cyan-500/50',    btn: 'hover:bg-cyan-600' },
+    teal:    { icon: 'bg-teal-500/10 border-teal-500/20 text-teal-400',       tag: 'text-teal-400 bg-teal-500/10',       hover: 'hover:border-teal-500/50',    btn: 'hover:bg-teal-600' },
+    emerald: { icon: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', tag: 'text-emerald-400 bg-emerald-500/10', hover: 'hover:border-emerald-500/50', btn: 'hover:bg-emerald-600' },
+    sky:     { icon: 'bg-sky-500/10 border-sky-500/20 text-sky-400',          tag: 'text-sky-400 bg-sky-500/10',         hover: 'hover:border-sky-500/50',     btn: 'hover:bg-sky-600' },
+    orange:  { icon: 'bg-orange-500/10 border-orange-500/20 text-orange-400', tag: 'text-orange-400 bg-orange-500/10', hover: 'hover:border-orange-500/50',  btn: 'hover:bg-orange-600' },
+    rose:    { icon: 'bg-rose-500/10 border-rose-500/20 text-rose-400',       tag: 'text-rose-400 bg-rose-500/10',       hover: 'hover:border-rose-500/50',    btn: 'hover:bg-rose-600' },
+    amber:   { icon: 'bg-amber-500/10 border-amber-500/20 text-amber-400',    tag: 'text-amber-400 bg-amber-500/10',    hover: 'hover:border-amber-500/50',   btn: 'hover:bg-amber-600' },
+    violet:  { icon: 'bg-violet-500/10 border-violet-500/20 text-violet-400', tag: 'text-violet-400 bg-violet-500/10', hover: 'hover:border-violet-500/50',  btn: 'hover:bg-violet-600' },
+    fuchsia: { icon: 'bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-400', tag: 'text-fuchsia-400 bg-fuchsia-500/10', hover: 'hover:border-fuchsia-500/50', btn: 'hover:bg-fuchsia-600' },
+    purple:  { icon: 'bg-purple-500/10 border-purple-500/20 text-purple-400', tag: 'text-purple-400 bg-purple-500/10', hover: 'hover:border-purple-500/50',  btn: 'hover:bg-purple-600' },
+  };
+
+  const modulos: Array<{
+    titulo: string;
+    desc: string;
+    tag: string;
+    accion: string;
+    icono: React.ReactNode;
+    color: keyof typeof moduloClases;
+    onClick: () => void;
+    oculto?: boolean;
+  }> = [
+    {
+      titulo: 'Periodos Académicos',
+      desc: 'Crear y administrar los periodos académicos del año escolar.',
+      tag: 'Gestión',
+      accion: 'Ver Periodos',
+      icono: <CalendarDays className="w-6 h-6" />,
+      color: 'amber',
+      onClick: () => setActiveTab('periodos'),
+    },
+    {
+      titulo: 'Proyecciones',
+      desc: 'Crear y gestionar proyecciones por PNF, trayecto y pensum.',
+      tag: 'Módulo Principal',
+      accion: 'Ver Proyecciones',
+      icono: <Calendar className="w-6 h-6" />,
+      color: 'blue',
+      onClick: () => setActiveTab('proyecciones'),
+    },
+    {
+      titulo: 'Profesores',
+      desc: 'Registro, carga horaria, restricciones y asignación de materias.',
+      tag: 'Gestión Docente',
+      accion: 'Ver Docentes',
+      icono: <Users className="w-6 h-6" />,
+      color: 'indigo',
+      onClick: () => setActiveTab('profesores'),
+    },
+    {
+      titulo: 'Tipos de Contrato',
+      desc: 'Dedicación y horas semanales según el tipo de contrato.',
+      tag: 'Gestión Docente',
+      accion: 'Ver Tipos',
+      icono: <Briefcase className="w-6 h-6" />,
+      color: 'cyan',
+      onClick: () => setTiposContratoOpen(true),
+      oculto: !puedeGestionarDocentes,
+    },
+    {
+      titulo: 'Perfiles Docentes',
+      desc: 'Perfiles y materias que cada docente puede dictar.',
+      tag: 'Gestión Docente',
+      accion: 'Ver Perfiles',
+      icono: <GraduationCap className="w-6 h-6" />,
+      color: 'teal',
+      onClick: () => setPerfilesOpen(true),
+      oculto: !puedeGestionarDocentes,
+    },
+    {
+      titulo: 'Carga Docente',
+      desc: 'Asignación de unidades curriculares a profesores por lapso.',
+      tag: 'Asignación',
+      accion: 'Ver Carga',
+      icono: <ClipboardList className="w-6 h-6" />,
+      color: 'sky',
+      onClick: () => setActiveTab('carga'),
+    },
+    {
+      titulo: 'Horarios',
+      desc: 'Generación y consulta de horarios por sección, aula y docente.',
+      tag: 'Planificación',
+      accion: 'Ver Horarios',
+      icono: <CalendarClock className="w-6 h-6" />,
+      color: 'orange',
+      onClick: () => {
+        setHorariosSubTab('horario');
+        setActiveTab('horarios');
+      },
+    },
+    {
+      titulo: 'Aulas de Clase',
+      desc: 'Catálogo de aulas, capacidades, laboratorios y estado.',
+      tag: 'Espacios Físicos',
+      accion: 'Gestionar Aulas',
+      icono: <Building2 className="w-6 h-6" />,
+      color: 'emerald',
+      onClick: () => {
+        setHorariosSubTab('aulas');
+        setActiveTab('horarios');
+      },
+    },
+    {
+      titulo: 'Turnos y Bloques',
+      desc: 'Turnos de clase, bloques horarios y su duración.',
+      tag: 'Espacios Físicos',
+      accion: 'Gestionar Turnos',
+      icono: <Clock className="w-6 h-6" />,
+      color: 'rose',
+      onClick: () => {
+        setHorariosSubTab('turnos');
+        setActiveTab('horarios');
+      },
+    },
+    {
+      titulo: 'Usuarios del Sistema',
+      desc: 'Crear y editar cuentas y permisos de acceso.',
+      tag: 'Administración',
+      accion: 'Gestionar Usuarios',
+      icono: <UserCog className="w-6 h-6" />,
+      color: 'purple',
+      onClick: () => setUsuariosModalOpen(true),
+      oculto: user?.role !== 'SUPER_USUARIO',
+    },
+    {
+      titulo: 'Configuración de Horarios',
+      desc: 'Reglas de generación automática de horarios.',
+      tag: 'Administración',
+      accion: 'Configurar',
+      icono: <CalendarCog className="w-6 h-6" />,
+      color: 'violet',
+      onClick: () => setConfigHorariosOpen(true),
+      oculto: !esAdmin,
+    },
+    {
+      titulo: 'PNF y Mallas',
+      desc: 'Mallas curriculares SAGA e inscritos por PNF.',
+      tag: 'Pensums SAGA',
+      accion: 'Consultar Pensums',
+      icono: <BookOpen className="w-6 h-6" />,
+      color: 'fuchsia',
+      onClick: () => setPnfMallasOpen(true),
+      oculto: !esAdmin,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -100,15 +259,6 @@ export const DashboardPage: React.FC = () => {
               >
                 <LayoutDashboard className="w-3.5 h-3.5" />
                 <span>Inicio</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('periodos')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
-                  activeTab === 'periodos' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <CalendarDays className="w-3.5 h-3.5" />
-                <span>Periodos Académicos</span>
               </button>
               <button
                 onClick={() => setActiveTab('proyecciones')}
@@ -284,98 +434,78 @@ export const DashboardPage: React.FC = () => {
                 <p className="text-slate-300 text-sm sm:text-base mt-2 leading-relaxed">
                   Plataforma para la creación de proyecciones académicas, asignación de carga docente y generación automática de horarios de la UPTLL "Juana Ramírez".
                 </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
+                    <IdCard className="w-[18px] h-[18px] text-blue-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Usuario</p>
+                      <p className="text-xs font-semibold text-slate-200">@{user?.username}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
+                    <ShieldCheck className="w-[18px] h-[18px] text-purple-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Nivel de Permiso</p>
+                      {getRoleBadge(user?.role)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
+                    <BookOpen className="w-[18px] h-[18px] text-emerald-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">PNF Asociado</p>
+                      <p className="text-xs font-semibold text-slate-200">
+                        {user?.pnf_saga_id != null
+                          ? user.pnf_nombre || `PNF #${user.pnf_saga_id}`
+                          : user?.role === 'REGULAR' || user?.role === 'PROFESOR'
+                            ? 'Sin PNF asignado'
+                            : 'Todos los PNF'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
+                    <UserCheck className="w-[18px] h-[18px] text-amber-400 shrink-0" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Docente Vinculado</p>
+                      <p className="text-xs font-semibold text-slate-200">
+                        {user?.profesor_cedula
+                          ? user.profesor_nombre
+                            ? `${user.profesor_nombre} · C.I. ${user.profesor_cedula}`
+                            : `C.I. ${user.profesor_cedula}`
+                          : 'No vinculado'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* System Module Shortcut Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              {/* Proyecciones */}
-              <div
-                onClick={() => setActiveTab('proyecciones')}
-                className="bg-slate-900/90 border border-slate-800 hover:border-blue-500/50 rounded-2xl p-5 transition-all group cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Calendar className="w-6 h-6" />
+              {modulos.filter((m) => !m.oculto).map((m) => {
+                const c = moduloClases[m.color];
+                return (
+                  <div
+                    key={m.titulo}
+                    onClick={m.onClick}
+                    className={`bg-slate-900/90 border border-slate-800 ${c.hover} rounded-2xl p-5 transition-all group cursor-pointer`}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`w-12 h-12 rounded-xl border ${c.icon} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                        {m.icono}
+                      </div>
+                      <span className={`text-xs font-semibold ${c.tag} px-2.5 py-1 rounded-md`}>{m.tag}</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-1">{m.titulo}</h3>
+                    <p className="text-xs text-slate-400 mb-4">{m.desc}</p>
+                    <button
+                      onClick={m.onClick}
+                      className={`w-full py-2.5 bg-slate-800 ${c.btn} text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer`}
+                    >
+                      <span>{m.accion}</span>
+                    </button>
                   </div>
-                  <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md">Módulo Principal</span>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-1">Proyecciones</h3>
-                <p className="text-xs text-slate-400 mb-4">Crear y gestionar proyecciones por PNF, trayecto y pensum.</p>
-                <button
-                  onClick={() => setActiveTab('proyecciones')}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-blue-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Nueva Proyección</span>
-                </button>
-              </div>
-
-              {/* Profesores */}
-              <div
-                onClick={() => setActiveTab('profesores')}
-                className="bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-5 transition-all group cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <span className="text-xs font-semibold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-md">Gestión Docente</span>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-1">Profesores</h3>
-                <p className="text-xs text-slate-400 mb-4">Registro, carga horaria, restricciones y asignación de materias.</p>
-                <button
-                  onClick={() => setActiveTab('profesores')}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <span>Ver Docentes</span>
-                </button>
-              </div>
-
-              {/* Aulas */}
-              <div
-                onClick={() => {
-                  setHorariosSubTab('aulas');
-                  setActiveTab('horarios');
-                }}
-                className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-5 transition-all group cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Building2 className="w-6 h-6" />
-                  </div>
-                  <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md">Espacios Físicos</span>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-1">Aulas de Clase</h3>
-                <p className="text-xs text-slate-400 mb-4">Catálogo de aulas, capacidades, laboratorios y estado.</p>
-                <button
-                  onClick={() => {
-                    setHorariosSubTab('aulas');
-                    setActiveTab('horarios');
-                  }}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <span>Gestionar Aulas</span>
-                </button>
-              </div>
-
-              {/* PNFs y Mallas */}
-              <div className="bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 rounded-2xl p-5 transition-all group">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <BookOpen className="w-6 h-6" />
-                  </div>
-                  <span className="text-xs font-semibold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">Pensums SAGA</span>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-1">PNFs & Mallas</h3>
-                <p className="text-xs text-slate-400 mb-4">Consulta de mallas curriculares e inscritos desde SAGA.</p>
-                <button
-                  onClick={() => setPnfMallasOpen(true)}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-purple-600 text-slate-200 hover:text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                >
-                  <span>Consultar Pensums</span>
-                </button>
-              </div>
+                );
+              })}
             </div>
           </>
         )}
@@ -398,6 +528,8 @@ export const DashboardPage: React.FC = () => {
       />
 
       <PnfMallasModal isOpen={pnfMallasOpen} onClose={() => setPnfMallasOpen(false)} />
+      <TiposContratoModal isOpen={tiposContratoOpen} onClose={() => setTiposContratoOpen(false)} />
+      <PerfilesModal isOpen={perfilesOpen} onClose={() => setPerfilesOpen(false)} />
     </div>
   );
 };

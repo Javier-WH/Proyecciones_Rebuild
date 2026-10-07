@@ -13,6 +13,8 @@ interface UserRow {
   role: 'SUPER_USUARIO' | 'ADMINISTRADOR' | 'REGULAR' | 'PROFESOR';
   pnf_saga_id: number | null;
   profesor_cedula: string | null;
+  pnf_nombre?: string | null;
+  profesor_nombre?: string | null;
   activo: number;
 }
 
@@ -27,7 +29,21 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
   }
 
   try {
-    const users = await query<UserRow[]>('SELECT * FROM users WHERE username = ? LIMIT 1', [username.trim()]);
+    const users = await query<UserRow[]>(
+      `SELECT u.*,
+              COALESCE(
+                p.nombre,
+                (SELECT x.pnf_nombre FROM proyecciones x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1),
+                (SELECT x.pnf_nombre FROM profesores x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1),
+                (SELECT x.pnf_nombre FROM aulas x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1)
+              ) AS pnf_nombre,
+              NULLIF(TRIM(CONCAT(COALESCE(pr.nombres, ''), ' ', COALESCE(pr.apellidos, ''))), '') AS profesor_nombre
+       FROM users u
+       LEFT JOIN pnf p ON p.saga_id = u.pnf_saga_id
+       LEFT JOIN profesores pr ON pr.cedula = u.profesor_cedula
+       WHERE u.username = ? LIMIT 1`,
+      [username.trim()]
+    );
     
     if (users.length === 0) {
       return reply.status(401).send({
@@ -79,6 +95,8 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
           role: user.role,
           pnf_saga_id: user.pnf_saga_id,
           profesor_cedula: user.profesor_cedula,
+          pnf_nombre: user.pnf_nombre ?? null,
+          profesor_nombre: user.profesor_nombre ?? null,
         },
       },
     });
@@ -99,7 +117,18 @@ export async function meHandler(request: FastifyRequest, reply: FastifyReply) {
 
   try {
     const users = await query<UserRow[]>(
-      'SELECT id, username, nombre, apellido, email, role, pnf_saga_id, profesor_cedula, activo FROM users WHERE id = ? LIMIT 1',
+      `SELECT u.id, u.username, u.nombre, u.apellido, u.email, u.role, u.pnf_saga_id, u.profesor_cedula, u.activo,
+              COALESCE(
+                p.nombre,
+                (SELECT x.pnf_nombre FROM proyecciones x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1),
+                (SELECT x.pnf_nombre FROM profesores x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1),
+                (SELECT x.pnf_nombre FROM aulas x WHERE x.pnf_saga_id = u.pnf_saga_id AND x.pnf_nombre != '' LIMIT 1)
+              ) AS pnf_nombre,
+              NULLIF(TRIM(CONCAT(COALESCE(pr.nombres, ''), ' ', COALESCE(pr.apellidos, ''))), '') AS profesor_nombre
+       FROM users u
+       LEFT JOIN pnf p ON p.saga_id = u.pnf_saga_id
+       LEFT JOIN profesores pr ON pr.cedula = u.profesor_cedula
+       WHERE u.id = ? LIMIT 1`,
       [payload.id]
     );
 

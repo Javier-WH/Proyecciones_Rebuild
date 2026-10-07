@@ -10,6 +10,8 @@ export interface User {
   role: 'SUPER_USUARIO' | 'ADMINISTRADOR' | 'REGULAR' | 'PROFESOR';
   pnf_saga_id?: number | null;
   profesor_cedula?: string | null;
+  pnf_nombre?: string | null;
+  profesor_nombre?: string | null;
 }
 
 interface AuthContextType {
