@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePnfColors } from '../../context/PnfColorContext.js';
-import { HorarioEntry, ErrorClase, colorMateria, fmtHoraCfg } from './types.js';
-import { User, MapPin, Clock, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { HorarioEntry, ErrorClase, colorMateria, fmtHoraCfg, pnfLabel } from './types.js';
+import { User, MapPin, Clock, AlertTriangle, AlertOctagon, GraduationCap } from 'lucide-react';
 
 // Tarjeta de una clase agendada, común a las vistas por sección, aula y
 // profesor: materia (grande) + profesor, aula y hora (pequeños).
@@ -176,8 +176,9 @@ export const ClaseCard: React.FC<{
       {compacto ? (
         <div
           className="text-[9px] opacity-80 leading-tight truncate"
-          title={`${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`}
+          title={`${ocultarAula ? `${pnfLabel(pnfNombre)} · ` : ''}${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`}
         >
+          {ocultarAula ? `${pnfLabel(pnfNombre)} · ` : ''}
           {profesor}
           {ocultarAula ? '' : ` · ${aula}`} · {hora}
         </div>
@@ -187,7 +188,12 @@ export const ClaseCard: React.FC<{
             <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
             <span className="truncate">{profesor}</span>
           </div>
-          {!ocultarAula && (
+          {ocultarAula ? (
+            <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
+              <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
+              <span className="truncate">{pnfLabel(pnfNombre)}</span>
+            </div>
+          ) : (
             <div className="flex items-center gap-1 truncate" title={`${entry.aula_codigo} — ${entry.aula_nombre}`}>
               <MapPin className="w-2.5 h-2.5 shrink-0 opacity-70" />
               <span className="truncate">{aula}</span>
@@ -255,6 +261,8 @@ const lapsoCorto = (it: ItemDividido) => {
 // profesor, aula y hora).
 const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean }> = ({ it, ocultarAula }) => {
   const e = it.entry;
+  const { catalogo } = usePnfColors();
+  const pnfNombre = catalogo.find((c) => c.id === e.pnf_saga_id)?.nombre;
   const profesor = e.profesor_id
     ? `${e.prof_nombres ?? ''} ${e.prof_apellidos ?? ''}`.trim()
     : 'Sin profesor';
@@ -279,7 +287,12 @@ const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean }> = ({ it
           <User className="w-2.5 h-2.5 shrink-0 opacity-70" />
           <span className="truncate">{profesor}</span>
         </div>
-        {!ocultarAula && (
+        {ocultarAula ? (
+          <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
+            <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
+            <span className="truncate">{pnfLabel(pnfNombre)}</span>
+          </div>
+        ) : (
           <div
             className="flex items-center gap-1 truncate"
             title={`${e.aula_codigo} — ${e.aula_nombre}`}
