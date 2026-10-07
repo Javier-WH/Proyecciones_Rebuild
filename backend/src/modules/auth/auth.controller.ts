@@ -109,10 +109,110 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
   }
 }
 
+// POST /api/auth/profesor-login — acceso de solo lectura para docentes con su cédula.
+// No requiere cuenta de usuario: emite un token de invitado (id = -profesor.id).
+export async function profesorLoginHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { cedula } = request.body as { cedula?: string };
+
+  if (!cedula || !cedula.trim()) {
+    return reply.status(400).send({ success: false, message: 'Ingrese su número de cédula.' });
+  }
+
+  try {
+    const profes = await query<any[]>(
+      `SELECT id, cedula, nombres, apellidos, email, pnf_saga_id, pnf_nombre, activo
+       FROM profesores WHERE cedula = ? LIMIT 1`,
+      [cedula.trim()]
+    );
+
+    if (profes.length === 0 || !profes[0].activo) {
+      return reply.status(404).send({
+        success: false,
+        message: 'No se encontró un docente activo con esa cédula.',
+      });
+    }
+
+    const p = profes[0];
+    const tokenPayload: UserTokenPayload = {
+      id: -p.id, // negativo para no colisionar con ids de users
+      username: p.cedula,
+      role: 'PROFESOR',
+      nombre: p.nombres,
+      apellido: p.apellidos,
+      pnf_saga_id: p.pnf_saga_id,
+      profesor_cedula: p.cedula,
+      invitado: true,
+    };
+
+    const token = request.server.jwt.sign(tokenPayload, { expiresIn: '12h' });
+    const profesorNombre = `${p.nombres} ${p.apellidos}`.trim();
+
+    return reply.send({
+      success: true,
+      message: 'Acceso concedido.',
+      data: {
+        token,
+        user: {
+          id: -p.id,
+          username: p.cedula,
+          nombre: p.nombres,
+          apellido: p.apellidos,
+          email: p.email,
+          role: 'PROFESOR',
+          pnf_saga_id: p.pnf_saga_id,
+          profesor_cedula: p.cedula,
+          pnf_nombre: p.pnf_nombre ?? null,
+          profesor_nombre: profesorNombre,
+          invitado: true,
+        },
+      },
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error interno del servidor.' });
+  }
+}
+
 export async function meHandler(request: FastifyRequest, reply: FastifyReply) {
   const payload = request.userPayload;
   if (!payload) {
     return reply.status(401).send({ success: false, message: 'No autenticado.' });
+  }
+
+  // Sesiones de invitado (docente por cédula): el usuario vive en profesores.
+  if (payload.invitado) {
+    try {
+      const profes = await query<any[]>(
+        `SELECT id, cedula, nombres, apellidos, email, pnf_saga_id, pnf_nombre, activo
+         FROM profesores WHERE cedula = ? LIMIT 1`,
+        [payload.profesor_cedula ?? '']
+      );
+      if (profes.length === 0 || !profes[0].activo) {
+        return reply.status(401).send({ success: false, message: 'Docente no encontrado o inactivo.' });
+      }
+      const p = profes[0];
+      return reply.send({
+        success: true,
+        data: {
+          user: {
+            id: -p.id,
+            username: p.cedula,
+            nombre: p.nombres,
+            apellido: p.apellidos,
+            email: p.email,
+            role: 'PROFESOR',
+            pnf_saga_id: p.pnf_saga_id,
+            profesor_cedula: p.cedula,
+            pnf_nombre: p.pnf_nombre ?? null,
+            profesor_nombre: `${p.nombres} ${p.apellidos}`.trim(),
+            invitado: true,
+          },
+        },
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.status(500).send({ success: false, message: 'Error recuperando información del docente.' });
+    }
   }
 
   try {

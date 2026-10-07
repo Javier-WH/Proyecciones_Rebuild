@@ -6,6 +6,7 @@ import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
 import { CargaDocentePage } from './CargaDocentePage.js';
 import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
+import { ProfesorPortalPage } from './ProfesorPortalPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import { ConfigHorariosModal } from './ConfigHorariosModal.js';
 import { PnfMallasModal } from './PnfMallasModal.js';
@@ -250,7 +251,8 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Navigation Tabs */}
+            {/* Navigation Tabs (ocultas para el rol docente) */}
+            {user?.role !== 'PROFESOR' && (
             <div className="hidden md:flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl">
               <button
                 onClick={() => setActiveTab('dashboard')}
@@ -298,6 +300,7 @@ export const DashboardPage: React.FC = () => {
                 <span>Horarios</span>
               </button>
             </div>
+            )}
 
             {/* Right Profile & Actions */}
             <div className="flex items-center gap-4">
@@ -409,7 +412,9 @@ export const DashboardPage: React.FC = () => {
 
       {/* Main Content Area */}
       <main className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${activeTab === 'carga' || activeTab === 'horarios' ? 'max-w-none' : 'max-w-7xl'}`}>
-        {activeTab === 'periodos' ? (
+        {user?.role === 'PROFESOR' ? (
+          <ProfesorPortalPage />
+        ) : activeTab === 'periodos' ? (
           <PeriodosPage />
         ) : activeTab === 'profesores' ? (
           <ProfesoresPage />
@@ -456,7 +461,7 @@ export const DashboardPage: React.FC = () => {
                       <p className="text-xs font-semibold text-slate-200">
                         {user?.pnf_saga_id != null
                           ? user.pnf_nombre || `PNF #${user.pnf_saga_id}`
-                          : user?.role === 'REGULAR' || user?.role === 'PROFESOR'
+                          : user?.role === 'REGULAR'
                             ? 'Sin PNF asignado'
                             : 'Todos los PNF'}
                       </p>

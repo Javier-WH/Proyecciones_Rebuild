@@ -12,6 +12,7 @@ export interface User {
   profesor_cedula?: string | null;
   pnf_nombre?: string | null;
   profesor_nombre?: string | null;
+  invitado?: boolean;
 }
 
 interface AuthContextType {
@@ -19,6 +20,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  loginProfesor: (cedula: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   checkAuth: () => Promise<void>;
 }
@@ -74,6 +76,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false, message: res.message || 'Error al iniciar sesión' };
   };
 
+  // Acceso de solo lectura para docentes con su cédula (sin cuenta de usuario)
+  const loginProfesor = async (cedula: string) => {
+    const res = await apiFetch<{ token: string; user: User }>('/auth/profesor-login', {
+      method: 'POST',
+      body: JSON.stringify({ cedula }),
+    });
+
+    if (res.success && res.data) {
+      const { token: newToken, user: newUser } = res.data;
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(newUser));
+      setToken(newToken);
+      setUser(newUser);
+      return { success: true, message: res.message };
+    }
+
+    return { success: false, message: res.message || 'No se encontró el docente.' };
+  };
+
   const logout = async () => {
     await apiFetch('/auth/logout', { method: 'POST' });
     localStorage.removeItem('token');
@@ -83,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, token, loading, login, loginProfesor, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

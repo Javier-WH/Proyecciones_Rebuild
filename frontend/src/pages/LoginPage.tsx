@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
-import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2, GraduationCap, IdCard, X } from 'lucide-react';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUptll from '../images/UPTLL_logo_transparent_outlined.png';
 
 export const LoginPage: React.FC = () => {
-  const { login } = useAuth();
+  const { login, loginProfesor } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [profModalOpen, setProfModalOpen] = useState(false);
+  const [cedula, setCedula] = useState('');
+  const [profLoading, setProfLoading] = useState(false);
+  const [profError, setProfError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +35,28 @@ export const LoginPage: React.FC = () => {
       setErrorMessage('Error al conectar con el servidor.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfesorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfError(null);
+
+    if (!cedula.trim()) {
+      setProfError('Ingrese su número de cédula.');
+      return;
+    }
+
+    setProfLoading(true);
+    try {
+      const res = await loginProfesor(cedula.trim());
+      if (!res.success) {
+        setProfError(res.message || 'No se encontró un docente con esa cédula.');
+      }
+    } catch (err) {
+      setProfError('Error al conectar con el servidor.');
+    } finally {
+      setProfLoading(false);
     }
   };
 
@@ -156,10 +182,98 @@ export const LoginPage: React.FC = () => {
               </button>
             </form>
 
-
+            {/* Acceso docente por cédula */}
+            <div className="mt-6 pt-5 border-t border-slate-800 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfModalOpen(true);
+                  setProfError(null);
+                  setCedula('');
+                }}
+                className="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Ingresar como profesor</span>
+              </button>
+            </div>
           </div>
         </div>
       </main>
+
+      {/* Modal: acceso docente por cédula */}
+      {profModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setProfModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/60 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Acceso Docente</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Consulta tu horario y carga académica</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setProfModalOpen(false)}
+                className="text-slate-500 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {profError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex items-start gap-2.5 text-red-300 text-xs">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{profError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleProfesorSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  Número de Cédula
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <IdCard className="w-5 h-5" />
+                  </div>
+                  <input
+                    type="text"
+                    autoFocus
+                    required
+                    value={cedula}
+                    onChange={(e) => setCedula(e.target.value.replace(/[^0-9A-Za-z-]/g, ''))}
+                    placeholder="Ej. 12345678"
+                    className="w-full pl-11 pr-4 py-3 bg-slate-950/70 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-sm"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={profLoading}
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/30 transition-all text-sm disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+              >
+                {profLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verificando...</span>
+                  </>
+                ) : (
+                  <span>Ingresar</span>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="w-full border-t border-slate-900 bg-slate-950/80 py-4 px-6 text-center text-xs text-slate-400 z-10">

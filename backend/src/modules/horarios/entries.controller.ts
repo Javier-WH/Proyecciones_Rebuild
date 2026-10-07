@@ -112,6 +112,14 @@ export async function listEntriesHandler(request: FastifyRequest, reply: Fastify
       sql += ' AND pr.pnf_saga_id = ?';
       params.push(user.pnf_saga_id);
     }
+    // Rol docente con cédula vinculada (invitado o cuenta PROFESOR): solo sus clases.
+    if (user.role === 'PROFESOR' && user.profesor_cedula) {
+      const prof = await query<any[]>('SELECT id FROM profesores WHERE cedula = ? LIMIT 1', [
+        user.profesor_cedula,
+      ]);
+      sql += ' AND e.profesor_id = ?';
+      params.push(prof[0]?.id ?? -1);
+    }
     sql += ' ORDER BY e.dia_semana, b.hora_inicio';
     const entries = await query<any[]>(sql, params);
     return reply.send({ success: true, data: { periodo: periodoCodigo, rivales, entries } });

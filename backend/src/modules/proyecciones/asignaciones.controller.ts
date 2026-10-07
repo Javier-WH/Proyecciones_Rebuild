@@ -142,7 +142,17 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
       }
     }
 
-    return reply.send({ success: true, data: { periodo: periodoCodigo, periodo_nombre: periodoNombre, rows } });
+    // Rol docente con cédula vinculada (invitado o cuenta PROFESOR): solo sus materias.
+    let rowsOut = rows;
+    if (user.role === 'PROFESOR' && user.profesor_cedula) {
+      const prof = await query<any[]>('SELECT id FROM profesores WHERE cedula = ? LIMIT 1', [
+        user.profesor_cedula,
+      ]);
+      const pid = prof[0]?.id ?? -1;
+      rowsOut = rows.filter((r) => r.profesor_id === pid);
+    }
+
+    return reply.send({ success: true, data: { periodo: periodoCodigo, periodo_nombre: periodoNombre, rows: rowsOut } });
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error cargando la carga docente.' });

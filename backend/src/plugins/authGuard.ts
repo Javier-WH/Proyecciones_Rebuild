@@ -8,6 +8,9 @@ export interface UserTokenPayload {
   apellido: string;
   pnf_saga_id?: number | null;
   profesor_cedula?: string | null;
+  // true cuando la sesión es de un docente que entró solo con su cédula
+  // (sin cuenta de usuario). id = -profesor.id en ese caso.
+  invitado?: boolean;
 }
 
 declare module 'fastify' {
