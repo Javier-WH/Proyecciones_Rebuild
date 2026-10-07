@@ -1760,15 +1760,37 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
       }
       sesiones.sort((a, b) => b - a); // runs grandes primero (más difíciles de encajar)
 
+      // Niveles de aula destino por preferencia: primero las aulas que
+      // tienen la materia como preferida, luego las del PNF de la clase y
+      // por último el resto. El generador agota TODAS las ventanas de un
+      // nivel antes de pasar al siguiente: si el aula preferida está ocupada
+      // en este bloque, busca otro bloque/día donde esté libre antes de
+      // resignarse a un aula sin preferencia.
+      const matNorm = normMateria(u.materia_nombre);
+      const conjuntosAulas: any[][] = [];
+      const aulasVistas = new Set<number>();
+      for (const grupo of [
+        aulas.filter((a: any) => a.materias_pref?.has(matNorm)),
+        aulas.filter((a: any) => a.pnf_saga_id === u.pnf_saga_id),
+        aulas,
+      ]) {
+        const g = grupo.filter((a: any) => !aulasVistas.has(a.id));
+        g.forEach((a: any) => aulasVistas.add(a.id));
+        if (g.length > 0) conjuntosAulas.push(g);
+      }
+
       let sinEncajar = restantes; // horas que no pudieron formar sesión válida
 
       // Coloca cada sesión como un run de bloques consecutivos en un mismo día,
-      // mismo aula. Dos pasadas: primero días nuevos para la materia, luego cualquiera.
+      // mismo aula. Por nivel de preferencia: primero días nuevos para la
+      // materia, luego cualquiera.
       for (const s of sesiones) {
         let colocada = false;
-        for (const soloDiasNuevos of [true, false]) {
+        for (const conjunto of conjuntosAulas) {
           if (colocada) break;
-          for (const dia of u.dias) {
+          for (const soloDiasNuevos of [true, false]) {
+            if (colocada) break;
+            for (const dia of u.dias) {
             if (colocada) break;
             if (soloDiasNuevos && diasUsados.has(dia)) continue;
             if ((usadasPorDia.get(dia) ?? 0) + s > maxDia) continue;
@@ -1815,8 +1837,8 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
                 ventana[ventana.length - 1].id === u.bloques[u.bloques.length - 1].id;
               const aulaId = elegirAula(
                 esUltimaDelTurno
-                  ? aulas
-                  : aulas.filter((a: any) => a.tipo !== 'INSTALACION_DEPORTIVA'),
+                  ? conjunto
+                  : conjunto.filter((a: any) => a.tipo !== 'INSTALACION_DEPORTIVA'),
                 ocupadasRun,
                 usoPorAula,
                 u.pnf_saga_id,
@@ -1844,6 +1866,7 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
               agendadas += s;
               colocada = true;
             }
+          }
           }
         }
         if (!colocada) sinEncajar += s;
