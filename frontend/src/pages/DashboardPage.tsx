@@ -317,8 +317,17 @@ export const DashboardPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Menú de configuración y sesión */}
+              {/* Menú de configuración y sesión — el docente ve solo logout directo */}
               <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
+                {user?.role === 'PROFESOR' ? (
+                  <button
+                    onClick={() => setLogoutConfirmOpen(true)}
+                    title="Cerrar sesión"
+                    className="p-2 rounded-xl border bg-slate-800 hover:bg-red-500/15 text-slate-300 hover:text-red-300 border-slate-700/60 hover:border-red-500/40 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                ) : (
                 <div className="relative">
                   <button
                     onClick={() => setConfigMenuOpen((v) => !v)}
@@ -404,6 +413,7 @@ export const DashboardPage: React.FC = () => {
                     </>
                   )}
                 </div>
+                )}
               </div>
             </div>
           </div>
