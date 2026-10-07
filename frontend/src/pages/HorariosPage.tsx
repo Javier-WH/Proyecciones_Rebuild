@@ -123,8 +123,8 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [dispProfs, setDispProfs] = useState<Map<number, DispSlot[]>>(new Map()); // bloqueos por profesor
   const [resaltar, setResaltar] = useState<Set<string> | null>(null);
   const [profEdit, setProfEdit] = useState<Profesor | null>(null);
-  // Trimestres ocultos en la vista por aula de un lapso semestral (ambos
-  // activos por defecto). Las clases de secciones semestrales — que se
+  // Trimestres ocultos en las vistas por aula/profesor de un lapso semestral
+  // (ambos activos por defecto). Las clases de secciones semestrales — que se
   // registran como T1/T3 — no se ocultan: SON la clase del semestre.
   const [trisOcultos, setTrisOcultos] = useState<Set<number>>(new Set());
   const toggleTriOculto = (t: number) =>
@@ -662,6 +662,21 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     );
   }, [entries, aulaId, aulas, lapso.tipo, trisOcultos, seccionesSemestrales]);
 
+  // Lo mismo para la vista por profesor.
+  const entriesProfesor = useMemo(() => {
+    const pid = profesorId ?? profesores[0]?.id;
+    return entries.filter(
+      (e) =>
+        e.profesor_id === pid &&
+        !(
+          lapso.tipo === 'SEMESTRAL' &&
+          e.tipo_proyeccion === 'TRIMESTRAL' &&
+          !seccionesSemestrales.has(e.seccion_id) &&
+          trisOcultos.has(e.trimestre)
+        )
+    );
+  }, [entries, profesorId, profesores, lapso.tipo, trisOcultos, seccionesSemestrales]);
+
   const irAViolacion = (v: Violacion) => {
     const s = secciones.find((x) => x.seccion_id === v.seccion_id);
     setVista('seccion');
@@ -1063,7 +1078,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 )}
                 </select>
               </div>
-              {vista === 'aula' && lapso.tipo === 'SEMESTRAL' && (
+              {(vista === 'aula' || vista === 'profesor') && lapso.tipo === 'SEMESTRAL' && (
                 <div className="flex items-center gap-1">
                   {trisDelSemestre.map((t) => {
                     const on = !trisOcultos.has(t);
@@ -1243,7 +1258,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           {vista === 'profesor' && (
             <VistaRecurso
               titulo="Agenda del profesor"
-              entries={entries.filter((e) => e.profesor_id === (profesorId ?? profesores[0]?.id))}
+              entries={entriesProfesor}
               turnos={turnos}
               formato12={usa12}
               enError={celdasEnError}

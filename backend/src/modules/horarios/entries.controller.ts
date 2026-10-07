@@ -10,6 +10,7 @@ import {
   lapsosRivales,
   lapsosTotales,
   seTraslapan,
+  horaMin,
   LapsoRef,
   TipoProyeccion,
   EntryRow,
@@ -1624,6 +1625,9 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
     const minBloque = Math.max(1, Number(cfgRows[0]?.min_horas_bloque) || 2);
     const maxDia = Math.max(minBloque, Number(cfgRows[0]?.max_horas_dia) || 3);
     const aulas = await cargarAulasActivas();
+    const deportivas = new Set(
+      aulas.filter((a: any) => a.tipo === 'INSTALACION_DEPORTIVA').map((a: any) => Number(a.id))
+    );
     if (aulas.length === 0) {
       return reply.status(400).send({
         success: false,
@@ -1772,6 +1776,19 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
             for (let k = 0; k + s <= u.bloques.length && !colocada; k++) {
               const ventana = u.bloques.slice(k, k + s);
               if (!ventana.every((b, j) => b.orden === ventana[0].orden + j)) continue;
+              // Una clase en instalación deportiva debe ser la última del
+              // día de la sección: si ya hay una deportiva antes de esta
+              // ventana, esta clase la dejaría de ser la última.
+              if (
+                entries.some(
+                  (e) =>
+                    e.seccion_id === u.seccion_id &&
+                    e.dia_semana === dia &&
+                    deportivas.has(Number(e.aula_id)) &&
+                    e.hora_inicio < ventana[0].hora_inicio
+                )
+              )
+                continue;
               // Sección y profesor libres en toda la ventana, y el profesor
               // disponible (sin bloqueo de disponibilidad en ese horario)
               let choque = false;
@@ -1792,8 +1809,14 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
                 }
               }
               if (choque) continue;
+              // Instalación deportiva: solo si la ventana termina en el
+              // último bloque del turno — así la clase es la última del día.
+              const esUltimaDelTurno =
+                ventana[ventana.length - 1].id === u.bloques[u.bloques.length - 1].id;
               const aulaId = elegirAula(
-                aulas,
+                esUltimaDelTurno
+                  ? aulas
+                  : aulas.filter((a: any) => a.tipo !== 'INSTALACION_DEPORTIVA'),
                 ocupadasRun,
                 usoPorAula,
                 u.pnf_saga_id,
@@ -1977,12 +2000,32 @@ export async function resolverAulasHandler(request: FastifyRequest, reply: Fasti
       usoPorAula.set(id, (usoPorAula.get(id) ?? 0) + 1);
     }
 
+    // ¿Es el run la última clase del día de su sección? Solo así puede
+    // ocupar una instalación deportiva (nadie llega sudado después).
+    const esUltimaDelDia = (run: any[]) => {
+      const fin = Math.max(...run.map((x) => horaMin(x.hora_fin)));
+      const ids = new Set(run.map((x) => Number(x.id)));
+      return !rows.some(
+        (o) =>
+          !ids.has(Number(o.id)) &&
+          o.seccion_id === run[0].seccion_id &&
+          o.dia_semana === run[0].dia_semana &&
+          horaMin(o.hora_inicio) >= fin
+      );
+    };
+
     // Mejor aula libre para el run: preferida de la materia → del PNF →
     // AULA_REGULAR → menos uso → código (mismo orden que elegirAula).
+    // Las instalaciones deportivas solo aplican si el run es la última
+    // clase del día de su sección.
     const aulaPara = (run: any[]): number | null => {
       const mat = matDe(run);
       const pnf = pnfDe(run);
-      const libres = aulas.filter((a: any) => aulaLibrePara(Number(a.id), run));
+      const ultima = esUltimaDelDia(run);
+      const libres = aulas.filter(
+        (a: any) =>
+          (ultima || a.tipo !== 'INSTALACION_DEPORTIVA') && aulaLibrePara(Number(a.id), run)
+      );
       if (libres.length === 0) return null;
       libres.sort((x: any, y: any) => {
         const mx = x.materias_pref?.has(mat) ? 0 : 1;
