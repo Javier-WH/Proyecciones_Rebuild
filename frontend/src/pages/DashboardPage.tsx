@@ -9,8 +9,8 @@ import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import { ConfigHorariosModal } from './ConfigHorariosModal.js';
 import { PnfMallasModal } from './PnfMallasModal.js';
+import logoProyecciones from '../images/Logo_transparent_outlined.png';
 import {
-  GraduationCap,
   LogOut,
   UserCheck,
   Calendar,
@@ -76,12 +76,12 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center justify-between h-16">
             {/* Left Brand */}
             <div className="flex items-center gap-3">
-              <div
+              <img
+                src={logoProyecciones}
+                alt="Logo Proyecciones UPTLL"
                 onClick={() => setActiveTab('dashboard')}
-                className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 cursor-pointer"
-              >
-                <GraduationCap className="w-6 h-6 text-white" />
-              </div>
+                className="h-15 w-auto object-contain cursor-pointer"
+              />
               <div>
                 <span className="font-bold text-white text-base tracking-tight cursor-pointer" onClick={() => setActiveTab('dashboard')}>
                   Proyecciones UPTLL

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
-import logoProyecciones from '../images/Logo_transparent.png';
-import logoUptll from '../images/UPTLL_logo_transparent.png';
+import logoProyecciones from '../images/Gemini_back_transparent.png';
+import logoUptll from '../images/UPTLL_logo_transparent_outlined.png';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -47,7 +47,7 @@ export const LoginPage: React.FC = () => {
             <img
               src={logoUptll}
               alt="Logo UPTLL"
-              className="h-11 w-auto object-contain"
+              className="h-20 w-auto object-contain"
             />
             <div>
               <h1 className="font-bold text-base tracking-tight text-white">UPTLL "Juana Ramírez"</h1>
@@ -70,15 +70,6 @@ export const LoginPage: React.FC = () => {
               src={logoProyecciones}
               alt="Logo Proyecciones UPTLL"
               className="h-[230px] w-auto object-contain"
-              style={{
-                // Delineado blanco: sombras duras en las 8 direcciones + halo suave
-                filter:
-                  'drop-shadow(2.5px 0 0 #fff) drop-shadow(-2.5px 0 0 #fff) ' +
-                  'drop-shadow(0 2.5px 0 #fff) drop-shadow(0 -2.5px 0 #fff) ' +
-                  'drop-shadow(2px 2px 0 #fff) drop-shadow(-2px -2px 0 #fff) ' +
-                  'drop-shadow(2px -2px 0 #fff) drop-shadow(-2px 2px 0 #fff) ' +
-                  'drop-shadow(0 0 16px rgba(255,255,255,0.45))',
-              }}
             />
           </div>
           {/* Card Container */}
