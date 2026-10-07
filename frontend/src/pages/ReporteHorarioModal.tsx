@@ -177,17 +177,8 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     setLapsoTab(lapsos.includes(lapsoActual) ? lapsoActual : lapsos[0] ?? '');
     setProfQuery('');
     setPnfTab('');
-    if (profesorPreseleccionado != null) {
-      setSelSec(new Set());
-      setSelProf(new Set(lapsos.map((lk) => `${lk}:${profesorPreseleccionado}`)));
-    } else {
-      const [tipo, n] = lapsoActual.split(':');
-      const secActual = seccionesDe(
-        rows.filter((r) => r.tipo_proyeccion === tipo && r.trimestre === Number(n))
-      );
-      setSelSec(new Set(secActual.map((s) => `${lapsoActual}:${s.seccion_id}`)));
-      setSelProf(new Set());
-    }
+    setSelSec(new Set());
+    setSelProf(new Set());
     setSelAula(new Set());
     setOcupReal(false);
 
@@ -1075,14 +1066,14 @@ td.clase { vertical-align: middle; }
           <div className="flex gap-2">
             <button
               onClick={imprimir}
-              disabled={generando || cargando}
+              disabled={generando || cargando || hojas.length === 0}
               className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold flex items-center gap-2 cursor-pointer"
             >
               <Printer className="w-4 h-4" /> Imprimir
             </button>
             <button
               onClick={generarExcel}
-              disabled={generando || cargando}
+              disabled={generando || cargando || hojas.length === 0}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" /> {generando ? 'Generando…' : 'Excel'}
