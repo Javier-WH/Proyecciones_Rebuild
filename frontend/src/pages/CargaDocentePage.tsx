@@ -68,6 +68,9 @@ export const CargaDocentePage: React.FC = () => {
   // trimestres que cubren (S1 -> T1+T2, S2 -> T2+T3)
   const [sumarSem1, setSumarSem1] = useState(false);
   const [sumarSem2, setSumarSem2] = useState(false);
+  // Vista "Todos los semestres": sumar horas de materias trimestrales a los
+  // semestres que cubren (T1 -> S1, T2 -> S1+S2, T3 -> S2)
+  const [sumarTrim, setSumarTrim] = useState(false);
   const [filterPnf, setFilterPnf] = useState<string>('todos');
   const [filterProyeccion, setFilterProyeccion] = useState<string>('todas');
   const [filterText, setFilterText] = useState('');
@@ -203,26 +206,43 @@ export const CargaDocentePage: React.FC = () => {
     [rows, filterLapso, filterPnf, filterProyeccion]
   );
 
-  // En la vista "Todos los trimestres", cuando se pide sumar horas semestrales,
-  // cada materia semestral se expande a filas trimestrales sintéticas en los
-  // trimestres que cubre (S1 -> T1+T2, S2 -> T2+T3). Así aparece como una sola
-  // fila con horas en esas columnas y suma en el total del profesor.
+  // Expansión de materias entre regímenes para las vistas agrupadas:
+  // - "Todos los trimestres": cada materia semestral se expande a filas
+  //   trimestrales sintéticas en los trimestres que cubre (S1 -> T1+T2,
+  //   S2 -> T2+T3) cuando se pide sumar sus horas.
+  // - "Todos los semestres": cada materia trimestral se expande a los
+  //   semestres que cubre (T1 -> S1, T2 -> S1+S2, T3 -> S2).
+  // Así la materia aparece como una sola fila con horas en esas columnas
+  // y suma en el total del profesor.
   const rowsVista = useMemo(() => {
-    if (filterLapso !== 'TRIMESTRAL' || (!sumarSem1 && !sumarSem2)) return rowsPorFiltro;
-    const extras = rows.filter(
-      (r) =>
-        r.tipo_proyeccion === 'SEMESTRAL' &&
-        ((r.trimestre === 1 && sumarSem1) || (r.trimestre === 2 && sumarSem2)) &&
-        (filterPnf === 'todos' || r.pnf_saga_id === Number(filterPnf)) &&
-        (filterProyeccion === 'todas' || r.proyeccion_id === Number(filterProyeccion))
-    );
-    const expandidas = extras.flatMap((r) =>
-      (r.trimestre === 1 ? [1, 2] : [2, 3]).map(
-        (t): CargaRow => ({ ...r, orig: r, tipo_proyeccion: 'TRIMESTRAL', trimestre: t })
-      )
-    );
-    return [...rowsPorFiltro, ...expandidas];
-  }, [rowsPorFiltro, rows, filterLapso, sumarSem1, sumarSem2, filterPnf, filterProyeccion]);
+    const pasaFiltros = (r: CargaRow) =>
+      (filterPnf === 'todos' || r.pnf_saga_id === Number(filterPnf)) &&
+      (filterProyeccion === 'todas' || r.proyeccion_id === Number(filterProyeccion));
+    if (filterLapso === 'TRIMESTRAL' && (sumarSem1 || sumarSem2)) {
+      const extras = rows.filter(
+        (r) =>
+          r.tipo_proyeccion === 'SEMESTRAL' &&
+          ((r.trimestre === 1 && sumarSem1) || (r.trimestre === 2 && sumarSem2)) &&
+          pasaFiltros(r)
+      );
+      const expandidas = extras.flatMap((r) =>
+        (r.trimestre === 1 ? [1, 2] : [2, 3]).map(
+          (t): CargaRow => ({ ...r, orig: r, tipo_proyeccion: 'TRIMESTRAL', trimestre: t })
+        )
+      );
+      return [...rowsPorFiltro, ...expandidas];
+    }
+    if (filterLapso === 'SEMESTRAL' && sumarTrim) {
+      const extras = rows.filter((r) => r.tipo_proyeccion === 'TRIMESTRAL' && pasaFiltros(r));
+      const expandidas = extras.flatMap((r) =>
+        (r.trimestre === 1 ? [1] : r.trimestre === 2 ? [1, 2] : [2]).map(
+          (s): CargaRow => ({ ...r, orig: r, tipo_proyeccion: 'SEMESTRAL', trimestre: s })
+        )
+      );
+      return [...rowsPorFiltro, ...expandidas];
+    }
+    return rowsPorFiltro;
+  }, [rowsPorFiltro, rows, filterLapso, sumarSem1, sumarSem2, sumarTrim, filterPnf, filterProyeccion]);
 
   // PNF de referencia para el toggle "Mis profesores": el PNF asociado
   // a la cuenta del usuario
@@ -300,6 +320,20 @@ export const CargaDocentePage: React.FC = () => {
     if (total > contrato) return 'text-red-400';
     if (total >= contrato * 0.8) return 'text-amber-400';
     return 'text-emerald-400';
+  };
+
+  // Etiqueta del lapso original de una fila expandida: 'SEMESTRE 1'/'SEMESTRAL'
+  // en la vista de trimestres; 'T1', 'T1+T2', ... en la de semestres
+  const badgeLapso = (m: { base: CargaRow; sems: Set<number> }): string | null => {
+    const o = m.base.orig;
+    if (!o) return null;
+    if (o.tipo_proyeccion === 'SEMESTRAL') {
+      return m.sems.size > 1 ? 'SEMESTRAL' : labelLapso(o.trimestre, 'SEMESTRAL').toUpperCase();
+    }
+    return [...m.sems]
+      .sort((a, b) => a - b)
+      .map((t) => `T${t}`)
+      .join('+');
   };
 
   const profesorCell = (p: Profesor, span: number) => (
@@ -479,6 +513,7 @@ export const CargaDocentePage: React.FC = () => {
           // materia semestral, se usa la original (régimen y lapsos reales)
           const rowObj = m.base.orig ?? m.base;
           const pluralRow = pluralLapso(terminoLapso([rowObj.tipo_proyeccion]));
+          const badge = badgeLapso(m);
           return (
           <tr
             key={`${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
@@ -487,11 +522,9 @@ export const CargaDocentePage: React.FC = () => {
             {idx === 0 && profesorCell(p, span)}
             <td className="py-3 px-3 font-medium text-white">
               {m.base.materia_nombre}
-              {m.base.orig && (
+              {badge && (
                 <span className="ml-1.5 text-[9px] bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded font-bold align-middle whitespace-nowrap">
-                  {m.sems.size > 1
-                    ? 'SEMESTRAL'
-                    : labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase()}
+                  {badge}
                 </span>
               )}
             </td>
@@ -597,11 +630,7 @@ export const CargaDocentePage: React.FC = () => {
       <Fragment key="sin-asignar-pivoted">
         {merged.map((m, idx) => {
           const rowObj = m.base.orig ?? m.base;
-          const badgeSem =
-            m.base.orig &&
-            (m.sems.size > 1
-              ? 'SEMESTRAL'
-              : labelLapso(m.base.orig.trimestre, 'SEMESTRAL').toUpperCase());
+          const badgeSem = badgeLapso(m);
           return (
           <tr
             key={`sa-${m.base.materia_id}-${m.base.seccion_id}-${m.base.tipo_proyeccion}`}
@@ -773,6 +802,23 @@ export const CargaDocentePage: React.FC = () => {
                   Sumar Semestre 2
                 </button>
               )}
+            </div>
+          )}
+
+          {/* En la vista de semestres: sumar horas de materias trimestrales */}
+          {filterLapso === 'SEMESTRAL' && lapsoCols.some((l) => l.tipo === 'TRIMESTRAL') && (
+            <div className="flex items-center gap-1.5 pl-0.5">
+              <button
+                onClick={() => setSumarTrim(!sumarTrim)}
+                title="Las materias trimestrales se muestran y sus horas suman en los semestres que cubren (T1 → S1, T2 → S1+S2, T3 → S2)"
+                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                  sumarTrim
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                Sumar trimestres
+              </button>
             </div>
           )}
         </div>
