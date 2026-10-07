@@ -24,6 +24,7 @@ export interface MateriaAsignableRow {
   profesor_id: number | null;
   prof_nombres: string | null;
   prof_apellidos: string | null;
+  prof_cedula?: string | null;
 }
 
 // Etiqueta de un lapso según el régimen de su proyección: 'Trimestre 2' / 'Semestre 1'

@@ -8,6 +8,8 @@ import {
   Loader2,
   Building2,
   Users,
+  Search,
+  UserPlus,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
@@ -102,7 +104,7 @@ interface GrupoLapso {
   n: number;
   label: string;
   secciones: SeccionRef[];
-  profesores: { id: number; nombre: string }[];
+  profesores: { id: number; nombre: string; cedula: string | null }[];
   aulas: { id: number; codigo: string }[];
 }
 
@@ -160,6 +162,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   const [selSec, setSelSec] = useState<Set<string>>(new Set());
   const [selAula, setSelAula] = useState<Set<string>>(new Set());
   const [selProf, setSelProf] = useState<Set<string>>(new Set());
+  const [profQuery, setProfQuery] = useState('');
   const [ocupReal, setOcupReal] = useState(false);
   const [entradas, setEntradas] = useState<Map<string, HorarioEntry[]>>(new Map());
   const [cargando, setCargando] = useState(false);
@@ -170,6 +173,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setLapsoTab(lapsos.includes(lapsoActual) ? lapsoActual : lapsos[0] ?? '');
+    setProfQuery('');
     if (profesorPreseleccionado != null) {
       setSelSec(new Set());
       setSelProf(new Set(lapsos.map((lk) => `${lk}:${profesorPreseleccionado}`)));
@@ -208,13 +212,13 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       const [tipo, nStr] = lk.split(':');
       const n = Number(nStr);
       const rowsL = rows.filter((r) => r.tipo_proyeccion === tipo && r.trimestre === n);
-      const profMap = new Map<number, string>();
+      const profMap = new Map<number, { nombre: string; cedula: string | null }>();
       for (const r of rowsL) {
         if (r.profesor_id != null && !profMap.has(r.profesor_id)) {
-          profMap.set(
-            r.profesor_id,
-            `${r.prof_apellidos ?? ''} ${r.prof_nombres ?? ''}`.trim() || 'Sin nombre'
-          );
+          profMap.set(r.profesor_id, {
+            nombre: `${r.prof_apellidos ?? ''} ${r.prof_nombres ?? ''}`.trim() || 'Sin nombre',
+            cedula: r.prof_cedula ?? null,
+          });
         }
       }
       const propias = (entradas.get(lk) ?? []).filter(
@@ -227,7 +231,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
         label: labelLapso(n, tipo),
         secciones: seccionesDe(rowsL),
         profesores: [...profMap.entries()]
-          .map(([id, nombre]) => ({ id, nombre }))
+          .map(([id, v]) => ({ id, nombre: v.nombre, cedula: v.cedula }))
           .sort((a, b) => a.nombre.localeCompare(b.nombre)),
         aulas: aulas
           .filter((a) => aulaIds.has(a.id))
@@ -720,6 +724,142 @@ td.clase { vertical-align: middle; }
     </label>
   );
 
+  // Grupo "Profesores": check de todos + buscador (nombre/apellido/cédula) con
+  // botón Agregar. La lista de agregados son los profesores a imprimir; con
+  // "todos" activo el buscador queda inactivo y la lista se oculta (redundante).
+  const profGrupo = (lk: string, g: GrupoLapso) => {
+    const ids = g.profesores.map((p) => p.id);
+    const claves = ids.map((id) => `${lk}:${id}`);
+    const marcadas = claves.filter((c) => selProf.has(c)).length;
+    const todosMarcados = ids.length > 0 && marcadas === ids.length;
+    const agregados = g.profesores.filter((p) => selProf.has(`${lk}:${p.id}`));
+    const q = normNombre(profQuery.trim());
+    const qNum = profQuery.trim().replace(/[^0-9]/g, '');
+    const sugerencias = profQuery.trim()
+      ? g.profesores
+          .filter((p) => !selProf.has(`${lk}:${p.id}`))
+          .filter(
+            (p) =>
+              normNombre(p.nombre).includes(q) ||
+              (qNum.length > 0 && (p.cedula ?? '').replace(/\D/g, '').includes(qNum))
+          )
+          .slice(0, 8)
+      : [];
+
+    const agregar = (id: number) => {
+      const n = new Set(selProf);
+      n.add(`${lk}:${id}`);
+      setSelProf(n);
+      setProfQuery('');
+    };
+    const quitar = (id: number) => {
+      const n = new Set(selProf);
+      n.delete(`${lk}:${id}`);
+      setSelProf(n);
+    };
+
+    if (ids.length === 0) {
+      return <div className="text-[10px] text-slate-600 italic px-1 py-0.5">— sin profesores con materias asignadas —</div>;
+    }
+
+    return (
+      <div>
+        <label className="flex items-center gap-2 px-1 py-0.5 cursor-pointer w-fit">
+          <input
+            type="checkbox"
+            checked={todosMarcados}
+            ref={(el) => {
+              if (el) el.indeterminate = marcadas > 0 && marcadas < ids.length;
+            }}
+            onChange={() => toggleGrupo(selProf, setSelProf, lk, ids)}
+            className="accent-blue-500"
+          />
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Todos los profesores <span className="text-slate-600 normal-case">({marcadas}/{ids.length})</span>
+          </span>
+        </label>
+
+        {todosMarcados ? (
+          <p className="text-[10px] text-slate-600 italic px-1 pt-1.5">
+            Se imprimirá la agenda de todos los profesores de este lapso.
+          </p>
+        ) : (
+          <div className="mt-2">
+            <div className="relative">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={profQuery}
+                    onChange={(e) => setProfQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && sugerencias.length > 0) {
+                        e.preventDefault();
+                        agregar(sugerencias[0].id);
+                      }
+                    }}
+                    placeholder="Buscar por nombre, apellido o cédula…"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  onClick={() => sugerencias.length > 0 && agregar(sugerencias[0].id)}
+                  disabled={sugerencias.length === 0}
+                  className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Agregar
+                </button>
+              </div>
+              {sugerencias.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl shadow-black/60 overflow-hidden">
+                  {sugerencias.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => agregar(p.id)}
+                      className="w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-slate-800 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                    >
+                      <span className="truncate">{p.nombre}</span>
+                      {p.cedula && <span className="text-[10px] text-slate-500 shrink-0">C.I. {p.cedula}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {agregados.length > 0 ? (
+              <div className="mt-2 max-h-40 overflow-y-auto space-y-1 pr-1">
+                {agregados.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/25 text-xs text-blue-200"
+                  >
+                    <span className="truncate">
+                      {p.nombre}
+                      {p.cedula && <span className="text-blue-300/60"> · C.I. {p.cedula}</span>}
+                    </span>
+                    <button
+                      onClick={() => quitar(p.id)}
+                      className="text-blue-300/70 hover:text-white shrink-0 cursor-pointer"
+                      title="Quitar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-600 italic px-1 pt-2">
+                — sin profesores agregados —
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
@@ -758,7 +898,10 @@ td.clase { vertical-align: middle; }
                 return (
                   <button
                     key={lk}
-                    onClick={() => setLapsoTab(lk)}
+                    onClick={() => {
+                      setLapsoTab(lk);
+                      setProfQuery('');
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                       activo
                         ? 'bg-blue-600 text-white shadow-md'
@@ -813,10 +956,8 @@ td.clase { vertical-align: middle; }
 
                 <div className="mb-4">
                   {grupoTitulo('Profesores', <Users className="w-3.5 h-3.5" />)}
-                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-56 overflow-y-auto">
-                    {subGrupo(lkActivo, 'Todos los profesores', g.profesores.map((p) => p.id), selProf, setSelProf,
-                      g.profesores.map((p) => itemCheck(`${lkActivo}:${p.id}`, p.nombre, selProf, setSelProf))
-                    )}
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    {profGrupo(lkActivo, g)}
                   </div>
                 </div>
               </>
