@@ -372,7 +372,8 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       {ocupada ? (
                         dias.map((d) => {
                           const items = ocupacion(d);
-                          const dividir = items.some((e) => parejasDe(e).length > 0);
+                          const dividir =
+                            items.length > 1 || items.some((e) => parejasDe(e).length > 0);
                           return (
                             <td key={d} className="relative p-0 align-top" style={{ height: '1.75rem' }}>
                               <div className="absolute inset-0 p-0.5">
@@ -480,17 +481,22 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                             {(() => {
                               // Parejas del choque parcial de TODAS las celdas
                               // que absorbe el rowspan: si alguna choca con el
-                              // trimestre 2, el bloque se divide.
+                              // trimestre 2, el bloque se divide. Con varias
+                              // clases en la celda también se divide, como en
+                              // la vista semestral (columnas lado a lado).
                               const itemsRun: HorarioEntry[] = [];
                               for (let k = 0; k < (fusion ? sp!.n : 1); k++) {
                                 const fl = banda.filas[fIdx + k];
                                 if (!fl) break;
                                 itemsRun.push(...(porCelda.get(`${bi}:${fIdx + k}:${d}`) ?? []));
                               }
-                              if (itemsRun.some((e) => parejasDe(e).length > 0)) {
+                              if (
+                                items.length > 1 ||
+                                itemsRun.some((e) => parejasDe(e).length > 0)
+                              ) {
                                 return (
                                   <ClaseCascada
-                                    items={grupoDe(itemsRun.length > 0 ? itemsRun : items).map(itemDividido)}
+                                    items={grupoDe(itemsRun).map(itemDividido)}
                                     rangoInicio={minutos(f.inicio)}
                                     rangoFin={minutos(fusion ? sp!.fin : f.fin)}
                                     ocultarAula={ocultarAula}
