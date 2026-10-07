@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
-import { GraduationCap, Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import logoProyecciones from '../images/Logo_transparent.png';
+import logoUptll from '../images/UPTLL_logo_transparent.png';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -42,9 +44,11 @@ export const LoginPage: React.FC = () => {
       <header className="w-full border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md px-6 py-4 z-10">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/25">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src={logoUptll}
+              alt="Logo UPTLL"
+              className="h-11 w-auto object-contain"
+            />
             <div>
               <h1 className="font-bold text-base tracking-tight text-white">UPTLL "Juana Ramírez"</h1>
               <p className="text-xs text-blue-400 font-medium">Universidad Politécnica Territorial de los Llanos</p>
@@ -60,13 +64,27 @@ export const LoginPage: React.FC = () => {
       {/* Main Container */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 z-10 my-6">
         <div className="w-full max-w-md">
+          {/* Logo delineado que sobresale de la tarjeta */}
+          <div className="relative z-10 flex justify-center -mb-16">
+            <img
+              src={logoProyecciones}
+              alt="Logo Proyecciones UPTLL"
+              className="h-[230px] w-auto object-contain"
+              style={{
+                // Delineado blanco: sombras duras en las 8 direcciones + halo suave
+                filter:
+                  'drop-shadow(2.5px 0 0 #fff) drop-shadow(-2.5px 0 0 #fff) ' +
+                  'drop-shadow(0 2.5px 0 #fff) drop-shadow(0 -2.5px 0 #fff) ' +
+                  'drop-shadow(2px 2px 0 #fff) drop-shadow(-2px -2px 0 #fff) ' +
+                  'drop-shadow(2px -2px 0 #fff) drop-shadow(-2px 2px 0 #fff) ' +
+                  'drop-shadow(0 0 16px rgba(255,255,255,0.45))',
+              }}
+            />
+          </div>
           {/* Card Container */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-2xl px-6 sm:px-8 pb-6 sm:pb-8 pt-24 backdrop-blur-xl">
             {/* Login Card Header */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-4">
-                <Lock className="w-7 h-7" />
-              </div>
               <h2 className="text-2xl font-bold text-white tracking-tight">Iniciar Sesión</h2>
               <p className="text-sm text-slate-400 mt-1">
                 Ingrese sus credenciales universitarias para acceder
