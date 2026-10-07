@@ -1235,7 +1235,7 @@ const ProfesorSearchSelect: React.FC<{
     <div className="relative w-[280px]">
       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
       <input
-        value={open ? q : sel ? `${sel.apellidos}, ${sel.nombres}` : ''}
+        value={open ? q : sel ? `${sel.apellidos}, ${sel.nombres}`.toUpperCase() : ''}
         onFocus={() => {
           setOpen(true);
           setQ('');
@@ -1276,7 +1276,7 @@ const ProfesorSearchSelect: React.FC<{
                     : 'text-slate-200 hover:bg-slate-800'
                 }`}
               >
-                {p.apellidos}, {p.nombres}
+                {`${p.apellidos}, ${p.nombres}`.toUpperCase()}
               </button>
             ))}
           </div>
