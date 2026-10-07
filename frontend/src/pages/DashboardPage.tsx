@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
+import { usePnfColors } from '../context/PnfColorContext.js';
 import { apiFetch } from '../api/client.js';
+import { invalidarCatalogoMaterias, precargarCatalogoMaterias } from './horarios/catalogoMaterias.js';
 import { ProyeccionesPage } from './ProyeccionesPage.js';
 import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
@@ -37,6 +39,7 @@ import {
   CalendarCog,
   IdCard,
   ShieldCheck,
+  RefreshCw,
   Info
 } from 'lucide-react';
 
@@ -46,6 +49,8 @@ export const DashboardPage: React.FC = () => {
   const [horariosSubTab, setHorariosSubTab] = useState<HorariosSubTab>('horario');
   const [sagaConnected, setSagaConnected] = useState<boolean | null>(null);
   const [loadingSaga, setLoadingSaga] = useState(true);
+  const [sagaNota, setSagaNota] = useState<string | null>(null); // feedback breve tras reintentar
+  const { refresh: refreshPnfs } = usePnfColors();
   const [configMenuOpen, setConfigMenuOpen] = useState(false);
   const [usuariosModalOpen, setUsuariosModalOpen] = useState(false);
   const [configHorariosOpen, setConfigHorariosOpen] = useState(false);
@@ -70,6 +75,29 @@ export const DashboardPage: React.FC = () => {
     };
     checkSagaStatus();
   }, []);
+
+  // Click en el indicador SAGA: reintenta la conexión y, si responde,
+  // resincroniza los cachés relacionados (catálogo de materias en memoria,
+  // catálogo/colores de PNF y la config del módulo de horarios).
+  const resincronizarSaga = async () => {
+    if (loadingSaga) return;
+    setLoadingSaga(true);
+    setSagaNota(null);
+    const res = await apiFetch('/saga/status');
+    const conectado = !!(res.connected ?? res.success);
+    setSagaConnected(conectado);
+    setLoadingSaga(false);
+    if (conectado) {
+      invalidarCatalogoMaterias();
+      precargarCatalogoMaterias();
+      await refreshPnfs();
+      setHorariosConfigTick((t) => t + 1);
+      setSagaNota('SAGA conectado: caché y catálogos actualizados.');
+    } else {
+      setSagaNota(res.message || 'SAGA sigue sin responder.');
+    }
+    window.setTimeout(() => setSagaNota(null), 6000);
+  };
 
   const getRoleBadge = (role?: string) => {
     switch (role) {
@@ -313,18 +341,37 @@ export const DashboardPage: React.FC = () => {
 
             {/* Right Profile & Actions */}
             <div className="flex items-center gap-4">
-              {/* SAGA Status Indicator */}
-              <div className="hidden md:flex items-center gap-2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
+              {/* SAGA Status Indicator — clic para reintentar y resincronizar cachés */}
+              <button
+                onClick={resincronizarSaga}
+                disabled={loadingSaga}
+                title="Reintentar conexión con SAGA y resincronizar los cachés"
+                className="hidden md:flex items-center gap-2 bg-slate-950 border border-slate-800 hover:border-slate-600 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer disabled:cursor-wait"
+              >
                 <Activity className="w-3.5 h-3.5 text-slate-400" />
                 <span className="text-slate-400">SAGA:</span>
                 {loadingSaga ? (
-                  <span className="text-amber-400 flex items-center gap-1"><Clock className="w-3 h-3 animate-spin" /> Verificando...</span>
+                  <span className="text-amber-400 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Sincronizando...</span>
+                ) : sagaNota ? (
+                  <span
+                    className={`flex items-center gap-1 font-medium max-w-[220px] truncate ${
+                      sagaConnected ? 'text-emerald-400' : 'text-red-400'
+                    }`}
+                    title={sagaNota}
+                  >
+                    {sagaConnected ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    {sagaNota}
+                  </span>
                 ) : sagaConnected ? (
                   <span className="text-emerald-400 flex items-center gap-1 font-medium"><CheckCircle2 className="w-3.5 h-3.5" /> En línea</span>
                 ) : (
                   <span className="text-red-400 flex items-center gap-1 font-medium"><XCircle className="w-3.5 h-3.5" /> Desconectado</span>
                 )}
-              </div>
+              </button>
 
               {/* Menú de configuración y sesión — el docente ve solo logout directo */}
               <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
