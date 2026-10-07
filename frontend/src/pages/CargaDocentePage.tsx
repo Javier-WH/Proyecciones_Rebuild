@@ -724,58 +724,58 @@ export const CargaDocentePage: React.FC = () => {
           />
         </div>
 
-        <select
-          value={filterLapso}
-          onChange={(e) => setFilterLapso(e.target.value)}
-          className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        >
-          <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
-          {lapsoCols.some((l) => l.tipo === 'TRIMESTRAL') && (
-            <option value="TRIMESTRAL">Todos los trimestres</option>
-          )}
-          {lapsoCols.some((l) => l.tipo === 'SEMESTRAL') && (
-            <option value="SEMESTRAL">Todos los semestres</option>
-          )}
-          {lapsoCols.map((l) => (
-            <option key={lapsoKey(l.tipo, l.n)} value={lapsoKey(l.tipo, l.n)}>
-              {labelLapso(l.n, l.tipo)}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-1.5">
+          <select
+            value={filterLapso}
+            onChange={(e) => setFilterLapso(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="todos">Todos los {pluralLapso(lapsoTermino)}</option>
+            {lapsoCols.some((l) => l.tipo === 'TRIMESTRAL') && (
+              <option value="TRIMESTRAL">Todos los trimestres</option>
+            )}
+            {lapsoCols.some((l) => l.tipo === 'SEMESTRAL') && (
+              <option value="SEMESTRAL">Todos los semestres</option>
+            )}
+            {lapsoCols.map((l) => (
+              <option key={lapsoKey(l.tipo, l.n)} value={lapsoKey(l.tipo, l.n)}>
+                {labelLapso(l.n, l.tipo)}
+              </option>
+            ))}
+          </select>
 
-        {/* En la vista de trimestres: sumar horas de materias semestrales */}
-        {filterLapso === 'TRIMESTRAL' && (
-          <div className="flex items-center gap-4 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2">
-            {lapsoCols.some((l) => l.tipo === 'SEMESTRAL' && l.n === 1) && (
-              <label
-                className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none"
-                title="Las materias de Semestre 1 se muestran y sus horas suman en Trimestre 1 y Trimestre 2"
-              >
-                <input
-                  type="checkbox"
-                  checked={sumarSem1}
-                  onChange={(e) => setSumarSem1(e.target.checked)}
-                  className="accent-emerald-500"
-                />
-                <span>Sumar horas de Semestre 1</span>
-              </label>
-            )}
-            {lapsoCols.some((l) => l.tipo === 'SEMESTRAL' && l.n === 2) && (
-              <label
-                className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none"
-                title="Las materias de Semestre 2 se muestran y sus horas suman en Trimestre 2 y Trimestre 3"
-              >
-                <input
-                  type="checkbox"
-                  checked={sumarSem2}
-                  onChange={(e) => setSumarSem2(e.target.checked)}
-                  className="accent-emerald-500"
-                />
-                <span>Sumar horas de Semestre 2</span>
-              </label>
-            )}
-          </div>
-        )}
+          {/* En la vista de trimestres: sumar horas de materias semestrales */}
+          {filterLapso === 'TRIMESTRAL' && (
+            <div className="flex items-center gap-1.5 pl-0.5">
+              {lapsoCols.some((l) => l.tipo === 'SEMESTRAL' && l.n === 1) && (
+                <button
+                  onClick={() => setSumarSem1(!sumarSem1)}
+                  title="Las materias de Semestre 1 se muestran y sus horas suman en Trimestre 1 y Trimestre 2"
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                    sumarSem1
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                      : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  Sumar Semestre 1
+                </button>
+              )}
+              {lapsoCols.some((l) => l.tipo === 'SEMESTRAL' && l.n === 2) && (
+                <button
+                  onClick={() => setSumarSem2(!sumarSem2)}
+                  title="Las materias de Semestre 2 se muestran y sus horas suman en Trimestre 2 y Trimestre 3"
+                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                    sumarSem2
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                      : 'border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  Sumar Semestre 2
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         <select
           value={filterPnf}
