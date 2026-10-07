@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import {
   X,
@@ -11,6 +11,7 @@ import {
   UserCheck,
   Eye,
   RefreshCw,
+  Search,
 } from 'lucide-react';
 
 type Rol = 'SUPER_USUARIO' | 'ADMINISTRADOR' | 'REGULAR' | 'PROFESOR';
@@ -309,18 +310,11 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
                 </div>
                 <div>
                   <label className={labelCls}>Profesor vinculado (opcional)</label>
-                  <select
+                  <ProfesorVinculoSelect
+                    profesores={profesores}
                     value={form.profesor_cedula}
-                    onChange={(e) => setForm({ ...form, profesor_cedula: e.target.value })}
-                    className={inputCls}
-                  >
-                    <option value="">— Ninguno —</option>
-                    {profesores.map((p) => (
-                      <option key={p.id} value={p.cedula}>
-                        {p.apellidos}, {p.nombres} ({p.cedula})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(cedula) => setForm({ ...form, profesor_cedula: cedula })}
+                  />
                 </div>
               </div>
 
@@ -467,6 +461,131 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+// Normaliza texto para búsqueda: sin acentos y en minúsculas
+const normTxt = (s: string) =>
+  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Selector de profesor con búsqueda: filtra por nombre, apellido o cédula
+// (ignora acentos; la cédula se compara solo por dígitos).
+const ProfesorVinculoSelect: React.FC<{
+  profesores: ProfesorOpcion[];
+  value: string; // cédula ('' = ninguno)
+  onChange: (cedula: string) => void;
+}> = ({ profesores, value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // Posición fija del desplegable (medida del input) para que sobresalga del
+  // modal: el área del formulario tiene overflow y recortaría un absolute.
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const sel = profesores.find((p) => p.cedula === value);
+
+  const abrir = () => {
+    if (wrapRef.current) {
+      const r = wrapRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    setQ('');
+    setOpen(true);
+  };
+
+  const filtrados = useMemo(() => {
+    const t = normTxt(q.trim());
+    const digitos = q.replace(/\D/g, '');
+    if (!t) return profesores;
+    return profesores.filter(
+      (p) =>
+        normTxt(`${p.apellidos} ${p.nombres}`).includes(t) ||
+        (digitos.length > 0 && p.cedula.replace(/\D/g, '').includes(digitos))
+    );
+  }, [profesores, q]);
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+      <input
+        type="text"
+        value={open ? q : sel ? `${sel.apellidos}, ${sel.nombres} (${sel.cedula})` : ''}
+        onFocus={abrir}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        placeholder="— Ninguno —"
+        className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-8 py-2.5 text-white text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-600"
+      />
+      {value && !open && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          title="Quitar vinculación"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setOpen(false);
+              setQ('');
+            }}
+          />
+          <div
+            className="fixed max-h-56 overflow-y-auto bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl shadow-black/60 z-50"
+            style={
+              pos
+                ? { top: pos.top, left: pos.left, width: pos.width }
+                : { top: 0, left: 0, width: 240 }
+            }
+          >
+            <button
+              type="button"
+              onClick={() => {
+                onChange('');
+                setOpen(false);
+                setQ('');
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-slate-400 italic hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              — Ninguno —
+            </button>
+            {filtrados.length === 0 ? (
+              <div className="px-3 py-3 text-[11px] text-slate-500 italic">
+                Sin profesores que coincidan con '{q}'.
+              </div>
+            ) : (
+              filtrados.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    onChange(p.cedula);
+                    setOpen(false);
+                    setQ('');
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                    p.cedula === value
+                      ? 'bg-purple-600/20 text-purple-200'
+                      : 'text-slate-200 hover:bg-slate-800'
+                  }`}
+                >
+                  <span className="truncate">
+                    {p.apellidos}, {p.nombres}
+                  </span>
+                  <span className="text-[10px] text-slate-500 shrink-0">C.I. {p.cedula}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };
