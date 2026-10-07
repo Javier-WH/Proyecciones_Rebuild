@@ -888,6 +888,40 @@ td.clase { vertical-align: middle; }
             </div>
           )}
 
+          {soloProfesores ? (
+            /* Modo docente: un checkbox por lapso — solo su propia agenda */
+            <div className="mb-4">
+              {grupoTitulo('Mis horarios', <CalendarClock className="w-3.5 h-3.5" />)}
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1">
+                {lapsos.map((lk) => {
+                  const g = grupos.get(lk);
+                  if (!g || !g.profesores.some((p) => p.id === profesorPreseleccionado))
+                    return null;
+                  const clave = `${lk}:${profesorPreseleccionado}`;
+                  const marcado = selProf.has(clave);
+                  return (
+                    <label
+                      key={lk}
+                      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
+                        marcado
+                          ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                          : 'text-slate-300 hover:bg-slate-800/60 border border-transparent'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        onChange={() => toggle(selProf, setSelProf, clave)}
+                        className="accent-blue-500 shrink-0"
+                      />
+                      <span>Horario del {g.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Tabs por lapso — el badge indica cuántas hojas hay marcadas en cada uno */}
           {lapsos.length > 1 && (
             <div className="flex flex-wrap gap-1.5 mb-5 p-1 bg-slate-950 border border-slate-800 rounded-xl w-fit">
@@ -1017,6 +1051,8 @@ td.clase { vertical-align: middle; }
               </>
             );
           })()}
+          </>
+          )}
 
           <label className="flex items-center gap-2 px-1 py-1 cursor-pointer w-fit">
             <input
