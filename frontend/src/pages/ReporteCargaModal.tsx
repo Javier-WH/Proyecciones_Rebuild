@@ -345,9 +345,11 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         const encabezado = header
           .map((tpl) => `<div class="hline">${escapeHtml(linea(tpl, hoja))}</div>`)
           .join('');
+        // Cada docente va en su propio <tbody> para que el salto de página
+        // no lo divida: el navegador mueve el grupo completo a la hoja siguiente
         const filas = hoja.profes
           .map((prof) =>
-            prof.items
+            `<tbody class="grp">${prof.items
               .map((item, i) => {
                 const tdProf =
                   i === 0 ? `<td rowspan="${prof.items.length}" class="prof">${escapeHtml(prof.nombre)}</td>` : '';
@@ -357,7 +359,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
                   i === 0 ? `<td rowspan="${prof.items.length}" class="ded">${escapeHtml(prof.dedicacion)}</td>` : '';
                 return `<tr>${tdProf}<td>${escapeHtml(item.materia_nombre)}</td><td>${escapeHtml(item.pnf_nombre)}</td><td>${escapeHtml(item.trayecto_nombre)}</td><td>${escapeHtml(item.seccion_nombre)}</td><td>${escapeHtml(item.turno_nombre)}</td><td class="num">${item.horas_semanales}</td>${tdTot}${tdDed}</tr>`;
               })
-              .join('')
+              .join('')}</tbody>`
           )
           .join('');
         return `<section class="hoja">${encabezado}
@@ -366,7 +368,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
 <tr><th rowspan="2">Profesor</th><th rowspan="2">Unidad Curricular</th><th rowspan="2">PNF</th><th rowspan="2">Trayecto</th><th rowspan="2">Sección</th><th rowspan="2">Turno</th><th colspan="2">${escapeHtml(hoja.lapsoLabel)}</th><th rowspan="2">Dedicación</th></tr>
 <tr><th class="v">Horas por U/C</th><th class="v">Total de Horas</th></tr>
 </thead>
-<tbody>${filas}</tbody>
+${filas}
 </table></section>`;
       })
       .join('\n');
@@ -379,6 +381,9 @@ body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; color: #000; }
 .hoja:last-child { page-break-after: auto; }
 .hline { text-align: center; font-weight: bold; line-height: 1.35; }
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+thead { display: table-header-group; }
+tbody.grp { break-inside: avoid; page-break-inside: avoid; }
+tr { break-inside: avoid; page-break-inside: avoid; }
 th, td { border: 1px solid #000; padding: 3px 4px; font-size: 9pt; }
 th { text-align: center; vertical-align: middle; font-weight: bold; }
 th.v { font-size: 7.5pt; }
