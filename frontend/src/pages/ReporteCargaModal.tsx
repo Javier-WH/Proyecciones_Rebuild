@@ -267,10 +267,28 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         ws.getRow(7).height = 18;
         ws.getRow(8).height = 30;
 
-        // Datos
+        // Datos. Para que un docente no quede partido entre páginas impresas
+        // se estima la altura de su bloque (filas con texto envuelto) y se
+        // inserta un salto de página manual antes del bloque que no quepa.
+        const anchoCol = { A: 34, B: 46, C: 26, I: 16 };
+        const lineasWrap = (texto: string | null | undefined, ancho: number) =>
+          Math.max(1, Math.ceil((texto || '').length / (ancho * 1.15)));
+        const altoItem = (item: ReporteRow) =>
+          Math.max(
+            15,
+            Math.max(
+              lineasWrap(item.materia_nombre, anchoCol.B),
+              lineasWrap(item.pnf_nombre, anchoCol.C)
+            ) * 12.5 + 4
+          );
+        // Carta apaisada: ~500pt útiles menos el encabezado repetido (filas 1-8 ≈ 140pt)
+        const CAP_DATOS = 355;
+        let resto = CAP_DATOS;
+
         let fila = 9;
         for (const prof of hoja.profes) {
           const inicio = fila;
+          let altoBloque = 0;
           for (const item of prof.items) {
             const r = ws.getRow(fila);
             r.getCell(2).value = item.materia_nombre;
@@ -284,8 +302,20 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
               r.getCell(col).alignment = col === 3 ? centradoWrap : centrado;
             }
             for (const col of [2, 3, 4, 5, 6, 7]) r.getCell(col).font = fuenteDatos;
+            altoBloque += altoItem(item);
             fila++;
           }
+          // El bloque también debe alojar el nombre y la dedicación combinados
+          altoBloque = Math.max(
+            altoBloque,
+            lineasWrap(prof.nombre, anchoCol.A) * 12.5 + 4,
+            lineasWrap(prof.dedicacion, anchoCol.I) * 12.5 + 4
+          );
+          if (altoBloque > resto && inicio > 9) {
+            ws.getRow(inicio - 1).addPageBreak();
+            resto = CAP_DATOS;
+          }
+          resto -= altoBloque;
           const fin = fila - 1;
           if (fin > inicio) {
             ws.mergeCells(inicio, 1, fin, 1);
@@ -323,6 +353,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
           fitToHeight: 0,
           margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
           printArea: `A1:I${ultima}`,
+          printTitlesRow: '1:8',
         } as ExcelJS.PageSetup;
       }
 
