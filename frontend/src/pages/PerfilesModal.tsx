@@ -16,6 +16,7 @@ import {
   Save,
   Undo2,
 } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal.js';
 
 export interface PerfilMateria {
   subject_saga_id: number;
@@ -56,6 +57,7 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
   const [descripcion, setDescripcion] = useState('');
   const [seleccion, setSeleccion] = useState<Map<number, string>>(new Map());
   const [buscarMateria, setBuscarMateria] = useState('');
+  const [borrandoPerfil, setBorrandoPerfil] = useState<Perfil | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -140,13 +142,14 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
   };
 
   const handleEliminar = async (p: Perfil) => {
-    if (!window.confirm(`¿Eliminar el perfil "${p.nombre}"? Se desvinculará de los profesores que lo tengan.`)) return;
     const res = await apiFetch(`/perfiles/${p.id}`, { method: 'DELETE' });
     if (res.success) {
       setNoticeMsg(res.message || 'Perfil eliminado.');
+      setBorrandoPerfil(null);
       fetchData();
     } else {
       setErrorMsg(res.message || 'Error eliminando el perfil.');
+      setBorrandoPerfil(null);
     }
   };
 
@@ -369,7 +372,7 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleEliminar(p)}
+                      onClick={() => setBorrandoPerfil(p)}
                       className="p-2 bg-slate-800 hover:bg-red-500/20 text-slate-300 hover:text-red-300 border border-slate-700 rounded-lg transition-colors cursor-pointer"
                       title="Eliminar perfil"
                     >
@@ -382,6 +385,19 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
           )}
         </div>
       </div>
+
+      {borrandoPerfil && (
+        <ConfirmModal
+          titulo={`Eliminar perfil "${borrandoPerfil.nombre}"`}
+          icono={<Trash2 className="w-5 h-5 text-red-400" />}
+          danger
+          confirmLabel="Eliminar Perfil"
+          mensaje="Se eliminará este perfil docente."
+          lineas={['Se desvinculará de los profesores que lo tengan asignado.']}
+          onConfirm={() => handleEliminar(borrandoPerfil)}
+          onCancel={() => setBorrandoPerfil(null)}
+        />
+      )}
     </div>
   );
 };

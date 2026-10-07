@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { Profesor } from './ProfesorModal.js';
 import { imprimirHtml } from '../utils/print.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
-import { X, FileSpreadsheet, Printer, Users } from 'lucide-react';
+import { X, FileSpreadsheet, Printer, Users, AlertTriangle } from 'lucide-react';
 
 // Filas de carga necesarias para el reporte (subconjunto de CargaRow)
 export type ReporteRow = MateriaAsignableRow & {
@@ -89,6 +89,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
   const [generando, setGenerando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const profMap = useMemo(() => new Map(profesores.map((p) => [p.id, p])), [profesores]);
 
@@ -359,7 +360,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
       }
 
       if (hojas.length === 0) {
-        alert('No hay docentes con carga para la selección realizada.');
+        setAviso('No hay docentes con carga para la selección realizada.');
         return;
       }
 
@@ -382,7 +383,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   // ------------------------- IMPRESIÓN DIRECTA -------------------------
   const imprimir = () => {
     if (hojas.length === 0) {
-      alert('No hay docentes con carga para la selección realizada.');
+      setAviso('No hay docentes con carga para la selección realizada.');
       return;
     }
     const secciones = hojas
@@ -608,6 +609,15 @@ td.ded { text-align: center; vertical-align: middle; }
         </div>
 
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 shrink-0 flex items-center justify-end gap-2">
+          {aviso && (
+            <span className="mr-auto text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              {aviso}
+              <button onClick={() => setAviso(null)} className="hover:text-white cursor-pointer">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
           <button
             onClick={imprimir}
             className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"

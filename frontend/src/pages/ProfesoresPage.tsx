@@ -6,6 +6,7 @@ import { TiposContratoModal } from './TiposContratoModal.js';
 import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
+import { ConfirmModal } from './ConfirmModal.js';
 import {
   Users,
   Plus,
@@ -48,6 +49,8 @@ export const ProfesoresPage: React.FC = () => {
     open: false,
     profesor: null,
   });
+  // Confirmación de desactivar/reactivar profesor
+  const [toggleProfesor, setToggleProfesor] = useState<Profesor | null>(null);
 
   const fetchProfesores = async () => {
     setLoading(true);
@@ -83,8 +86,6 @@ export const ProfesoresPage: React.FC = () => {
   };
 
   const handleToggleActivo = async (p: Profesor) => {
-    const accion = p.activo ? 'desactivar' : 'reactivar';
-    if (!window.confirm(`¿Está seguro de ${accion} a ${p.nombres} ${p.apellidos}?`)) return;
     const res = await apiFetch(`/profesores/${p.id}/toggle-activo`, { method: 'PUT' });
     if (res.success) {
       fetchProfesores();
@@ -335,7 +336,7 @@ export const ProfesoresPage: React.FC = () => {
                           <CalendarCheck className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleToggleActivo(p)}
+                          onClick={() => setToggleProfesor(p)}
                           className={`p-2 rounded-lg transition-colors cursor-pointer ${
                             p.activo
                               ? 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'
@@ -371,6 +372,32 @@ export const ProfesoresPage: React.FC = () => {
         profesor={modalDisp.profesor}
         onClose={() => setModalDisp({ open: false, profesor: null })}
       />
+
+      {toggleProfesor && (
+        <ConfirmModal
+          titulo={toggleProfesor.activo ? 'Desactivar profesor' : 'Reactivar profesor'}
+          icono={
+            toggleProfesor.activo ? (
+              <PowerOff className="w-5 h-5 text-red-400" />
+            ) : (
+              <Power className="w-5 h-5 text-emerald-400" />
+            )
+          }
+          danger={!!toggleProfesor.activo}
+          confirmLabel={toggleProfesor.activo ? 'Desactivar' : 'Reactivar'}
+          mensaje={`¿Está seguro de ${toggleProfesor.activo ? 'desactivar' : 'reactivar'} a ${toggleProfesor.nombres} ${toggleProfesor.apellidos}?`}
+          lineas={
+            toggleProfesor.activo
+              ? ['No podrá ser asignado a nuevas materias hasta reactivarlo.']
+              : undefined
+          }
+          onConfirm={() => {
+            handleToggleActivo(toggleProfesor);
+            setToggleProfesor(null);
+          }}
+          onCancel={() => setToggleProfesor(null)}
+        />
+      )}
     </div>
   );
 };

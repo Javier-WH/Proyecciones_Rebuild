@@ -7,6 +7,7 @@ import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
 import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
 import { ReporteCargaModal } from './ReporteCargaModal.js';
+import { ConfirmModal } from './ConfirmModal.js';
 import {
   ClipboardList,
   Loader2,
@@ -90,6 +91,12 @@ export const CargaDocentePage: React.FC = () => {
     open: false,
     profesor: null,
   });
+  // Confirmación para quitar una materia de todos sus lapsos
+  const [quitarMateria, setQuitarMateria] = useState<{
+    row: CargaRow;
+    materia: string;
+    plural: string;
+  } | null>(null);
 
   // Altura real de la barra de filtros (cambia con los toggles y el wrap);
   // el thead sticky se posiciona debajo del nav (h-16) + esta barra
@@ -574,15 +581,13 @@ export const CargaDocentePage: React.FC = () => {
                     <UserSearch className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `¿Quitar "${m.base.materia_nombre}" en todos sus ${pluralRow}?`
-                        )
-                      ) {
-                        handleAssign(rowObj, null, true);
-                      }
-                    }}
+                    onClick={() =>
+                      setQuitarMateria({
+                        row: rowObj,
+                        materia: m.base.materia_nombre,
+                        plural: pluralRow,
+                      })
+                    }
                     className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
                     title={`Quitar materia en todos los ${pluralRow}`}
                   >
@@ -1100,6 +1105,21 @@ export const CargaDocentePage: React.FC = () => {
           fetchCarga();
         }}
       />
+
+      {quitarMateria && (
+        <ConfirmModal
+          titulo="Quitar materia asignada"
+          icono={<X className="w-5 h-5 text-red-400" />}
+          danger
+          confirmLabel="Quitar Materia"
+          mensaje={`Se quitará "${quitarMateria.materia}" del profesor en todos sus ${quitarMateria.plural}.`}
+          onConfirm={() => {
+            handleAssign(quitarMateria.row, null, true);
+            setQuitarMateria(null);
+          }}
+          onCancel={() => setQuitarMateria(null)}
+        />
+      )}
     </div>
   );
 };

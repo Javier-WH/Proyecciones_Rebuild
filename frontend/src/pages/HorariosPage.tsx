@@ -7,6 +7,7 @@ import { AulasPanel } from './horarios/AulasPanel.js';
 import { TurnosPanel } from './horarios/TurnosPanel.js';
 import { VistaRecurso } from './horarios/VistaRecurso.js';
 import { ReporteHorarioModal } from './ReporteHorarioModal.js';
+import { ConfirmModal } from './ConfirmModal.js';
 import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import {
   Aula,
@@ -116,6 +117,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [aulaId, setAulaId] = useState<number | null>(null);
   const [profesorId, setProfesorId] = useState<number | null>(null);
   const [generando, setGenerando] = useState(false);
+  const [regenerarOpen, setRegenerarOpen] = useState(false); // modal de confirmación de regenerar
   const [resolviendo, setResolviendo] = useState(false);
   const [reporteOpen, setReporteOpen] = useState(false);
   const [erroresOpen, setErroresOpen] = useState(false);
@@ -816,9 +818,6 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   };
 
   const generar = async (modo: 'completar' | 'regenerar') => {
-    if (modo === 'regenerar' && !confirm('Esto borrará todas las clases agendadas del lapso y las recalculará. ¿Continuar?')) {
-      return;
-    }
     setGenerando(true);
     const res = await apiFetch<{ agendadas: number; pendientes: any[] }>('/horarios/generar', {
       method: 'POST',
@@ -875,7 +874,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 Generar horario
               </button>
               <button
-                onClick={() => generar('regenerar')}
+                onClick={() => setRegenerarOpen(true)}
                 disabled={generando}
                 className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700"
                 title="Borra las clases agendadas del lapso y las recalcula"
@@ -1333,6 +1332,27 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             />
           )}
         </>
+      )}
+
+      {regenerarOpen && (
+        <ConfirmModal
+          titulo="Regenerar horario del lapso"
+          icono={<Sparkles className="w-5 h-5 text-amber-400" />}
+          danger
+          slideToConfirm
+          busy={generando}
+          confirmLabel="Regenerar Horario"
+          mensaje="Se borrarán todas las clases agendadas de este lapso y se recalcularán desde cero."
+          lineas={[
+            'Las materias pendientes y los cambios manuales hechos en el lapso se perderán.',
+            'Esta acción no se puede deshacer.',
+          ]}
+          onConfirm={() => {
+            setRegenerarOpen(false);
+            generar('regenerar');
+          }}
+          onCancel={() => setRegenerarOpen(false)}
+        />
       )}
 
       <ReporteHorarioModal

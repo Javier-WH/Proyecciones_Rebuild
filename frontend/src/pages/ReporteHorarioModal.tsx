@@ -10,6 +10,7 @@ import {
   Users,
   Search,
   UserPlus,
+  AlertTriangle,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
 import { imprimirHtml } from '../utils/print.js';
@@ -170,6 +171,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   const [entradas, setEntradas] = useState<Map<string, HorarioEntry[]>>(new Map());
   const [cargando, setCargando] = useState(false);
   const [generando, setGenerando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   // Al abrir: secciones del lapso activo pre-marcadas + entries de todos los
   // lapsos (el endpoint devuelve también los lapsos rivales).
@@ -480,7 +482,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   // ------------------------- EXCEL -------------------------
   const generarExcel = async () => {
     if (hojas.length === 0) {
-      alert('No hay nada seleccionado.');
+      setAviso('No hay nada seleccionado.');
       return;
     }
     setGenerando(true);
@@ -575,7 +577,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   // ------------------------- IMPRESIÓN -------------------------
   const imprimir = () => {
     if (hojas.length === 0) {
-      alert('No hay nada seleccionado.');
+      setAviso('No hay nada seleccionado.');
       return;
     }
     const seccionesHtml = hojas
@@ -1051,9 +1053,20 @@ td.clase { vertical-align: middle; }
         </div>
 
         <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
-          <span className="text-[11px] text-slate-500">
-            {hojas.length} hoja{hojas.length === 1 ? '' : 's'} seleccionada{hojas.length === 1 ? '' : 's'}
-          </span>
+          <div className="flex items-center gap-2 min-w-0">
+            {aviso && (
+              <span className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {aviso}
+                <button onClick={() => setAviso(null)} className="hover:text-white cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <span className="text-[11px] text-slate-500">
+              {hojas.length} hoja{hojas.length === 1 ? '' : 's'} seleccionada{hojas.length === 1 ? '' : 's'}
+            </span>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={imprimir}

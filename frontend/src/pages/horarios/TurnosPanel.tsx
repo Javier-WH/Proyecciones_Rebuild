@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
 import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHoraCfg, hora12De, a24 } from './types.js';
 import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle, Merge } from 'lucide-react';
+import { ConfirmModal } from '../ConfirmModal.js';
 
 interface TurnosPanelProps {
   turnos: Turno[];
@@ -115,6 +116,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
   const [creando, setCreando] = useState(false);
   const [conflicto, setConflicto] = useState<{ total: number; clases: ClaseConflicto[] } | null>(null);
   const [desagendando, setDesagendando] = useState(false);
+  const [confirmarBorrar, setConfirmarBorrar] = useState(false);
   const esAdmin = puedeEditar; // creación de turnos locales solo SUPER/ADMIN se valida server-side
 
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];
@@ -344,15 +346,20 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
     }
   };
 
-  const eliminarTurno = async () => {
+  const pedirEliminarTurno = () => {
     if (!turno) return;
     if (turno.saga_id !== null) {
-      alert('Los turnos de SAGA no se pueden eliminar.');
+      setMsg({ error: true, texto: 'Los turnos de SAGA no se pueden eliminar.' });
       return;
     }
-    if (!confirm(`¿Eliminar el turno local '${turno.nombre}'?`)) return;
+    setConfirmarBorrar(true);
+  };
+
+  const eliminarTurno = async () => {
+    if (!turno) return;
+    setConfirmarBorrar(false);
     const res = await apiFetch(`/horarios/turnos/${turno.id}`, { method: 'DELETE' });
-    if (!res.success) alert(res.message || 'Error eliminando.');
+    if (!res.success) setMsg({ error: true, texto: res.message || 'Error eliminando.' });
     onChanged();
   };
 
@@ -439,7 +446,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
               <Clock className="w-4 h-4 text-blue-400" /> {turno.nombre}
               {turno.saga_id === null && puedeEditar && (
                 <button
-                  onClick={eliminarTurno}
+                  onClick={pedirEliminarTurno}
                   title="Eliminar turno local"
                   className="text-slate-500 hover:text-red-300 cursor-pointer"
                 >
@@ -706,6 +713,18 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
             </div>
           </div>
         </div>
+      )}
+
+      {confirmarBorrar && turno && (
+        <ConfirmModal
+          titulo={`Eliminar turno ${turno.nombre}`}
+          icono={<Trash2 className="w-5 h-5 text-red-400" />}
+          danger
+          confirmLabel="Eliminar Turno"
+          mensaje={`Se eliminará el turno local '${turno.nombre}' con sus bloques horarios.`}
+          onConfirm={eliminarTurno}
+          onCancel={() => setConfirmarBorrar(false)}
+        />
       )}
     </div>
   );

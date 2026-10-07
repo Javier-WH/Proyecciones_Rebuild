@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { TipoContrato } from './ProfesorModal.js';
 import { X, Loader2, AlertCircle, Plus, RefreshCw, Save, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal.js';
 
 interface TiposContratoModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoHoras, setNuevoHoras] = useState('');
+  const [borrandoTipo, setBorrandoTipo] = useState<EditableTipo | null>(null);
 
   const fetchTipos = async () => {
     setLoading(true);
@@ -83,7 +85,7 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
   };
 
   const handleDelete = async (t: EditableTipo) => {
-    if (!window.confirm(`¿Está seguro de eliminar el tipo de contrato "${t.nombre}"?`)) return;
+    setBorrandoTipo(null);
     setDeletingId(t.id);
     setFeedback(null);
     const res = await apiFetch(`/profesores/tipos-contrato/${t.id}`, { method: 'DELETE' });
@@ -202,7 +204,7 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
                   </button>
 
                   <button
-                    onClick={() => handleDelete(t)}
+                    onClick={() => setBorrandoTipo(t)}
                     disabled={deletingId === t.id}
                     className="p-1.5 bg-red-600/15 hover:bg-red-600/35 border border-red-500/30 text-red-400 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-default shrink-0"
                     title="Eliminar tipo de contrato"
@@ -251,6 +253,18 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
           </div>
         </div>
       </div>
+
+      {borrandoTipo && (
+        <ConfirmModal
+          titulo={`Eliminar tipo de contrato "${borrandoTipo.nombre}"`}
+          icono={<Trash2 className="w-5 h-5 text-red-400" />}
+          danger
+          confirmLabel="Eliminar"
+          mensaje={`Se eliminará el tipo de contrato "${borrandoTipo.nombre}".`}
+          onConfirm={() => handleDelete(borrandoTipo)}
+          onCancel={() => setBorrandoTipo(null)}
+        />
+      )}
     </div>
   );
 };

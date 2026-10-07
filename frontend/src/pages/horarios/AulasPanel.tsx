@@ -8,6 +8,7 @@ import {
   catalogoMateriasListo,
 } from './catalogoMaterias.js';
 import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search, RefreshCw } from 'lucide-react';
+import { ConfirmModal } from '../ConfirmModal.js';
 
 const TIPOS = [
   { v: 'AULA_REGULAR', l: 'Aula regular' },
@@ -43,6 +44,11 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
   const [pickerQ, setPickerQ] = useState('');
   const [materiasOpts, setMateriasOpts] = useState<MateriaOpcion[] | null>(null);
   const [pickerLoading, setPickerLoading] = useState(false);
+  // Borrado con confirmación + aviso de resultado (banner inline)
+  const [borrando, setBorrando] = useState<Aula | null>(null);
+  const [borrandoBusy, setBorrandoBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   // Orden natural por nombre: Aula 9 antes que Aula 10
   const aulasOrdenadas = useMemo(() => sortAulas(aulas), [aulas]);
@@ -138,11 +144,18 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
     }
   };
 
-  const eliminar = async (a: Aula) => {
-    if (!confirm(`¿Eliminar el aula ${a.codigo}? Si tiene clases agendadas se desactivará.`)) return;
-    const res = await apiFetch(`/horarios/aulas/${a.id}`, { method: 'DELETE' });
-    if (!res.success) alert(res.message || 'Error eliminando el aula.');
-    else if (res.message) alert(res.message);
+  const eliminar = async () => {
+    if (!borrando) return;
+    setBorrandoBusy(true);
+    const res = await apiFetch(`/horarios/aulas/${borrando.id}`, { method: 'DELETE' });
+    setBorrandoBusy(false);
+    if (!res.success) {
+      setDeleteError(res.message || 'Error eliminando el aula.');
+      return;
+    }
+    setBorrando(null);
+    setDeleteError(null);
+    if (res.message) setAviso(res.message);
     onChanged();
   };
 
@@ -153,6 +166,14 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
       <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Building2 className="w-4 h-4 text-emerald-400" /> Aulas de clase
+          {aviso && (
+            <span className="ml-2 text-[10px] font-normal text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-0.5 inline-flex items-center gap-1.5">
+              {aviso}
+              <button onClick={() => setAviso(null)} className="hover:text-white cursor-pointer">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
         </h3>
         {puedeEditar && (
           <button
@@ -219,7 +240,7 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => eliminar(a)}
+                        onClick={() => { setBorrando(a); setDeleteError(null); }}
                         className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-300 cursor-pointer"
                         title="Eliminar"
                       >
@@ -509,6 +530,21 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
             </div>
           </div>
         </div>
+      )}
+
+      {borrando && (
+        <ConfirmModal
+          titulo={`Eliminar aula ${borrando.codigo}`}
+          icono={<Trash2 className="w-5 h-5 text-red-400" />}
+          danger
+          busy={borrandoBusy}
+          error={deleteError}
+          confirmLabel="Eliminar Aula"
+          mensaje={`Se eliminará el aula ${borrando.codigo} (${borrando.nombre}).`}
+          lineas={['Si tiene clases agendadas, el aula se desactivará en su lugar.']}
+          onConfirm={eliminar}
+          onCancel={() => setBorrando(null)}
+        />
       )}
     </div>
   );

@@ -13,10 +13,9 @@ import {
   X,
   Search,
   RefreshCw,
-  Sparkles,
-  AlertTriangle,
-  ChevronsRight
+  Sparkles
 } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal.js';
 
 export interface PeriodoAcademico {
   id: number;
@@ -46,7 +45,6 @@ export const PeriodosPage: React.FC = () => {
 
   // Confirmación de borrado: modal con deslizador (slide-to-confirm)
   const [borrando, setBorrando] = useState<PeriodoAcademico | null>(null);
-  const [slide, setSlide] = useState(0);
   const [eliminando, setEliminando] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -126,12 +124,11 @@ export const PeriodosPage: React.FC = () => {
 
   const abrirBorrado = (p: PeriodoAcademico) => {
     setBorrando(p);
-    setSlide(0);
     setDeleteError(null);
   };
 
   const confirmarBorrado = async () => {
-    if (!borrando || slide < 100) return;
+    if (!borrando) return;
     setEliminando(true);
     const res = await apiFetch(`/periodos/${borrando.id}`, { method: 'DELETE' });
     setEliminando(false);
@@ -140,13 +137,7 @@ export const PeriodosPage: React.FC = () => {
       fetchPeriodos();
     } else {
       setDeleteError(res.message || 'No se puede eliminar el periodo.');
-      setSlide(0);
     }
-  };
-
-  // Si el usuario suelta el deslizador antes del final, vuelve al inicio
-  const soltarSlide = () => {
-    if (slide < 100) setSlide(0);
   };
 
   const getEstadoBadge = (st: 'PLANIFICACION' | 'ACTIVO' | 'CERRADO') => {
@@ -353,105 +344,22 @@ export const PeriodosPage: React.FC = () => {
 
       {/* Modal Confirmar Eliminación (slide-to-confirm) */}
       {borrando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-red-500/30 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Trash2 className="w-5 h-5 text-red-400" />
-                Eliminar Periodo Académico
-              </h3>
-              <button onClick={() => setBorrando(null)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span className="leading-snug">
-                  Está a punto de eliminar el periodo{' '}
-                  <span className="font-bold">{borrando.codigo}</span> (
-                  {borrando.nombre}).{' '}
-                  <span className="font-bold">
-                    Todas las proyecciones, materias, secciones, asignaciones y horarios
-                    registrados en este periodo se eliminarán permanentemente.
-                  </span>{' '}
-                  Esta acción no se puede deshacer.
-                </span>
-              </div>
-
-              {deleteError && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                  <span>{deleteError}</span>
-                </div>
-              )}
-
-              {/* Deslizador de confirmación: hay que llevarlo al final */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-semibold text-slate-300 uppercase tracking-wider">
-                    Desliza para confirmar
-                  </span>
-                  <ChevronsRight
-                    className={`w-4 h-4 transition-colors ${
-                      slide >= 100 ? 'text-red-400' : 'text-slate-600'
-                    }`}
-                  />
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-xl bg-slate-950 border border-slate-700/80 overflow-hidden">
-                    <div
-                      className="h-full bg-red-500/25 transition-[width] duration-75"
-                      style={{ width: `${slide}%` }}
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={slide}
-                    disabled={eliminando}
-                    onChange={(e) => setSlide(Number(e.target.value))}
-                    onMouseUp={soltarSlide}
-                    onTouchEnd={soltarSlide}
-                    onPointerUp={soltarSlide}
-                    className="relative w-full h-10 appearance-none bg-transparent cursor-pointer accent-red-500"
-                    aria-label="Desliza completamente a la derecha para habilitar la eliminación"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1.5">
-                  {slide >= 100
-                    ? 'Confirmado — ya puedes eliminar el periodo.'
-                    : 'Arrastra el control completamente hacia la derecha.'}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setBorrando(null)}
-                  className="px-4 py-2.5 border border-slate-700 text-slate-300 rounded-xl hover:bg-slate-800 font-semibold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarBorrado}
-                  disabled={slide < 100 || eliminando}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl font-semibold shadow-lg shadow-red-600/30 flex items-center gap-2 disabled:shadow-none"
-                >
-                  {eliminando ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                  <span>Eliminar Periodo</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ConfirmModal
+          titulo="Eliminar Periodo Académico"
+          icono={<Trash2 className="w-5 h-5 text-red-400" />}
+          danger
+          slideToConfirm
+          busy={eliminando}
+          error={deleteError}
+          confirmLabel="Eliminar Periodo"
+          mensaje={`Está a punto de eliminar el periodo ${borrando.codigo} (${borrando.nombre}).`}
+          lineas={[
+            'Todas las proyecciones, materias, secciones, asignaciones y horarios registrados en este periodo se eliminarán permanentemente.',
+            'Esta acción no se puede deshacer.',
+          ]}
+          onConfirm={confirmarBorrado}
+          onCancel={() => setBorrando(null)}
+        />
       )}
     </div>
   );
