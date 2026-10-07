@@ -156,6 +156,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   profesorPreseleccionado,
   soloProfesores,
 }) => {
+  const [lapsoTab, setLapsoTab] = useState<string>('');
   const [selSec, setSelSec] = useState<Set<string>>(new Set());
   const [selAula, setSelAula] = useState<Set<string>>(new Set());
   const [selProf, setSelProf] = useState<Set<string>>(new Set());
@@ -168,6 +169,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   // lapsos (el endpoint devuelve también los lapsos rivales).
   useEffect(() => {
     if (!isOpen) return;
+    setLapsoTab(lapsos.includes(lapsoActual) ? lapsoActual : lapsos[0] ?? '');
     if (profesorPreseleccionado != null) {
       setSelSec(new Set());
       setSelProf(new Set(lapsos.map((lk) => `${lk}:${profesorPreseleccionado}`)));
@@ -647,26 +649,10 @@ td.clase { vertical-align: middle; }
   if (!isOpen) return null;
 
   // ---------- UI de selección ----------
-  const grupoCheck = (
-    titulo: string,
-    icono: React.ReactNode,
-    set: Set<string>,
-    setSet: (s: Set<string>) => void,
-    renderItem: (lk: string, g: GrupoLapso) => React.ReactNode
-  ) => (
-    <div className="mb-4">
-      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-2">
-        {icono} {titulo}
-      </label>
-      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-3 max-h-56 overflow-y-auto">
-        {lapsos.map((lk) => {
-          const g = grupos.get(lk);
-          if (!g) return null;
-          const items = renderItem(lk, g);
-          return items ? <div key={lk}>{items}</div> : null;
-        })}
-      </div>
-    </div>
+  const grupoTitulo = (titulo: string, icono: React.ReactNode) => (
+    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-2">
+      {icono} {titulo}
+    </label>
   );
 
   const subGrupo = (
@@ -758,42 +744,84 @@ td.clase { vertical-align: middle; }
             </div>
           )}
 
-          {!soloProfesores &&
-            grupoCheck(
-              'Secciones',
-              <CalendarClock className="w-3.5 h-3.5" />,
-            selSec,
-            setSelSec,
-            (lk, g) =>
-              subGrupo(lk, `${g.label} — Todas las secciones`, g.secciones.map((s) => s.seccion_id), selSec, setSelSec,
-                g.secciones.map((s) =>
-                  itemCheck(`${lk}:${s.seccion_id}`, `${s.seccion_nombre} · ${s.proyeccion_nombre} (${s.turno_nombre})`, selSec, setSelSec)
-                )
-              )
+          {/* Tabs por lapso — el badge indica cuántas hojas hay marcadas en cada uno */}
+          {lapsos.length > 1 && (
+            <div className="flex flex-wrap gap-1.5 mb-5 p-1 bg-slate-950 border border-slate-800 rounded-xl w-fit">
+              {lapsos.map((lk) => {
+                const g = grupos.get(lk);
+                if (!g) return null;
+                const nSel =
+                  g.secciones.filter((s) => selSec.has(`${lk}:${s.seccion_id}`)).length +
+                  g.aulas.filter((a) => selAula.has(`${lk}:${a.id}`)).length +
+                  g.profesores.filter((p) => selProf.has(`${lk}:${p.id}`)).length;
+                const activo = lk === (lapsoTab || lapsos[0]);
+                return (
+                  <button
+                    key={lk}
+                    onClick={() => setLapsoTab(lk)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activo
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {g.label}
+                    {nSel > 0 && (
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          activo ? 'bg-white/20 text-white' : 'bg-blue-500/15 text-blue-300'
+                        }`}
+                      >
+                        {nSel}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           )}
 
-          {!soloProfesores &&
-            grupoCheck(
-              'Aulas',
-              <Building2 className="w-3.5 h-3.5" />,
-            selAula,
-            setSelAula,
-            (lk, g) =>
-              subGrupo(lk, `${g.label} — Todas las aulas`, g.aulas.map((a) => a.id), selAula, setSelAula,
-                g.aulas.map((a) => itemCheck(`${lk}:${a.id}`, a.codigo, selAula, setSelAula))
-              )
-          )}
+          {(() => {
+            const lkActivo = lapsoTab || lapsos[0] || '';
+            const g = grupos.get(lkActivo);
+            if (!g) return null;
+            return (
+              <>
+                {!soloProfesores && (
+                  <div className="mb-4">
+                    {grupoTitulo('Secciones', <CalendarClock className="w-3.5 h-3.5" />)}
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-56 overflow-y-auto">
+                      {subGrupo(lkActivo, 'Todas las secciones', g.secciones.map((s) => s.seccion_id), selSec, setSelSec,
+                        g.secciones.map((s) =>
+                          itemCheck(`${lkActivo}:${s.seccion_id}`, `${s.seccion_nombre} · ${s.proyeccion_nombre} (${s.turno_nombre})`, selSec, setSelSec)
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
 
-          {grupoCheck(
-            'Profesores',
-            <Users className="w-3.5 h-3.5" />,
-            selProf,
-            setSelProf,
-            (lk, g) =>
-              subGrupo(lk, `${g.label} — Todos los profesores`, g.profesores.map((p) => p.id), selProf, setSelProf,
-                g.profesores.map((p) => itemCheck(`${lk}:${p.id}`, p.nombre, selProf, setSelProf))
-              )
-          )}
+                {!soloProfesores && (
+                  <div className="mb-4">
+                    {grupoTitulo('Aulas', <Building2 className="w-3.5 h-3.5" />)}
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-56 overflow-y-auto">
+                      {subGrupo(lkActivo, 'Todas las aulas', g.aulas.map((a) => a.id), selAula, setSelAula,
+                        g.aulas.map((a) => itemCheck(`${lkActivo}:${a.id}`, a.codigo, selAula, setSelAula))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mb-4">
+                  {grupoTitulo('Profesores', <Users className="w-3.5 h-3.5" />)}
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-h-56 overflow-y-auto">
+                    {subGrupo(lkActivo, 'Todos los profesores', g.profesores.map((p) => p.id), selProf, setSelProf,
+                      g.profesores.map((p) => itemCheck(`${lkActivo}:${p.id}`, p.nombre, selProf, setSelProf))
+                    )}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           <label className="flex items-center gap-2 px-1 py-1 cursor-pointer w-fit">
             <input
