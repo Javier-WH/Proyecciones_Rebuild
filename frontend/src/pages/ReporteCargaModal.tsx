@@ -90,6 +90,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
   const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
+  const [vista, setVista] = useState<'seleccion' | 'encabezado'>('seleccion');
   // Evita guardar el default sobre la plantilla de BD antes de cargarla
   const headerListo = useRef(false);
 
@@ -509,9 +510,65 @@ td.ded { text-align: center; vertical-align: middle; }
           <p className="text-[11px] text-slate-400 mt-1">
             Genera el Excel con la carga académica por PNF del docente. Sin selección = reporte general.
           </p>
+          {/* Pestañas: separa la selección del editor de encabezado */}
+          <div className="flex gap-1.5 mt-4 p-1 bg-slate-900 border border-slate-800 rounded-xl w-fit">
+            {(
+              [
+                ['seleccion', 'Contenido'],
+                ['encabezado', 'Encabezado'],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setVista(v)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  vista === v
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {vista === 'encabezado' ? (
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                Encabezado del reporte
+              </label>
+              <div className="space-y-1.5">
+                {header.map((lineaTpl, i) => (
+                  <input
+                    key={i}
+                    type="text"
+                    value={lineaTpl}
+                    onChange={(e) =>
+                      setHeader((prev) => prev.map((l, j) => (j === i ? e.target.value : l)))
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder={HEADER_DEFAULT[i]}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-[10px] text-slate-500">
+                  Placeholders: <code className="text-slate-400">{'{PNF}'}</code>{' '}
+                  <code className="text-slate-400">{'{LAPSO}'}</code>{' '}
+                  <code className="text-slate-400">{'{PERIODO}'}</code>
+                </p>
+                <button
+                  onClick={() => setHeader([...HEADER_DEFAULT])}
+                  className="text-[10px] text-slate-400 hover:text-emerald-300 font-semibold cursor-pointer"
+                >
+                  Restaurar encabezado
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Selector de PNF del docente */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -616,40 +673,8 @@ td.ded { text-align: center; vertical-align: middle; }
               Sin selección se incluyen todos. Cada lapso genera su propia hoja solo si existen datos en él.
             </p>
           </div>
-
-          {/* Encabezado editable */}
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
-              Encabezado del reporte
-            </label>
-            <div className="space-y-1.5">
-              {header.map((lineaTpl, i) => (
-                <input
-                  key={i}
-                  type="text"
-                  value={lineaTpl}
-                  onChange={(e) =>
-                    setHeader((prev) => prev.map((l, j) => (j === i ? e.target.value : l)))
-                  }
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder={HEADER_DEFAULT[i]}
-                />
-              ))}
-            </div>
-            <div className="flex items-center justify-between mt-1.5">
-              <p className="text-[10px] text-slate-500">
-                Placeholders: <code className="text-slate-400">{'{PNF}'}</code>{' '}
-                <code className="text-slate-400">{'{LAPSO}'}</code>{' '}
-                <code className="text-slate-400">{'{PERIODO}'}</code>
-              </p>
-              <button
-                onClick={() => setHeader([...HEADER_DEFAULT])}
-                className="text-[10px] text-slate-400 hover:text-emerald-300 font-semibold cursor-pointer"
-              >
-                Restaurar encabezado
-              </button>
-            </div>
-          </div>
+          </>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 shrink-0 flex items-center justify-end gap-2">

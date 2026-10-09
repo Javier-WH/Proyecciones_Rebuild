@@ -210,8 +210,9 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
 
   // Al abrir el modal se cargan las tres plantillas de BD; 'horarios' queda
   // como respaldo heredado por si existía una plantilla única anterior.
+  // En modo docente (soloProfesores) el encabezado ni se carga ni se edita.
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || soloProfesores) {
       encabezadoListo.current = false;
       return;
     }
@@ -237,7 +238,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   // Guardado automático con debounce: cada edición se persiste en BD ~800ms
   // después del último cambio (también el Restaurar).
   useEffect(() => {
-    if (!isOpen || !encabezadoListo.current) return;
+    if (!isOpen || soloProfesores || !encabezadoListo.current) return;
     const t = setTimeout(() => {
       saveEncabezado(CLAVE_PLANTILLA.seccion, encabezados.seccion).catch(() => {});
       saveEncabezado(CLAVE_PLANTILLA.aula, encabezados.aula).catch(() => {});
@@ -974,31 +975,34 @@ td.clase { vertical-align: middle; }
           <p className="text-[11px] text-slate-400 mt-1">
             Periodo {periodoNombre || periodo || '—'} · Una hoja por cada elemento seleccionado.
           </p>
-          {/* Pestañas: separa la selección de hojas del editor de encabezado */}
-          <div className="flex gap-1.5 mt-4 p-1 bg-slate-900 border border-slate-800 rounded-xl w-fit">
-            {(
-              [
-                ['seleccion', 'Contenido'],
-                ['encabezado', 'Encabezado'],
-              ] as const
-            ).map(([v, label]) => (
-              <button
-                key={v}
-                onClick={() => setVista(v)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  vista === v
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Pestañas: separa la selección de hojas del editor de encabezado.
+              El docente solo imprime — no puede editar la plantilla */}
+          {!soloProfesores && (
+            <div className="flex gap-1.5 mt-4 p-1 bg-slate-900 border border-slate-800 rounded-xl w-fit">
+              {(
+                [
+                  ['seleccion', 'Contenido'],
+                  ['encabezado', 'Encabezado'],
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setVista(v)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    vista === v
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {vista === 'encabezado' ? (
+          {vista === 'encabezado' && !soloProfesores ? (
             <div>
               {grupoTitulo('Encabezado del reporte', <Printer className="w-3.5 h-3.5" />)}
               {/* Sub-pestañas: cada tipo de hoja tiene su propia plantilla */}
