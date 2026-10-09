@@ -12,6 +12,7 @@ import { profesoresRoutes } from './modules/profesores/profesores.routes.js';
 import { perfilesRoutes } from './modules/perfiles/perfiles.routes.js';
 import { usuariosRoutes } from './modules/usuarios/usuarios.routes.js';
 import { horariosRoutes } from './modules/horarios/horarios.routes.js';
+import { reportesRoutes } from './modules/reportes/reportes.routes.js';
 
 export function buildApp() {
   const app = Fastify({
@@ -53,6 +54,7 @@ export function buildApp() {
   app.register(perfilesRoutes, { prefix: '/api/perfiles' });
   app.register(usuariosRoutes, { prefix: '/api/usuarios' });
   app.register(horariosRoutes, { prefix: '/api/horarios' });
+  app.register(reportesRoutes, { prefix: '/api/reportes' });
 
   return app;
 }

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { Profesor } from './ProfesorModal.js';
 import { imprimirHtml } from '../utils/print.js';
 import { logoDataUri, logoBase64 } from '../utils/logo.js';
+import { getEncabezado, saveEncabezado } from '../utils/plantillas.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import { X, FileSpreadsheet, Printer, Users, AlertTriangle } from 'lucide-react';
 
@@ -89,6 +90,33 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
   const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
+  // Evita guardar el default sobre la plantilla de BD antes de cargarla
+  const headerListo = useRef(false);
+
+  // Al abrir el modal se carga la plantilla guardada (reporte 'carga_docente')
+  useEffect(() => {
+    if (!isOpen) {
+      headerListo.current = false;
+      return;
+    }
+    getEncabezado('carga_docente')
+      .then((guardado) => {
+        if (guardado) setHeader(guardado);
+      })
+      .catch(() => {})
+      .finally(() => {
+        headerListo.current = true;
+      });
+  }, [isOpen]);
+
+  // Guardado automático con debounce tras cada edición (también el Restaurar)
+  useEffect(() => {
+    if (!isOpen || !headerListo.current) return;
+    const t = setTimeout(() => {
+      saveEncabezado('carga_docente', header).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [header, isOpen]);
   const [generando, setGenerando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 

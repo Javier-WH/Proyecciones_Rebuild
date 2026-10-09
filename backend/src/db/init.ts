@@ -506,6 +506,17 @@ export async function initializeDatabase() {
     }
   }
 
+  // 9f. Plantillas de encabezado de reportes (horarios, carga docente y
+  // futuros paneles de impresión). Una fila por reporte; el encabezado se
+  // guarda como array JSON de líneas.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS reportes_plantillas (
+      reporte VARCHAR(50) PRIMARY KEY,
+      encabezado JSON NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
   const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);
   if (existingUsers.length === 0) {

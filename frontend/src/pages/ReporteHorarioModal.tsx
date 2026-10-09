@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import {
   X,
@@ -15,6 +15,7 @@ import {
 import { apiFetch } from '../api/client.js';
 import { imprimirHtml } from '../utils/print.js';
 import { logoDataUri, logoBase64 } from '../utils/logo.js';
+import { getEncabezado, saveEncabezado } from '../utils/plantillas.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import {
   HorarioEntry,
@@ -150,6 +151,27 @@ const ordenTurno = (nombre: string): number => {
 
 const esDiurno = (nombre: string): boolean => normNombre(nombre).includes('DIURN');
 
+// Encabezado por defecto — hay una plantilla independiente por tipo de
+// hoja (sección / aula / profesor) editable en la pestaña "Encabezado".
+// Placeholders de sección: {SECCION} {PROYECCION} {PROGRAMA} {TURNO}
+// {TRAYECTO} {PNF}; agendas: {PROFESOR} {AULA}; comunes: {TITULO}
+// (línea completa) {LAPSO} {PERIODO}.
+const ENCABEZADO_DEFAULT = [
+  'HORARIO DE CLASE',
+  'U.P.T. DE LOS LLANOS "JUANA RAMÍREZ", EXTENSIÓN ALTAGRACIA DE ORITUCO',
+  '{TITULO}',
+  '{LAPSO} — PERIODO {PERIODO}',
+];
+
+type TipoEncabezado = 'seccion' | 'aula' | 'profesor';
+
+// Clave de la plantilla en reportes_plantillas según el tipo de hoja
+const CLAVE_PLANTILLA: Record<TipoEncabezado, string> = {
+  seccion: 'horarios_seccion',
+  aula: 'horarios_aulas',
+  profesor: 'horarios_profesores',
+};
+
 export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   isOpen,
   onClose,
@@ -175,6 +197,54 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   const [cargando, setCargando] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [vista, setVista] = useState<'seleccion' | 'encabezado'>('seleccion');
+  // Tres plantillas independientes: secciones, aulas y profesores
+  const [encabezados, setEncabezados] = useState<Record<TipoEncabezado, string[]>>({
+    seccion: ENCABEZADO_DEFAULT,
+    aula: ENCABEZADO_DEFAULT,
+    profesor: ENCABEZADO_DEFAULT,
+  });
+  const [encabezadoTab, setEncabezadoTab] = useState<TipoEncabezado>('seccion');
+  // Evita guardar la plantilla por defecto sobre la de BD antes de cargarla
+  const encabezadoListo = useRef(false);
+
+  // Al abrir el modal se cargan las tres plantillas de BD; 'horarios' queda
+  // como respaldo heredado por si existía una plantilla única anterior.
+  useEffect(() => {
+    if (!isOpen) {
+      encabezadoListo.current = false;
+      return;
+    }
+    Promise.all([
+      getEncabezado('horarios'),
+      getEncabezado(CLAVE_PLANTILLA.seccion),
+      getEncabezado(CLAVE_PLANTILLA.aula),
+      getEncabezado(CLAVE_PLANTILLA.profesor),
+    ])
+      .then(([legacy, sec, aul, prof]) => {
+        setEncabezados({
+          seccion: sec ?? legacy ?? ENCABEZADO_DEFAULT,
+          aula: aul ?? legacy ?? ENCABEZADO_DEFAULT,
+          profesor: prof ?? legacy ?? ENCABEZADO_DEFAULT,
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        encabezadoListo.current = true;
+      });
+  }, [isOpen]);
+
+  // Guardado automático con debounce: cada edición se persiste en BD ~800ms
+  // después del último cambio (también el Restaurar).
+  useEffect(() => {
+    if (!isOpen || !encabezadoListo.current) return;
+    const t = setTimeout(() => {
+      saveEncabezado(CLAVE_PLANTILLA.seccion, encabezados.seccion).catch(() => {});
+      saveEncabezado(CLAVE_PLANTILLA.aula, encabezados.aula).catch(() => {});
+      saveEncabezado(CLAVE_PLANTILLA.profesor, encabezados.profesor).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [encabezados, isOpen]);
 
   // Al abrir: secciones del lapso activo pre-marcadas + entries de todos los
   // lapsos (el endpoint devuelve también los lapsos rivales).
@@ -333,10 +403,13 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     return arr.length > 0 ? arr : [1, 2, 3, 4, 5];
   };
 
-  const ENCABEZADO = [
-    'HORARIO DE CLASE',
-    'U.P.T. DE LOS LLANOS "JUANA RAMÍREZ", EXTENSIÓN ALTAGRACIA DE ORITUCO',
-  ];
+  // Encabezado editable: cada línea es una plantilla que se resuelve contra
+  // el mapa de valores de la hoja (placeholders sin valor en esa hoja → '').
+  // Cada tipo de hoja usa su propia plantilla guardada.
+  const lineasEncabezado = (tipo: TipoEncabezado, ctx: Record<string, string>): string[] =>
+    encabezados[tipo].map((tpl) =>
+      tpl.replace(/\{([A-Z]+)\}/gi, (_m, k: string) => ctx[k.toUpperCase()] ?? '')
+    );
 
   // Hoja de una sección: su turno fijo define la grilla (igual que antes)
   const hojaSeccion = (lk: string, s: SeccionRef): HojaRep => {
@@ -363,11 +436,17 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     });
     return {
       nombre: `${s.seccion_nombre} ${g.label}`,
-      lineas: [
-        ...ENCABEZADO,
-        `SECCIÓN ${s.seccion_nombre} — ${s.proyeccion_nombre} — TURNO ${s.turno_nombre.toUpperCase()}`,
-        `${g.label.toUpperCase()} — PERIODO ${periodoNombre || periodo || ''}`,
-      ],
+      lineas: lineasEncabezado('seccion', {
+        TITULO: `SECCIÓN ${s.seccion_nombre} — ${s.proyeccion_nombre} — TURNO ${s.turno_nombre.toUpperCase()}`,
+        SECCION: s.seccion_nombre,
+        PROYECCION: s.proyeccion_nombre,
+        PROGRAMA: s.pnf_nombre || s.proyeccion_nombre,
+        TURNO: s.turno_nombre.toUpperCase(),
+        TRAYECTO: s.trayecto_nombre ?? '',
+        PNF: s.pnf_nombre ?? '',
+        LAPSO: g.label.toUpperCase(),
+        PERIODO: periodoNombre || periodo || '',
+      }),
       dias,
       filas,
       ...fusionesDe(filas, dias.length),
@@ -381,7 +460,8 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     recurso: 'aula' | 'profesor',
     id: number,
     titulo: string,
-    nombreHoja: string
+    nombreHoja: string,
+    ctxExtra: Record<string, string> = {}
   ): HojaRep => {
     const g = grupos.get(lk)!;
     const base = entradas.get(lk) ?? [];
@@ -430,7 +510,12 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     }
     return {
       nombre: nombreHoja,
-      lineas: [...ENCABEZADO, `${titulo} — ${g.label.toUpperCase()}`, `PERIODO ${periodoNombre || periodo || ''}`],
+      lineas: lineasEncabezado(recurso, {
+        TITULO: titulo,
+        LAPSO: g.label.toUpperCase(),
+        PERIODO: periodoNombre || periodo || '',
+        ...ctxExtra,
+      }),
       dias,
       filas,
       ...fusionesDe(filas, dias.length),
@@ -448,16 +533,24 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       }
       for (const a of g.aulas) {
         if (selAula.has(`${lk}:${a.id}`))
-          out.push(hojaAgenda(lk, 'aula', a.id, a.codigo.toUpperCase(), `${a.codigo} ${g.label}`));
+          out.push(
+            hojaAgenda(lk, 'aula', a.id, a.codigo.toUpperCase(), `${a.codigo} ${g.label}`, {
+              AULA: a.codigo.toUpperCase(),
+            })
+          );
       }
       for (const p of g.profesores) {
         if (selProf.has(`${lk}:${p.id}`))
-          out.push(hojaAgenda(lk, 'profesor', p.id, `PROF. ${p.nombre.toUpperCase()}`, `${p.nombre} ${g.label}`));
+          out.push(
+            hojaAgenda(lk, 'profesor', p.id, `PROF. ${p.nombre.toUpperCase()}`, `${p.nombre} ${g.label}`, {
+              PROFESOR: p.nombre.toUpperCase(),
+            })
+          );
       }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lapsos, grupos, selSec, selAula, selProf, ocupReal, turnos, periodo, formato12]);
+  }, [lapsos, grupos, selSec, selAula, selProf, ocupReal, turnos, periodo, periodoNombre, encabezados, formato12]);
 
   const toggle = (set: Set<string>, setSet: (s: Set<string>) => void, clave: string) => {
     const n = new Set(set);
@@ -881,9 +974,101 @@ td.clase { vertical-align: middle; }
           <p className="text-[11px] text-slate-400 mt-1">
             Periodo {periodoNombre || periodo || '—'} · Una hoja por cada elemento seleccionado.
           </p>
+          {/* Pestañas: separa la selección de hojas del editor de encabezado */}
+          <div className="flex gap-1.5 mt-4 p-1 bg-slate-900 border border-slate-800 rounded-xl w-fit">
+            {(
+              [
+                ['seleccion', 'Contenido'],
+                ['encabezado', 'Encabezado'],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setVista(v)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  vista === v
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
+          {vista === 'encabezado' ? (
+            <div>
+              {grupoTitulo('Encabezado del reporte', <Printer className="w-3.5 h-3.5" />)}
+              {/* Sub-pestañas: cada tipo de hoja tiene su propia plantilla */}
+              <div className="flex gap-1.5 mb-3 p-1 bg-slate-950 border border-slate-800 rounded-xl w-fit">
+                {(
+                  [
+                    ['seccion', 'Secciones'],
+                    ['aula', 'Aulas'],
+                    ['profesor', 'Profesores'],
+                  ] as const
+                ).map(([t, label]) => (
+                  <button
+                    key={t}
+                    onClick={() => setEncabezadoTab(t)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      encabezadoTab === t
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-1.5">
+                {encabezados[encabezadoTab].map((tpl, i) => (
+                  <input
+                    key={i}
+                    type="text"
+                    value={tpl}
+                    onChange={(e) =>
+                      setEncabezados((prev) => ({
+                        ...prev,
+                        [encabezadoTab]: prev[encabezadoTab].map((l, j) =>
+                          j === i ? e.target.value : l
+                        ),
+                      }))
+                    }
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={ENCABEZADO_DEFAULT[i]}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center justify-between mt-1.5 gap-3">
+                <p className="text-[10px] text-slate-500">
+                  Placeholders:{' '}
+                  {(
+                    ({
+                      seccion: ['{TITULO}', '{SECCION}', '{PROGRAMA}', '{TRAYECTO}', '{TURNO}', '{PNF}', '{LAPSO}', '{PERIODO}'],
+                      aula: ['{TITULO}', '{AULA}', '{LAPSO}', '{PERIODO}'],
+                      profesor: ['{TITULO}', '{PROFESOR}', '{LAPSO}', '{PERIODO}'],
+                    }) satisfies Record<TipoEncabezado, string[]>
+                  )[encabezadoTab].map((p) => (
+                    <code key={p} className="text-slate-400 mr-1.5">
+                      {p}
+                    </code>
+                  ))}
+                </p>
+                <button
+                  onClick={() =>
+                    setEncabezados((prev) => ({ ...prev, [encabezadoTab]: [...ENCABEZADO_DEFAULT] }))
+                  }
+                  className="text-[10px] text-slate-400 hover:text-blue-300 font-semibold cursor-pointer shrink-0"
+                >
+                  Restaurar encabezado
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
           {cargando && (
             <div className="flex items-center gap-2 text-[11px] text-slate-400 mb-3">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando clases de todos los lapsos…
@@ -1068,6 +1253,8 @@ td.clase { vertical-align: middle; }
               (p. ej. Semestre 1 incluye T1 y T2)
             </span>
           </label>
+          </>
+          )}
         </div>
 
         <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
