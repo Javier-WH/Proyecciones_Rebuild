@@ -1,0 +1,37 @@
+GUÍA DE CAPTURAS PARA EL MANUAL DE USUARIO
+==========================================
+
+Guarde cada captura en esta carpeta con el nombre exacto indicado
+(el manual ya las referencia con esos nombres).
+
+Cómo capturar en Windows: Win + Shift + S → recorte la zona → Ctrl+V
+en Paint → Guardar como PNG con el nombre indicado.
+
+CAPTURAS NECESARIAS
+-------------------
+01-login.png              Pantalla de inicio de sesión
+02-inicio.png             Página principal con la barra lateral
+03-periodos.png           Pantalla de Periodos Académicos
+04-nueva-proyeccion.png   Ventana "Nueva Proyección" con sus campos
+05-lista-proyecciones.png Lista de proyecciones activas
+06-profesores.png         Lista de profesores y botón "Sincronizar desde SAGA"
+07-profesor-modal.png     Ventana de datos de un profesor
+08-carga-docente.png      Tabla de Carga Docente
+09-asignar.png            Ventana de elegir profesor al asignar
+10-grilla.png             Grilla de horarios de una sección
+11-conflicto.png          Una clase marcada con el punto rojo de conflicto
+12-generar.png            Botones "Generar horario"/"Regenerar" (o ventana de configuración)
+13-reporte.png            Ventana del reporte de horarios ("Imprimir / Excel")
+14-encabezado.png         Pestaña "Encabezado" del reporte
+15-reporte-carga.png      Ventana del reporte de carga docente
+16-acceso-docente.png     Pantalla "Acceso Docente" (login por cédula)
+17-portal.png             Portal del profesor
+18-mi-horario.png         Horario del profesor dentro del portal
+
+CONSEJOS
+--------
+- Capture con datos reales si es posible (se ve más profesional),
+  pero verifique que no aparezcan datos sensibles que no deban difundirse.
+- Use PNG. Si la captura queda muy ancha, recorte la zona relevante.
+- Después de guardar las imágenes aquí, abra manual-usuario.html en el
+  navegador y presione Ctrl+P → "Guardar como PDF" para generar el manual.

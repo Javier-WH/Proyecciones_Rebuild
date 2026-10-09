@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Manual de Usuario — Sistema de Proyecciones Académicas UPTLL</title>
+<style>
+  :root { --verde: #166534; --acento: #15803d; --gris: #475569; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; max-width: 21cm; margin: 0 auto; padding: 0 1.5cm; line-height: 1.55; font-size: 11pt; }
+  h1 { font-size: 22pt; color: var(--verde); }
+  h2 { font-size: 15pt; color: var(--verde); border-bottom: 2px solid var(--acento); padding-bottom: 4px; margin-top: 2.2em; page-break-after: avoid; }
+  h3 { font-size: 12pt; color: #0f172a; page-break-after: avoid; }
+  .portada { text-align: center; padding-top: 7cm; page-break-after: always; }
+  .portada h1 { font-size: 26pt; border: none; }
+  .portada p { color: var(--gris); font-size: 12pt; }
+  ol li, ul li { margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 10pt; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; }
+  .nota { background: #f0fdf4; border-left: 4px solid var(--acento); padding: 8px 14px; margin: 1em 0; }
+  .aviso { background: #fef3c7; border-left: 4px solid #d97706; padding: 8px 14px; margin: 1em 0; }
+  .captura { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin: 1.2em 0; text-align: center; page-break-inside: avoid; }
+  .captura img { max-width: 100%; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.15); } .captura figcaption { margin-top: 8px; color: #475569; font-size: 9.5pt; }
+  .captura .num { font-weight: bold; color: var(--verde); }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 10pt; }
+  .indice { page-break-after: always; }
+  .indice ol { font-size: 12pt; }
+  .indice li { margin-bottom: 8px; }
+  strong { color: #0f172a; }
+  @media print {
+    body { padding: 0; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .captura { page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="portada">
+  <h1>Manual de Usuario</h1>
+  <h2 style="border:none">Sistema de Proyecciones Académicas</h2>
+  <p>Universidad Politécnica Territorial de los Llanos<br>"Juana Ramírez" — Extensión Altagracia de Orituco</p>
+  <p style="margin-top:3cm">Dirigido a coordinadores de PNF y personal administrativo</p>
+</div>
+
+<div class="indice">
+<h2>Índice</h2>
+<ol>
+  <li>¿Qué es este sistema?</li>
+  <li>Cómo entrar al sistema</li>
+  <li>Conociendo la pantalla</li>
+  <li>Periodos académicos</li>
+  <li>Crear una proyección</li>
+  <li>Gestión de profesores</li>
+  <li>Carga docente (asignar profesores)</li>
+  <li>Horarios</li>
+  <li>Reportes, impresión y Excel</li>
+  <li>El portal del profesor</li>
+  <li>Preguntas frecuentes</li>
+</ol>
+</div>
+
+<h2>1. ¿Qué es este sistema?</h2>
+<p>Es la herramienta con la que la universidad organiza <strong>qué materias se van a dictar, quién las dicta, en qué aula y a qué hora</strong>, en cada periodo académico.</p>
+<p>En resumen, el sistema le permite:</p>
+<ul>
+  <li>Crear la <strong>proyección</strong> de su PNF (las materias y secciones que se ofrecerán en el periodo).</li>
+  <li>Asignar <strong>profesores</strong> a cada materia y sección (la <em>carga docente</em>).</li>
+  <li>Registrar la <strong>disponibilidad</strong> horaria de cada docente.</li>
+  <li>Armar el <strong>horario de clases</strong> (a mano en una grilla, o de forma <strong>automática</strong> respetando aulas, turnos y disponibilidad).</li>
+  <li><strong>Imprimir o exportar a Excel</strong> los horarios y la carga docente, con el membrete institucional.</li>
+</ul>
+<div class="nota">💡 <strong>Consejo:</strong> trabaje siempre con el <em>periodo activo</em>. El sistema muestra el periodo actual en la parte superior de cada pantalla.</div>
+
+<h2>2. Cómo entrar al sistema</h2>
+<ol>
+  <li>Abra su navegador (Chrome, Edge o Firefox).</li>
+  <li>Escriba la dirección del sistema (la que le indique el administrador, por ejemplo <code>http://servidor:3000</code>).</li>
+  <li>Verá la pantalla de <strong>Iniciar Sesión</strong>. Escriba su <strong>usuario</strong> y <strong>contraseña</strong> y presione el botón <strong>Iniciar Sesión</strong>.</li>
+</ol>
+<figure class="captura"><img src="screenshots/01-login.png" alt="Pantalla completa de inicio de sesión."><figcaption><strong>Captura 1.</strong> Pantalla completa de inicio de sesión.</figcaption></figure>
+<div class="aviso">⚠️ <strong>Si la contraseña falla:</strong> verifique que no tenga activada la tecla de mayúsculas (Bloq Mayús) y vuelva a intentarlo. Si el problema continúa, solicite al administrador que restablezca su cuenta.</div>
+<p><strong>Los profesores no usan usuario y contraseña</strong>: en la misma pantalla hay un enlace <strong>"Ingresar como profesor"</strong> (Acceso Docente) donde solo escriben su número de cédula. Vea la sección 10.</p>
+
+<h2>3. Conociendo la pantalla</h2>
+<p>Al entrar verá la página principal. A la izquierda hay una <strong>barra lateral</strong> con las secciones del sistema:</p>
+<table>
+  <tr><th>Sección</th><th>Para qué sirve</th></tr>
+  <tr><td><strong>Inicio</strong></td><td>Resumen general del sistema</td></tr>
+  <tr><td><strong>Proyecciones</strong></td><td>Crear y administrar las proyecciones de cada PNF</td></tr>
+  <tr><td><strong>Profesores</strong></td><td>Lista de docentes, sus datos, perfiles y disponibilidad</td></tr>
+  <tr><td><strong>Carga Docente</strong></td><td>Asignar qué profesor dicta cada materia</td></tr>
+  <tr><td><strong>Horarios</strong></td><td>La grilla de clases: armar, mover y generar el horario</td></tr>
+</table>
+<figure class="captura"><img src="screenshots/02-inicio.png" alt="Página principal mostrando la barra lateral y el resumen."><figcaption><strong>Captura 2.</strong> Página principal mostrando la barra lateral y el resumen.</figcaption></figure>
+<p>Botones que verá en casi todas las pantallas:</p>
+<ul>
+  <li><strong>Actualizar</strong> (icono de flechas circulares): vuelve a cargar los datos más recientes.</li>
+  <li><strong>Reporte</strong> o <strong>Imprimir / Excel</strong>: genera el documento para imprimir o descargar.</li>
+  <li>Cuadro de <strong>Buscar</strong>: filtra la lista que está viendo (por nombre, cédula, materia…).</li>
+</ul>
+
+<h2>4. Periodos académicos</h2>
+<p>Un <strong>periodo</strong> es el lapso académico completo (por ejemplo <em>2026-2027</em>). Las proyecciones y horarios pertenecen a un periodo.</p>
+<p>En la pantalla de <strong>Periodos Académicos</strong> puede:</p>
+<ul>
+  <li>Ver todos los periodos y cuál está <strong>ACTIVO</strong>.</li>
+  <li>Crear el periodo nuevo cuando inicie el año escolar.</li>
+  <li>Cambiar el estado de un periodo (<em>PLANIFICACIÓN → ACTIVO → CERRADO</em>).</li>
+</ul>
+<figure class="captura"><img src="screenshots/03-periodos.png" alt="Pantalla de Periodos Académicos con el periodo activo visible."><figcaption><strong>Captura 3.</strong> Pantalla de Periodos Académicos con el periodo activo visible.</figcaption></figure>
+<div class="aviso">⚠️ <strong>Importante:</strong> solo debe haber <strong>un</strong> periodo ACTIVO a la vez. El horario y los reportes se generan sobre el periodo activo.</div>
+
+<h2>5. Crear una proyección</h2>
+<p>La <strong>proyección</strong> es la oferta académica de un trayecto de un PNF para el periodo: qué materias se dictarán y en cuántas secciones.</p>
+<h3>Paso a paso</h3>
+<ol>
+  <li>En la barra lateral, haga clic en <strong>Proyecciones</strong>.</li>
+  <li>Presione el botón <strong>Nueva Proyección</strong> (si es la primera vez, verá el botón <strong>"Crear mi primera proyección"</strong> en el centro de la pantalla).</li>
+  <li>En la ventana que se abre, seleccione:
+    <ul>
+      <li><strong>PNF</strong> (el programa, por ejemplo <em>P.N.F. en Administración</em>).</li>
+      <li><strong>Trayecto</strong> (Trayecto Inicial, I, II, III…).</li>
+      <li><strong>Malla / pensum</strong> vigente.</li>
+      <li>El <strong>tipo de régimen</strong> (trimestral o semestral) — normalmente el sistema lo detecta según el PNF.</li>
+    </ul>
+  </li>
+  <li>Marque las <strong>materias</strong> que se ofrecerán y defina las <strong>secciones</strong> (con su turno: Mañana, Tarde, Nocturno o Diurno).</li>
+  <li>Guarde. La proyección queda creada y <strong>activa</strong>.</li>
+</ol>
+<figure class="captura"><img src="screenshots/04-nueva-proyeccion.png" alt="La ventana &quot;Nueva Proyección&quot; con sus campos."><figcaption><strong>Captura 4.</strong> La ventana &quot;Nueva Proyección&quot; con sus campos.</figcaption></figure>
+<figure class="captura"><img src="screenshots/05-lista-proyecciones.png" alt="La lista de proyecciones activas."><figcaption><strong>Captura 5.</strong> La lista de proyecciones activas.</figcaption></figure>
+<ul>
+  <li>Para <strong>editar</strong> una proyección: haga clic sobre ella en la lista.</li>
+  <li>Si una proyección ya no se ofrecerá, puede <strong>desactivarla</strong> (no se borra la información).</li>
+</ul>
+<div class="nota">💡 <strong>Consejo:</strong> los nombres de PNF, trayectos y materias vienen del sistema SAGA. Si una materia no aparece, verifique la sincronización o consulte al administrador.</div>
+
+<h2>6. Gestión de profesores</h2>
+<p>En la sección <strong>Profesores</strong> verá la lista de docentes con su foto, cédula, PNF y dedicación.</p>
+<h3>Sincronizar con SAGA</h3>
+<p>El botón <strong>"Sincronizar desde SAGA"</strong> trae automáticamente los docentes registrados en el sistema central de la universidad. Úselo al inicio de cada periodo o cuando se incorpore personal nuevo.</p>
+<figure class="captura"><img src="screenshots/06-profesores.png" alt="Lista de profesores y el botón de sincronización."><figcaption><strong>Captura 6.</strong> Lista de profesores y el botón de sincronización.</figcaption></figure>
+<h3>Datos de un profesor</h3>
+<p>Haciendo <strong>doble clic</strong> sobre un profesor (o con los botones de su fila) puede:</p>
+<ul>
+  <li><strong>Editar sus datos</strong> (nombre, correo, teléfono, dedicación).</li>
+  <li><strong>Asignarle un PNF</strong> (importante para el filtro "Mis profesores").</li>
+  <li><strong>Definir sus perfiles</strong>: las áreas en las que puede dictar (ej. <em>Matemáticas</em>, <em>Informática</em>). Los perfiles sirven como <strong>sugerencia</strong> de afinidad al asignar materias.</li>
+  <li><strong>Subir su foto</strong>.</li>
+  <li><strong>Registrar su disponibilidad</strong>: marcar las horas en las que <strong>no</strong> puede dar clase (ver sección 8).</li>
+  <li><strong>Desactivarlo</strong> si ya no trabaja en la institución (no se borra su historial).</li>
+</ul>
+<figure class="captura"><img src="screenshots/07-profesor-modal.png" alt="Ventana de datos del profesor."><figcaption><strong>Captura 7.</strong> Ventana de datos del profesor.</figcaption></figure>
+
+<h2>7. Carga docente (asignar profesores)</h2>
+<p>La pantalla <strong>Carga Docente</strong> es donde se decide <strong>qué profesor dicta cada materia en cada sección y lapso</strong>.</p>
+<h3>La tabla</h3>
+<p>Cada fila es una materia de una sección. Las columnas de lapso (TRIMESTRE 1, TRIMESTRE 2…) muestran las <strong>horas</strong> de esa materia en cada lapso y el <strong>total</strong> de horas del profesor.</p>
+<figure class="captura"><img src="screenshots/08-carga-docente.png" alt="La tabla de carga docente."><figcaption><strong>Captura 8.</strong> La tabla de carga docente.</figcaption></figure>
+<h3>Asignar o cambiar un profesor</h3>
+<ol>
+  <li>Ubique la materia (puede usar el buscador o los filtros de arriba).</li>
+  <li>Presione el botón de <strong>asignar</strong> (icono de persona con lupa) en la fila.</li>
+  <li>Elija el profesor en la ventana y confirme.</li>
+</ol>
+<figure class="captura"><img src="screenshots/09-asignar.png" alt="Ventana para elegir el profesor."><figcaption><strong>Captura 9.</strong> Ventana para elegir el profesor.</figcaption></figure>
+<ul>
+  <li>Para <strong>quitar</strong> una asignación, use el botón ✖ de la fila.</li>
+  <li>Las materias sin asignar aparecen en el bloque <strong>"SIN ASIGNAR"</strong> — y puede filtrar solo esas con el botón correspondiente.</li>
+</ul>
+<h3>Filtros útiles (parte superior de la pantalla)</h3>
+<ul>
+  <li><strong>Lapso</strong>: ver solo Trimestre 1, 2, 3 (o todos).</li>
+  <li><strong>PNF</strong> y <strong>Proyección</strong>: acotar por programa o trayecto.</li>
+  <li><strong>Mis profesores</strong>: muestra solo los docentes de su PNF.</li>
+  <li><strong>Sin asignar</strong>: muestra lo que falta por asignar.</li>
+</ul>
+<h3>Colores del total de horas</h3>
+<p>El total semanal de cada profesor cambia de color según su dedicación (tipo de contrato):</p>
+<ul>
+  <li>🟢 <strong>Verde</strong>: dentro de su carga.</li>
+  <li>🟡 <strong>Ámbar</strong>: cerca del límite (80% o más).</li>
+  <li>🔴 <strong>Rojo</strong>: <strong>sobrecargado</strong> — tiene más horas de las que su contrato permite.</li>
+</ul>
+<div class="aviso">⚠️ Revise los totales en rojo antes de generar el horario.</div>
+
+<h2>8. Horarios</h2>
+<p>La sección <strong>Horarios</strong> es la grilla de clases: filas = bloques de hora, columnas = días de la semana.</p>
+<h3>Cómo funciona la grilla</h3>
+<ul>
+  <li>Arriba elige el <strong>lapso</strong> (Trimestre 1, 2, 3 — o Semestre) y la <strong>sección</strong>.</li>
+  <li>Cada materia pendiente por agendar aparece como una <strong>tarjeta</strong>; para ponerla en el horario, <strong>arrástrela</strong> con el mouse hasta el día y hora deseados.</li>
+  <li>Para quitar una clase, arrástrela fuera o use su opción de desagendar.</li>
+</ul>
+<figure class="captura"><img src="screenshots/10-grilla.png" alt="La grilla del horario de una sección."><figcaption><strong>Captura 10.</strong> La grilla del horario de una sección.</figcaption></figure>
+<h3>Conflictos (el punto rojo)</h3>
+<p>Si una clase choca — porque el <strong>aula</strong>, el <strong>profesor</strong> o la <strong>sección</strong> ya tienen otra clase a esa hora — el sistema lo marca con un <strong>punto rojo</strong> y le avisa qué está en conflicto.</p>
+<ul>
+  <li>Un bloque marcado <strong>RECESO</strong> no puede usarse.</li>
+  <li>Los turnos <strong>Mañana</strong> y <strong>Tarde</strong> no chocan entre sí; el turno <strong>Diurno</strong> puede chocar con ambos (sus horas se solapan).</li>
+  <li>Las materias sin profesor asignado también se pueden agendar.</li>
+</ul>
+<figure class="captura"><img src="screenshots/11-conflicto.png" alt="Una clase con el punto rojo de conflicto."><figcaption><strong>Captura 11.</strong> Una clase con el punto rojo de conflicto.</figcaption></figure>
+<h3>Generar el horario automáticamente</h3>
+<p>El botón <strong>"Generar horario"</strong> agenda automáticamente las materias pendientes respetando:</p>
+<ul>
+  <li>La <strong>disponibilidad</strong> de cada profesor.</li>
+  <li>Los <strong>conflictos</strong> de aula, sección y profesor.</li>
+  <li>Las reglas configurables (horas máximas por día, bloques contiguos mínimos, aulas preferidas del PNF…).</li>
+</ul>
+<p>Hay dos opciones:</p>
+<ul>
+  <li><strong>Generar horario</strong>: completa lo que falta, sin tocar lo ya agendado.</li>
+  <li><strong>Regenerar</strong>: borra el horario del lapso y lo construye desde cero (pide confirmación).</li>
+</ul>
+<p>Lo que no pudo agendarse queda en la lista de <strong>pendientes</strong> con el motivo.</p>
+<figure class="captura"><img src="screenshots/12-generar.png" alt="Botones de generación y ventana de configuración de horarios."><figcaption><strong>Captura 12.</strong> Botones de generación y ventana de configuración de horarios.</figcaption></figure>
+<h3>Turnos, bloques y aulas</h3>
+<ul>
+  <li><strong>Turnos y Bloques</strong>: define las horas de clase de cada turno (ej. Mañana: 7:00–12:00 en bloques de 45 min) y qué días de la semana aplica.</li>
+  <li><strong>Aulas</strong>: catálogo de salones, laboratorios e instalaciones. Cada aula puede tener un <strong>PNF preferido</strong> y <strong>materias preferidas</strong> (el generador las prioriza, pero no es exclusivo).</li>
+</ul>
+<h3>Ver por aula o por profesor</h3>
+<p>Además de la vista por sección, puede consultar las <strong>agendas por aula</strong> (qué clases ocupan cada salón) y <strong>por profesor</strong> (el horario semanal de cada docente). Útil para revisar ocupación antes de imprimir.</p>
+
+<h2>9. Reportes, impresión y Excel</h2>
+<p>Desde <strong>Horarios</strong> y desde <strong>Carga Docente</strong> hay un botón <strong>"Imprimir / Excel"</strong> (o <strong>"Reporte"</strong>) que abre la ventana de reporte.</p>
+<h3>Generar el documento</h3>
+<ol>
+  <li>Elija qué imprimir: <strong>secciones</strong>, <strong>agendas de aulas</strong> o <strong>agendas de profesores</strong>, y en qué lapsos.</li>
+  <li>Marque las casillas de lo que necesita.</li>
+  <li>Presione <strong>Imprimir</strong> (abre el diálogo de impresión del navegador — puede guardar como PDF) o <strong>Excel</strong> (descarga el archivo <code>.xlsx</code>).</li>
+</ol>
+<figure class="captura"><img src="screenshots/13-reporte.png" alt="Ventana del reporte de horarios."><figcaption><strong>Captura 13.</strong> Ventana del reporte de horarios.</figcaption></figure>
+<h3>Editar el encabezado (membrete)</h3>
+<p>Los reportes llevan un encabezado institucional (nombre de la universidad, título, periodo). Para cambiarlo:</p>
+<ol>
+  <li>En la ventana del reporte, abra la pestaña <strong>"Encabezado"</strong>.</li>
+  <li>Edite las líneas de texto. Puede usar <strong>variables</strong> que se reemplazan solas en cada hoja: <code>{SECCION}</code>, <code>{PROFESOR}</code>, <code>{AULA}</code>, <code>{LAPSO}</code>, <code>{PERIODO}</code>, <code>{PNF}</code>, <code>{PROGRAMA}</code>, <code>{TRAYECTO}</code>, <code>{TURNO}</code>.</li>
+  <li><strong>Se guarda automáticamente</strong> al terminar de escribir — no hay botón de guardar.</li>
+  <li><strong>"Restaurar encabezado"</strong> devuelve el texto original.</li>
+</ol>
+<figure class="captura"><img src="screenshots/14-encabezado.png" alt="Pestaña de edición del encabezado."><figcaption><strong>Captura 14.</strong> Pestaña de edición del encabezado.</figcaption></figure>
+<div class="aviso">⚠️ El encabezado es <strong>el mismo para todos los usuarios</strong>: si usted lo cambia, cambia para todo el sistema. Los profesores no pueden editarlo.</div>
+<figure class="captura"><img src="screenshots/15-reporte-carga.png" alt="Ventana del reporte de carga docente."><figcaption><strong>Captura 15.</strong> Ventana del reporte de carga docente.</figcaption></figure>
+
+<h2>10. El portal del profesor</h2>
+<p>Los docentes <strong>no tienen usuario ni contraseña</strong> y no ven el panel de coordinación. Su acceso es así:</p>
+<ol>
+  <li>En la pantalla de inicio de sesión, haga clic en <strong>"Ingresar como profesor"</strong> (Acceso Docente).</li>
+  <li>Escriba su <strong>número de cédula</strong> (sin puntos ni guiones) y presione <strong>Ingresar</strong>.</li>
+</ol>
+<figure class="captura"><img src="screenshots/16-acceso-docente.png" alt="Pantalla de acceso por cédula."><figcaption><strong>Captura 16.</strong> Pantalla de acceso por cédula.</figcaption></figure>
+<h3>Qué puede hacer el profesor</h3>
+<ul>
+  <li><strong>Ver sus materias</strong> asignadas ("Mis Materias").</li>
+  <li><strong>Ver e imprimir su horario</strong> semanal.</li>
+  <li><strong>Registrar su disponibilidad</strong>: marcar en la grilla los horarios en los que <strong>no puede</strong> dar clase (reuniones, otros trabajos, etc.). Es <strong>lo único que puede editar</strong>.</li>
+</ul>
+<figure class="captura"><img src="screenshots/17-portal.png" alt="Portal del profesor."><figcaption><strong>Captura 17.</strong> Portal del profesor.</figcaption></figure>
+<figure class="captura"><img src="screenshots/18-mi-horario.png" alt="Horario del profesor con botón de impresión."><figcaption><strong>Captura 18.</strong> Horario del profesor con botón de impresión.</figcaption></figure>
+<div class="aviso">⚠️ <strong>El profesor no puede</strong> modificar proyecciones, asignaciones, horarios, encabezados de reportes ni ningún dato del sistema — solo su propia disponibilidad. Esto está bloqueado también a nivel de servidor.</div>
+<h3>Por qué es importante la disponibilidad</h3>
+<p>El <strong>generador automático</strong> de horarios respeta la disponibilidad registrada: si el docente marcó que no puede los lunes, el sistema no le pondrá clase ese día. Pídales que la registren <strong>antes</strong> de generar el horario.</p>
+
+<h2>11. Preguntas frecuentes</h2>
+<p><strong>¿Por qué el sistema no me deja poner una clase a esa hora?</strong><br>
+Porque hay un conflicto: el aula, el profesor o la sección ya están ocupados en ese horario (aunque sea en otro turno con horas solapadas), o el bloque es un receso, o ese día no está habilitado para el turno. El mensaje de error le dice exactamente cuál es el choque.</p>
+<p><strong>¿Se pierde mi trabajo si cierro la página?</strong><br>
+No. Todo lo que guarda (proyecciones, asignaciones, clases agendadas, disponibilidad, encabezados) queda en la base de datos del servidor inmediatamente.</p>
+<p><strong>Generé el horario y quedaron materias pendientes. ¿Por qué?</strong><br>
+El generador muestra el motivo de cada una: normalmente falta de aulas libres, profesor sin disponibilidad en esos días, o que ya no quedan bloques contiguos. Ajuste disponibilidad/aulas y vuelva a generar (o agende esas a mano).</p>
+<p><strong>¿Puedo mover una clase aunque haya conflicto?</strong><br>
+Sí, existe un modo que lo permite (el conflicto queda marcado con el punto rojo para resolverlo después). Úselo con cuidado.</p>
+<p><strong>¿Cómo cambio el membrete de los reportes?</strong><br>
+Desde la ventana del reporte, pestaña <strong>Encabezado</strong> — se guarda solo (ver sección 9).</p>
+<p><strong>El profesor dice que no puede entrar.</strong><br>
+Verifique que escribe la cédula <strong>sin puntos ni letra inicial</strong> y que su ficha está <strong>activa</strong> en la sección Profesores.</p>
+<p><strong>¿Dónde veo qué aulas están libres?</strong><br>
+En Horarios, cambie a la vista de <strong>agendas por aula</strong>: cada salón muestra sus clases del lapso.</p>
+
+<hr>
+<p style="text-align:center;color:#64748b;font-size:9pt">Manual generado para el Sistema de Proyecciones Académicas UPTLL.<br>Para soporte técnico contacte al administrador del sistema.</p>
+
+</body>
+</html>
