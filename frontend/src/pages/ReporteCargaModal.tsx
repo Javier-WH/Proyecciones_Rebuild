@@ -266,6 +266,8 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
 
       for (const hoja of hojas) {
         const ws = wb.addWorksheet(hoja.nombreHoja);
+        // Numeración "página/total" en la esquina superior derecha de cada página impresa
+        ws.headerFooter = { oddHeader: '&R&P/&N' };
         // Logo institucional: 21px desde la izquierda, 7.50" desde arriba
         // (EMU: px × 9525, pulgadas × 914400; nativeColOff sí lo lee
         // Anchor aunque el tipo público solo declare { col, row })
@@ -486,7 +488,10 @@ ${filas}
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carga Docente</title>
 <style>
-@page { size: letter landscape; margin: 1.2cm 1.5cm; }
+@page { size: letter landscape; margin: 1.5cm 1.5cm 1.2cm;
+  @top-right { content: counter(page) ' / ' counter(pages);
+               font-family: Calibri, Arial, sans-serif; font-size: 8pt; font-weight: bold; }
+}
 body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; color: #000; }
 .hoja { page-break-after: always; position: relative; }
 .hoja:last-child { page-break-after: auto; }
