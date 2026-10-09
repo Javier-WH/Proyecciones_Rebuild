@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
-import { esCoordinadorDeOtroPnf } from '../../plugins/authGuard.js';
+import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
 interface AsignacionBody {
   proyeccion_id: number;
@@ -92,6 +92,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
       const asignaciones = await query<any[]>(
         `SELECT a.id, a.materia_id, a.seccion_id, a.trimestre, a.profesor_id,
                 pf.nombres, pf.apellidos, pf.cedula, pf.nacionalidad, pf.sexo, pf.foto_url, pf.activo,
+                pf.pnf_saga_id AS prof_pnf_saga_id,
                 tc.nombre AS contrato_nombre, tc.horas_semanales AS contrato_horas
          FROM proyeccion_asignaciones a
          JOIN profesores pf ON pf.id = a.profesor_id
@@ -135,6 +136,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
           prof_sexo: asig?.sexo ?? null,
           prof_foto_url: asig?.foto_url ?? null,
           prof_activo: asig?.activo ?? null,
+          prof_pnf_saga_id: asig?.prof_pnf_saga_id ?? null,
           contrato_nombre: asig?.contrato_nombre ?? null,
           contrato_horas: asig?.contrato_horas ?? null,
         });
@@ -191,10 +193,6 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
       return reply.status(400).send({ success: false, message: 'La materia o la sección no pertenecen a la proyección.' });
     }
 
-    if (esCoordinadorDeOtroPnf(user, val[0].pnf_saga_id)) {
-      return reply.status(403).send({ success: false, message: 'Solo puede asignar profesores en su PNF.' });
-    }
-
     // Lapsos objetivo: solo el lapso indicado, o todos los lapsos de la materia
     // cuando el cliente agrupa (todos_lapsos = true).
     const termino = val[0].tipo_proyeccion === 'SEMESTRAL' ? 'semestres' : 'trimestres';
@@ -205,6 +203,34 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
         [materiaId]
       );
       if (m.length > 0) lapsos = lapsosDeMateria(m[0], val[0].tipo_proyeccion);
+    }
+
+    // Coordinador: solo asigna materias de su PNF (a cualquier profesor), y solo
+    // puede quitar una materia de otro PNF cuando el profesor afectado es suyo.
+    if (user.role === 'ADMINISTRADOR') {
+      if (user.pnf_saga_id == null) {
+        return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+      }
+      if (Number(val[0].pnf_saga_id) !== Number(user.pnf_saga_id)) {
+        if (profesorId !== null) {
+          return reply
+            .status(403)
+            .send({ success: false, message: 'Solo puede asignar materias de su PNF.' });
+        }
+        const phL = lapsos.map(() => '?').join(',');
+        const asignados = await query<any[]>(
+          `SELECT DISTINCT pf.pnf_saga_id FROM proyeccion_asignaciones a
+           JOIN profesores pf ON pf.id = a.profesor_id
+           WHERE a.materia_id = ? AND a.seccion_id = ? AND a.trimestre IN (${phL})`,
+          [materiaId, seccionId, ...lapsos]
+        );
+        if (asignados.some((a) => Number(a.pnf_saga_id) !== Number(user.pnf_saga_id))) {
+          return reply.status(403).send({
+            success: false,
+            message: 'Solo puede quitar materias de otro PNF cuando el profesor pertenece a su PNF.',
+          });
+        }
+      }
     }
 
     if (profesorId === null) {

@@ -26,6 +26,7 @@ import {
 interface CargaRow extends AsignacionRow, MateriaAsignableRow {
   asignacion_id: number | null;
   pnf_saga_id: number;
+  prof_pnf_saga_id: number | null;
   prof_cedula: string | null;
   prof_nacionalidad: string | null;
   prof_sexo: string | null;
@@ -49,9 +50,14 @@ export const CargaDocentePage: React.FC = () => {
   const { colorDePnf } = usePnfColors();
   const esCoordinador = user?.role === 'ADMINISTRADOR';
   const puedeAsignar = user?.role === 'SUPER_USUARIO' || esCoordinador;
-  // El coordinador solo gestiona materias/profesores de su propio PNF
-  const puedeEditarPnf = (pnf?: number | null) =>
-    puedeAsignar && (!esCoordinador || (pnf != null && Number(pnf) === Number(user?.pnf_saga_id)));
+  const esMioPnf = (pnf?: number | null) =>
+    pnf != null && Number(pnf) === Number(user?.pnf_saga_id);
+  // Asignar/reasignar: el coordinador solo sobre materias de su PNF (a cualquier profesor)
+  const puedeAsignarMateria = (materiaPnf?: number | null) =>
+    puedeAsignar && (!esCoordinador || esMioPnf(materiaPnf));
+  // Quitar: materia propia, o materia ajena cuyo profesor asignado es de su PNF
+  const puedeQuitarMateria = (materiaPnf?: number | null, profPnf?: number | null) =>
+    puedeAsignar && (!esCoordinador || esMioPnf(materiaPnf) || esMioPnf(profPnf));
 
   // Punto discreto con el color identificativo del PNF (slate si no tiene)
   const pnfDot = (sagaId: number | null | undefined) => (
@@ -446,8 +452,8 @@ export const CargaDocentePage: React.FC = () => {
             {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, span)}
             {puedeAsignar && (
               <td className="py-3 px-4">
-                {puedeEditarPnf(r.pnf_saga_id) && (
-                  <div className="flex items-center justify-center gap-1">
+                <div className="flex items-center justify-center gap-1">
+                  {puedeAsignarMateria(r.pnf_saga_id) && (
                     <button
                       onClick={() => setModalAsignar({ open: true, row: r })}
                       className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
@@ -455,6 +461,8 @@ export const CargaDocentePage: React.FC = () => {
                     >
                       <UserSearch className="w-4 h-4" />
                     </button>
+                  )}
+                  {puedeQuitarMateria(r.pnf_saga_id, r.prof_pnf_saga_id) && (
                     <button
                       onClick={() => handleAssign(r, null)}
                       className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
@@ -462,8 +470,8 @@ export const CargaDocentePage: React.FC = () => {
                     >
                       <X className="w-4 h-4" />
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </td>
             )}
           </tr>
@@ -474,7 +482,7 @@ export const CargaDocentePage: React.FC = () => {
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
             <td colSpan={6} className="py-2 px-4">
-              {puedeEditarPnf(p.pnf_saga_id) ? (
+              {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
                   className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer uppercase"
@@ -581,30 +589,32 @@ export const CargaDocentePage: React.FC = () => {
             {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, dataSpan)}
             {puedeAsignar && (
               <td className="py-3 px-4">
-                {puedeEditarPnf(m.base.pnf_saga_id) && (
                 <div className="flex items-center justify-center gap-1">
-                  <button
-                    onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
-                    className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
-                    title={`Reasignar a otro profesor en todos los ${pluralRow}`}
-                  >
-                    <UserSearch className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() =>
-                      setQuitarMateria({
-                        row: rowObj,
-                        materia: m.base.materia_nombre,
-                        plural: pluralRow,
-                      })
-                    }
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                    title={`Quitar materia en todos los ${pluralRow}`}
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  {puedeAsignarMateria(m.base.pnf_saga_id) && (
+                    <button
+                      onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
+                      className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                      title={`Reasignar a otro profesor en todos los ${pluralRow}`}
+                    >
+                      <UserSearch className="w-4 h-4" />
+                    </button>
+                  )}
+                  {puedeQuitarMateria(m.base.pnf_saga_id, m.base.prof_pnf_saga_id) && (
+                    <button
+                      onClick={() =>
+                        setQuitarMateria({
+                          row: rowObj,
+                          materia: m.base.materia_nombre,
+                          plural: pluralRow,
+                        })
+                      }
+                      className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      title={`Quitar materia en todos los ${pluralRow}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-                )}
               </td>
             )}
           </tr>
@@ -616,7 +626,7 @@ export const CargaDocentePage: React.FC = () => {
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
             <td colSpan={6 + lapsoColsVista.length * 2} className="py-2 px-4">
-              {puedeEditarPnf(p.pnf_saga_id) ? (
+              {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
                   className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer uppercase"
@@ -718,7 +728,7 @@ export const CargaDocentePage: React.FC = () => {
             )}
             {puedeAsignar && (
               <td className="py-3 px-4 text-center">
-                {puedeEditarPnf(m.base.pnf_saga_id) && (
+                {puedeAsignarMateria(m.base.pnf_saga_id) && (
                 <button
                   onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
                   className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -1063,7 +1073,7 @@ export const CargaDocentePage: React.FC = () => {
                       )}
                       {puedeAsignar && (
                         <td className="py-3 px-4 text-center">
-                          {puedeEditarPnf(r.pnf_saga_id) && (
+                          {puedeAsignarMateria(r.pnf_saga_id) && (
                           <button
                             onClick={() => setModalAsignar({ open: true, row: r })}
                             className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
