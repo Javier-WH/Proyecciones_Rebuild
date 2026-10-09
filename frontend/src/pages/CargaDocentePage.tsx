@@ -195,6 +195,14 @@ export const CargaDocentePage: React.FC = () => {
   // 'Trimestre' o 'Semestre' si todas las filas son de un mismo régimen; 'Lapso' si se mezclan
   const lapsoTermino = useMemo(() => terminoLapso(rows.map((r) => r.tipo_proyeccion)), [rows]);
 
+  // Etiqueta de la columna de lapso en la vista plana: el lapso filtrado
+  // ('TRIMESTRAL:2' -> 'Trimestre 2'); el término genérico como respaldo
+  const lapsoColHeader = useMemo(() => {
+    const [tipo, n] = filterLapso.split(':');
+    if ((tipo === 'TRIMESTRAL' || tipo === 'SEMESTRAL') && n) return labelLapso(Number(n), tipo);
+    return lapsoTermino;
+  }, [filterLapso, lapsoTermino]);
+
   // Vista agrupada por materia (una columna por lapso) cuando el filtro es
   // "todos" o un régimen completo ('TRIMESTRAL' = todos los trimestres,
   // 'SEMESTRAL' = todos los semestres)
@@ -429,11 +437,6 @@ export const CargaDocentePage: React.FC = () => {
             <td className="py-3 px-4 text-slate-400">{r.trayecto_nombre}</td>
             <td className="py-3 px-4 font-semibold text-slate-200">{r.seccion_nombre}</td>
             <td className="py-3 px-4 text-slate-400">{r.turno_nombre}</td>
-            <td className="py-3 px-4 text-center">
-              <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300">
-                {labelLapso(r.trimestre, r.tipo_proyeccion)}
-              </span>
-            </td>
             <td className="py-3 px-4 text-center font-bold text-blue-300">{r.horas_semanales}</td>
             {idx === 0 && totalCell(grupo.totalHoras, p.tipo_contrato_horas, span)}
             {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, span)}
@@ -464,7 +467,7 @@ export const CargaDocentePage: React.FC = () => {
         {(puedeAsignar || n === 0) && (
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
-            <td colSpan={7} className="py-2 px-4">
+            <td colSpan={6} className="py-2 px-4">
               {puedeAsignar ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
@@ -982,19 +985,25 @@ export const CargaDocentePage: React.FC = () => {
                   </tr>
                 </>
               ) : (
-                <tr>
-                  <th className="py-3.5 px-4 min-w-[210px]">Profesor</th>
-                  <th className="py-3.5 px-4 min-w-[220px]">Unidad Curricular</th>
-                  <th className="py-3.5 px-4">PNF</th>
-                  <th className="py-3.5 px-4">Trayecto</th>
-                  <th className="py-3.5 px-4">Sección</th>
-                  <th className="py-3.5 px-4">Turno</th>
-                  <th className="py-3.5 px-4 text-center">{lapsoTermino}</th>
-                  <th className="py-3.5 px-4 text-center">Hrs x U/C</th>
-                  <th className="py-3.5 px-4 text-center">Total Hrs</th>
-                  <th className="py-3.5 px-4">Dedicación</th>
-                  {puedeAsignar && <th className="py-3.5 px-4 text-center w-[90px]">Acciones</th>}
-                </tr>
+                <>
+                  <tr>
+                    <th rowSpan={2} className="py-3.5 px-3 min-w-[210px]">Profesor</th>
+                    <th rowSpan={2} className="py-3.5 px-3 min-w-[220px]">Unidad Curricular</th>
+                    <th rowSpan={2} className="py-3.5 px-3">PNF</th>
+                    <th rowSpan={2} className="py-3.5 px-3">Trayecto</th>
+                    <th rowSpan={2} className="py-3.5 px-3">Sección</th>
+                    <th rowSpan={2} className="py-3.5 px-3">Turno</th>
+                    <th colSpan={2} className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap text-[10px]">
+                      {lapsoColHeader}
+                    </th>
+                    <th rowSpan={2} className="py-3.5 px-3 border-l border-slate-800/60">Dedicación</th>
+                    {puedeAsignar && <th rowSpan={2} className="py-3.5 px-3 text-center w-[90px]">Acciones</th>}
+                  </tr>
+                  <tr>
+                    <th className="py-2 px-1.5 text-center border-l border-slate-800/60" title="Horas por U/C">Hrs</th>
+                    <th className="py-2 px-1.5 text-center" title="Total de horas del profesor en el lapso">Tot</th>
+                  </tr>
+                </>
               )}
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -1031,11 +1040,6 @@ export const CargaDocentePage: React.FC = () => {
                       <td className="py-3 px-4 text-slate-400">{r.trayecto_nombre}</td>
                       <td className="py-3 px-4 font-semibold text-slate-200">{r.seccion_nombre}</td>
                       <td className="py-3 px-4 text-slate-400">{r.turno_nombre}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-bold text-slate-300">
-                          {labelLapso(r.trimestre, r.tipo_proyeccion)}
-                        </span>
-                      </td>
                       <td className="py-3 px-4 text-center font-bold text-blue-300">{r.horas_semanales}</td>
                       {idx === 0 && (
                         <>
