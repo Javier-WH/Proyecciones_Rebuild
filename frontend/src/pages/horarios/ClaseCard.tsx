@@ -35,11 +35,17 @@ export const ClaseCard: React.FC<{
   const aula = entry.aula_nombre || entry.aula_codigo;
   const hora = `${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(fin ?? entry.hora_fin, usa12h)}`;
   const pnf = pnfLabel(pnfNombre);
+  // Trayecto de la sección: se anexa al PNF en las vistas por aula/profesor
+  // para identificar de qué cohorte es la clase ('Administración · T. IV').
+  const trayecto = entry.trayecto_nombre
+    ? entry.trayecto_nombre.replace(/^\s*trayecto\s*/i, 'T. ').replace(/\s+/g, ' ')
+    : '';
+  const pnfTrayecto = trayecto ? `${pnf} · ${trayecto}` : pnf;
   // Línea resumida del modo compacto: en vista por aula se antepone el PNF;
   // en vista por profesor el PNF sustituye al profesor (redundante ahí).
   const resumen = ocultarProfesor
-    ? `${pnf} · ${aula} · ${hora}`
-    : `${ocultarAula ? `${pnf} · ` : ''}${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`;
+    ? `${pnfTrayecto} · ${aula} · ${hora}`
+    : `${ocultarAula ? `${pnfTrayecto} · ` : ''}${profesor}${ocultarAula ? '' : ` · ${aula}`} · ${hora}`;
 
   return (
     <div
@@ -187,9 +193,9 @@ export const ClaseCard: React.FC<{
       ) : (
         <div className="text-[9px] opacity-80 leading-tight mt-0.5 space-y-px">
           {ocultarProfesor ? (
-            <div className="flex items-center gap-1 truncate" title={pnf}>
+            <div className="flex items-center gap-1 truncate" title={pnfTrayecto}>
               <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
-              <span className="truncate">{pnf}</span>
+              <span className="truncate">{pnfTrayecto}</span>
             </div>
           ) : (
             <div className="flex items-center gap-1 truncate" title={profesor}>
@@ -198,9 +204,9 @@ export const ClaseCard: React.FC<{
             </div>
           )}
           {ocultarAula ? (
-            <div className="flex items-center gap-1 truncate" title={pnf}>
+            <div className="flex items-center gap-1 truncate" title={pnfTrayecto}>
               <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
-              <span className="truncate">{pnf}</span>
+              <span className="truncate">{pnfTrayecto}</span>
             </div>
           ) : (
             <div className="flex items-center gap-1 truncate" title={`${entry.aula_codigo} — ${entry.aula_nombre}`}>
@@ -280,6 +286,10 @@ const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean; ocultarPr
     ? `${e.prof_nombres ?? ''} ${e.prof_apellidos ?? ''}`.trim()
     : 'Sin profesor';
   const aula = e.aula_nombre || e.aula_codigo;
+  const trayecto = e.trayecto_nombre
+    ? e.trayecto_nombre.replace(/^\s*trayecto\s*/i, 'T. ').replace(/\s+/g, ' ')
+    : '';
+  const pnfTrayecto = trayecto ? `${pnfLabel(pnfNombre)} · ${trayecto}` : pnfLabel(pnfNombre);
   return (
     <>
       <div
@@ -292,14 +302,14 @@ const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean; ocultarPr
       <div className="text-[8px] opacity-80 leading-tight mt-0.5 space-y-px">
         <div
           className="truncate"
-          title={`${e.seccion_nombre} · ${lapsoDe(it)} · ${e.turno_nombre}`}
+          title={`${e.seccion_nombre} · ${lapsoDe(it)} · ${e.turno_nombre}${trayecto ? ` · ${e.trayecto_nombre}` : ''}`}
         >
           {e.seccion_nombre} · {lapsoDe(it)}
         </div>
         {ocultarProfesor ? (
-          <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
+          <div className="flex items-center gap-1 truncate" title={pnfTrayecto}>
             <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
-            <span className="truncate">{pnfLabel(pnfNombre)}</span>
+            <span className="truncate">{pnfTrayecto}</span>
           </div>
         ) : (
           <div className="flex items-center gap-1 truncate" title={profesor}>
@@ -308,9 +318,9 @@ const DetalleItem: React.FC<{ it: ItemDividido; ocultarAula?: boolean; ocultarPr
           </div>
         )}
         {ocultarAula ? (
-          <div className="flex items-center gap-1 truncate" title={pnfLabel(pnfNombre)}>
+          <div className="flex items-center gap-1 truncate" title={pnfTrayecto}>
             <GraduationCap className="w-2.5 h-2.5 shrink-0 opacity-70" />
-            <span className="truncate">{pnfLabel(pnfNombre)}</span>
+            <span className="truncate">{pnfTrayecto}</span>
           </div>
         ) : (
           <div

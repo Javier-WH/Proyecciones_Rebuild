@@ -46,6 +46,7 @@ export interface HorarioEntry {
   materia_nombre: string;
   horas_semanales: number;
   pnf_saga_id: number | null;
+  trayecto_nombre: string | null; // 'Trayecto IV', 'Inicial'… (vistas por aula/profesor)
   seccion_id: number;
   seccion_nombre: string;
   turno_saga_id: number;

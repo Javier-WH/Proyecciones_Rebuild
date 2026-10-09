@@ -78,7 +78,7 @@ const ENTRY_SELECT = `
          e.dia_semana, e.bloque_id, e.aula_id,
          a.codigo AS aula_codigo, a.nombre AS aula_nombre,
          b.orden AS bloque_orden, b.hora_inicio, b.hora_fin, b.es_receso, b.turno_id,
-         t.nombre AS turno_bloque_nombre, pr.pnf_saga_id
+         t.nombre AS turno_bloque_nombre, pr.pnf_saga_id, pr.trayecto_nombre
   FROM horario_entries e
   JOIN proyeccion_materias m ON m.id = e.materia_id
   JOIN proyeccion_secciones s ON s.id = e.seccion_id
