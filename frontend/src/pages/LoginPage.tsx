@@ -187,7 +187,7 @@ export const LoginPage: React.FC = () => {
             </form>
 
             {/* Recuperación y acceso docente */}
-            <div className="mt-6 pt-5 border-t border-slate-800 text-center space-y-3">
+            <div className="mt-6 pt-5 border-t border-slate-800 flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setRecuperarOpen(true)}
@@ -196,20 +196,18 @@ export const LoginPage: React.FC = () => {
                 <KeyRound className="w-4 h-4" />
                 <span>¿Olvidaste tu contraseña?</span>
               </button>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProfModalOpen(true);
-                    setProfError(null);
-                    setCedula('');
-                  }}
-                  className="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  <span>Ingresar como profesor</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setProfModalOpen(true);
+                  setProfError(null);
+                  setCedula('');
+                }}
+                className="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Ingresar como profesor</span>
+              </button>
             </div>
           </div>
         </div>
