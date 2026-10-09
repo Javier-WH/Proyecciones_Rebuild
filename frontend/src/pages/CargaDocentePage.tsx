@@ -58,6 +58,9 @@ export const CargaDocentePage: React.FC = () => {
   // Quitar: materia propia, o materia ajena cuyo profesor asignado es de su PNF
   const puedeQuitarMateria = (materiaPnf?: number | null, profPnf?: number | null) =>
     puedeAsignar && (!esCoordinador || esMioPnf(materiaPnf) || esMioPnf(profPnf));
+  // Editar ficha del docente: Master siempre; Coordinador solo de su PNF
+  const puedeEditarProfesor = (p: Profesor) =>
+    user?.role === 'SUPER_USUARIO' || (esCoordinador && esMioPnf(p.pnf_saga_id));
 
   // Punto discreto con el color identificativo del PNF (slate si no tiene)
   const pnfDot = (sagaId: number | null | undefined) => (
@@ -378,9 +381,13 @@ export const CargaDocentePage: React.FC = () => {
   const profesorCell = (p: Profesor, span: number) => (
     <td rowSpan={span} className="py-3 px-4 align-top border-r border-slate-800/60">
       <div
-        className="flex items-center gap-2.5 cursor-pointer"
-        title="Doble click para editar los datos del profesor"
-        onDoubleClick={() => setModalProfesor({ open: true, profesor: p })}
+        className={`flex items-center gap-2.5 ${puedeEditarProfesor(p) ? 'cursor-pointer' : ''}`}
+        title={puedeEditarProfesor(p) ? 'Doble click para editar los datos del profesor' : undefined}
+        onDoubleClick={
+          puedeEditarProfesor(p)
+            ? () => setModalProfesor({ open: true, profesor: p })
+            : undefined
+        }
       >
         <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} />
         <div className="min-w-0">
