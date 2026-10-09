@@ -552,13 +552,27 @@ export const DashboardPage: React.FC = () => {
                   Plataforma para la creación de proyecciones académicas, asignación de carga docente y generación automática de horarios de la UPTLL "Juana Ramírez".
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
-                  <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
-                    <IdCard className="w-[18px] h-[18px] text-blue-400 shrink-0" />
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Usuario</p>
-                      <p className="text-xs font-semibold text-slate-200">@{user?.username}</p>
+                  {user?.invitado ? (
+                    <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
+                      <IdCard className="w-[18px] h-[18px] text-blue-400 shrink-0" />
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Usuario</p>
+                        <p className="text-xs font-semibold text-slate-200">@{user?.username}</p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <button
+                      onClick={() => setMiCuentaOpen(true)}
+                      title="Editar mi cuenta"
+                      className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5 hover:border-blue-500/40 hover:bg-slate-800/60 transition-colors cursor-pointer text-left"
+                    >
+                      <IdCard className="w-[18px] h-[18px] text-blue-400 shrink-0" />
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Usuario</p>
+                        <p className="text-xs font-semibold text-slate-200">@{user?.username}</p>
+                      </div>
+                    </button>
+                  )}
                   <button
                     onClick={() => setPermisosOpen(true)}
                     title="Ver qué puede hacer este nivel de permiso"
