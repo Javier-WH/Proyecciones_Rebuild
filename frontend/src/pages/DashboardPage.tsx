@@ -15,6 +15,7 @@ import { PnfMallasModal } from './PnfMallasModal.js';
 import { TiposContratoModal } from './TiposContratoModal.js';
 import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorPanelModal } from './ProfesorPanelModal.js';
+import { PermisosRolModal } from './PermisosRolModal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
 import {
@@ -61,6 +62,7 @@ export const DashboardPage: React.FC = () => {
   const [perfilesOpen, setPerfilesOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [acercaOpen, setAcercaOpen] = useState(false);
+  const [permisosOpen, setPermisosOpen] = useState(false);
   const [panelProfesor, setPanelProfesor] = useState<{
     id: number;
     nombre: string;
@@ -543,13 +545,17 @@ export const DashboardPage: React.FC = () => {
                       <p className="text-xs font-semibold text-slate-200">@{user?.username}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
+                  <button
+                    onClick={() => setPermisosOpen(true)}
+                    title="Ver qué puede hacer este nivel de permiso"
+                    className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5 hover:border-purple-500/40 hover:bg-slate-800/60 transition-colors cursor-pointer text-left"
+                  >
                     <ShieldCheck className="w-[18px] h-[18px] text-purple-400 shrink-0" />
                     <div>
                       <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Nivel de Permiso</p>
                       {getRoleBadge(user?.role)}
                     </div>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-2.5 bg-slate-900/60 border border-slate-700/50 rounded-xl px-3.5 py-2.5">
                     <BookOpen className="w-[18px] h-[18px] text-emerald-400 shrink-0" />
                     <div>
@@ -645,6 +651,7 @@ export const DashboardPage: React.FC = () => {
       <TiposContratoModal isOpen={tiposContratoOpen} onClose={() => setTiposContratoOpen(false)} />
       <PerfilesModal isOpen={perfilesOpen} onClose={() => setPerfilesOpen(false)} />
       <ProfesorPanelModal profesor={panelProfesor} onClose={() => setPanelProfesor(null)} />
+      {permisosOpen && <PermisosRolModal role={user?.role} onClose={() => setPermisosOpen(false)} />}
 
       {/* Acerca de — información del sistema */}
       {acercaOpen && (
