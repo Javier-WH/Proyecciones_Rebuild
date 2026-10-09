@@ -55,7 +55,11 @@ interface PnfMallasModalProps {
 export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   // Solo gestores pueden cambiar el color; el resto navega el árbol en lectura.
-  const puedeEditar = user?.role !== 'PROFESOR';
+  // El Coordinador solo personaliza el color de su propio PNF.
+  const esCoordinador = user?.role === 'ADMINISTRADOR';
+  const puedeEditar = user?.role === 'SUPER_USUARIO' || esCoordinador;
+  const puedeEditarColor = (pnfId: number) =>
+    puedeEditar && (!esCoordinador || Number(pnfId) === Number(user?.pnf_saga_id));
   const { refresh: refreshColores } = usePnfColors();
 
   const [pnfs, setPnfs] = useState<PnfItem[]>([]);
@@ -226,14 +230,14 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
                         type="color"
                         value={pnf.color || COLOR_DEFAULT}
                         onChange={(e) => guardarColor(pnf, e.target.value)}
-                        disabled={!puedeEditar}
-                        className={`w-7 h-7 rounded-lg border border-slate-700 bg-slate-900 p-0.5 ${puedeEditar ? 'cursor-pointer' : 'cursor-default opacity-70'}`}
+                        disabled={!puedeEditarColor(pnf.id)}
+                        className={`w-7 h-7 rounded-lg border border-slate-700 bg-slate-900 p-0.5 ${puedeEditarColor(pnf.id) ? 'cursor-pointer' : 'cursor-default opacity-70'}`}
                       />
                       {guardandoColor === pnf.id && (
                         <Loader2 className="w-3 h-3 animate-spin text-white absolute inset-0 m-auto pointer-events-none" />
                       )}
                     </div>
-                    {pnf.color && puedeEditar && (
+                    {pnf.color && puedeEditarColor(pnf.id) && (
                       <button
                         onClick={() => guardarColor(pnf, null)}
                         title="Quitar color"

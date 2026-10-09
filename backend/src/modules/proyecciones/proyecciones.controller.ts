@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
+import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
 const normTurno = (s: any): string =>
   String(s ?? '')
@@ -97,12 +98,9 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
     });
   }
 
-  // Si el usuario es regular (coordinador PNF), validar que pertenezca a ese PNF
-  if (user.role === 'REGULAR' && user.pnf_saga_id && Number(user.pnf_saga_id) !== Number(body.pnf_saga_id)) {
-    return reply.status(403).send({
-      success: false,
-      message: 'Solo tiene permisos para crear proyecciones en su PNF asignado.',
-    });
+  // El Coordinador solo puede crear proyecciones de su PNF (PNF obligatorio)
+  if (esCoordinadorDeOtroPnf(user, body.pnf_saga_id)) {
+    return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
   }
 
   const codigo = body.codigo || `PROY-${body.pnf_saga_id}-${body.trayecto_saga_id}-${body.periodo_academico}-${Date.now().toString().slice(-4)}`;
@@ -243,12 +241,6 @@ export async function listProyeccionesHandler(request: FastifyRequest, reply: Fa
       params.push(periodoActivo[0].codigo);
     }
 
-    // Si el usuario es regular (coordinador PNF), filtrar solo su PNF
-    if (user.role === 'REGULAR' && user.pnf_saga_id) {
-      conditions.push('p.pnf_saga_id = ?');
-      params.push(user.pnf_saga_id);
-    }
-
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
@@ -304,12 +296,9 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
     }
     const proyeccion = proyRows[0];
 
-    // Si el usuario es regular (coordinador PNF), validar que la proyección pertenezca a su PNF
-    if (user.role === 'REGULAR' && user.pnf_saga_id && Number(user.pnf_saga_id) !== Number(proyeccion.pnf_saga_id)) {
-      return reply.status(403).send({
-        success: false,
-        message: 'Solo tiene permisos para editar proyecciones de su PNF asignado.',
-      });
+    // El Coordinador solo puede editar proyecciones de su PNF
+    if (esCoordinadorDeOtroPnf(user, proyeccion.pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
     const nombre = body.nombre?.trim() || proyeccion.nombre;
@@ -517,6 +506,7 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
 
 export async function toggleActiveProyeccionHandler(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  const user = request.userPayload!;
 
   try {
     const proyList = await query<any[]>('SELECT * FROM proyecciones WHERE id = ? LIMIT 1', [id]);
@@ -525,6 +515,9 @@ export async function toggleActiveProyeccionHandler(request: FastifyRequest, rep
     }
 
     const proyeccion = proyList[0];
+    if (esCoordinadorDeOtroPnf(user, proyeccion.pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
     const newActiveState = proyeccion.activa ? 0 : 1;
 
     if (newActiveState === 1) {
@@ -549,8 +542,17 @@ export async function toggleActiveProyeccionHandler(request: FastifyRequest, rep
 
 export async function deleteProyeccionHandler(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  const user = request.userPayload!;
 
   try {
+    const proyList = await query<any[]>('SELECT pnf_saga_id FROM proyecciones WHERE id = ? LIMIT 1', [id]);
+    if (proyList.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Proyección no encontrada.' });
+    }
+    if (esCoordinadorDeOtroPnf(user, proyList[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
+
     await query('DELETE FROM proyecciones WHERE id = ?', [id]);
     return reply.send({ success: true, message: 'Proyección eliminada exitosamente.' });
   } catch (error: any) {

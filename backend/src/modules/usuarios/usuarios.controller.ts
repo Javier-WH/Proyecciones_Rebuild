@@ -56,8 +56,9 @@ export async function createUsuarioHandler(request: FastifyRequest, reply: Fasti
   if (password.length < 6) {
     return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });
   }
-  if (!pnfSagaId) {
-    return reply.status(400).send({ success: false, message: 'Debe asociar el usuario a un PNF.' });
+  // Solo el Coordinador (ADMINISTRADOR) requiere obligatoriamente un PNF
+  if (role === 'ADMINISTRADOR' && !pnfSagaId) {
+    return reply.status(400).send({ success: false, message: 'El Coordinador debe tener un PNF asociado.' });
   }
 
   try {
@@ -110,8 +111,9 @@ export async function updateUsuarioHandler(request: FastifyRequest, reply: Fasti
   if (!ROLES_VALIDOS.includes(role)) {
     return reply.status(400).send({ success: false, message: 'Nivel de permisos inválido.' });
   }
-  if (!pnfSagaId) {
-    return reply.status(400).send({ success: false, message: 'Debe asociar el usuario a un PNF.' });
+  // Solo el Coordinador (ADMINISTRADOR) requiere obligatoriamente un PNF
+  if (role === 'ADMINISTRADOR' && !pnfSagaId) {
+    return reply.status(400).send({ success: false, message: 'El Coordinador debe tener un PNF asociado.' });
   }
   if (body.password && body.password.length < 6) {
     return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });

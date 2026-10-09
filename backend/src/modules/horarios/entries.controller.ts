@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
+import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 import {
   cargarEntries,
   cargarAulasActivas,
@@ -109,10 +110,6 @@ export async function listEntriesHandler(request: FastifyRequest, reply: Fastify
     let sql = `${ENTRY_SELECT}
       WHERE e.periodo_academico = ? AND (${cond})`;
     params.unshift(periodoCodigo);
-    if (user.role === 'REGULAR' && user.pnf_saga_id) {
-      sql += ' AND pr.pnf_saga_id = ?';
-      params.push(user.pnf_saga_id);
-    }
     // Rol docente con cédula vinculada (invitado o cuenta PROFESOR): solo sus clases.
     if (user.role === 'PROFESOR' && user.profesor_cedula) {
       const prof = await query<any[]>('SELECT id FROM profesores WHERE cedula = ? LIMIT 1', [
@@ -199,7 +196,7 @@ async function resolverSlot(
     reply.status(400).send({ success: false, message: 'Esta materia es exclusiva de otra sección.' });
     return null;
   }
-  if (user.role === 'REGULAR' && user.pnf_saga_id && Number(user.pnf_saga_id) !== Number(m.pnf_saga_id)) {
+  if (esCoordinadorDeOtroPnf(user, m.pnf_saga_id)) {
     reply.status(403).send({ success: false, message: 'Solo puede agendar materias de su PNF.' });
     return null;
   }
@@ -499,9 +496,8 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
     }
     const user = request.userPayload!;
     if (
-      user.role === 'REGULAR' &&
-      user.pnf_saga_id &&
-      rows.some((r) => Number(r.pnf_saga_id) !== Number(user.pnf_saga_id))
+      user.role === 'ADMINISTRADOR' &&
+      (!user.pnf_saga_id || rows.some((r) => Number(r.pnf_saga_id) !== Number(user.pnf_saga_id)))
     ) {
       return reply
         .status(403)
@@ -712,11 +708,7 @@ export async function cambiarAulaGrupoHandler(request: FastifyRequest, reply: Fa
     }
     const base = rows[0];
     const user = request.userPayload!;
-    if (
-      user.role === 'REGULAR' &&
-      user.pnf_saga_id &&
-      Number(base.pnf_saga_id) !== Number(user.pnf_saga_id)
-    ) {
+    if (esCoordinadorDeOtroPnf(user, base.pnf_saga_id)) {
       return reply
         .status(403)
         .send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
@@ -855,9 +847,8 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     }
     const user = request.userPayload!;
     if (
-      user.role === 'REGULAR' &&
-      user.pnf_saga_id &&
-      rows.some((r) => Number(r.pnf_saga_id) !== Number(user.pnf_saga_id))
+      user.role === 'ADMINISTRADOR' &&
+      (!user.pnf_saga_id || rows.some((r) => Number(r.pnf_saga_id) !== Number(user.pnf_saga_id)))
     ) {
       return reply
         .status(403)
@@ -1463,7 +1454,12 @@ export async function unscheduleEntriesHandler(request: FastifyRequest, reply: F
   }
   try {
     const user = request.userPayload!;
-    if (user.role === 'REGULAR' && user.pnf_saga_id) {
+    if (user.role === 'ADMINISTRADOR') {
+      if (!user.pnf_saga_id) {
+        return reply
+          .status(403)
+          .send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
+      }
       const rows = await query<any[]>(
         `SELECT en.id FROM horario_entries en
          JOIN proyeccion_materias m ON m.id = en.materia_id
@@ -1507,7 +1503,7 @@ export async function deleteEntryHandler(request: FastifyRequest, reply: Fastify
     );
     if (e.length === 0) return reply.status(404).send({ success: false, message: 'Clase no encontrada.' });
     const user = request.userPayload!;
-    if (user.role === 'REGULAR' && user.pnf_saga_id && Number(user.pnf_saga_id) !== Number(e[0].pnf_saga_id)) {
+    if (esCoordinadorDeOtroPnf(user, e[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
     }
     await query('DELETE FROM horario_entries WHERE id = ?', [Number(id)]);
@@ -1544,7 +1540,11 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
   const tipo: TipoProyeccion = body.tipo === 'SEMESTRAL' ? 'SEMESTRAL' : 'TRIMESTRAL';
   const trimestre = Number(body.trimestre) || 1;
   const modo = body.modo === 'regenerar' ? 'regenerar' : 'completar';
-  const pnfFiltro = user.role === 'REGULAR' && user.pnf_saga_id ? user.pnf_saga_id : body.pnf_saga_id;
+  // El Coordinador solo genera horarios de su propio PNF (PNF obligatorio)
+  if (user.role === 'ADMINISTRADOR' && !user.pnf_saga_id) {
+    return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+  }
+  const pnfFiltro = user.role === 'ADMINISTRADOR' ? user.pnf_saga_id : body.pnf_saga_id;
 
   try {
     const periodo = body.periodo || (await periodoActivo());
@@ -1935,6 +1935,9 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
 export async function resolverAulasHandler(request: FastifyRequest, reply: FastifyReply) {
   try {
     const user = request.userPayload!;
+    if (user.role === 'ADMINISTRADOR' && !user.pnf_saga_id) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
     const periodo = await periodoActivo();
     if (!periodo) {
       return reply.send({ success: false, message: 'No hay período académico activo.' });
@@ -2149,7 +2152,7 @@ export async function resolverAulasHandler(request: FastifyRequest, reply: Fasti
           : sa < sb
             ? [ra, rb]
             : [rb, ra];
-      if (user.role === 'REGULAR' && user.pnf_saga_id) {
+      if (user.role === 'ADMINISTRADOR' && user.pnf_saga_id) {
         candidatos = candidatos.filter((r) => pnfDe(r) === Number(user.pnf_saga_id));
       }
       let movido = false;

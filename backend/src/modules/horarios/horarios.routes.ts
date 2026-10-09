@@ -30,8 +30,9 @@ import {
 } from './entries.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
-const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR', 'REGULAR'] as const;
+// Escritura: Master + Coordinador (este último validado a su PNF en los handlers)
 const ADMINS = ['SUPER_USUARIO', 'ADMINISTRADOR'] as const;
+const GESTORES = ADMINS;
 
 export async function horariosRoutes(fastify: FastifyInstance) {
   // Aulas

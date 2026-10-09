@@ -44,9 +44,9 @@ interface ProfesorOpcion {
 
 const ROL_LABEL: Record<Rol, string> = {
   SUPER_USUARIO: 'Master',
-  ADMINISTRADOR: 'Administrador',
-  REGULAR: 'Coordinador',
-  PROFESOR: 'Usuario',
+  ADMINISTRADOR: 'Coordinador',
+  REGULAR: 'Usuario',
+  PROFESOR: 'Docente',
 };
 
 const rolBadge = (role: Rol) => {
@@ -150,8 +150,8 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    if (!form.pnf_saga_id) {
-      setErrorMsg('Debe asociar el usuario a un PNF.');
+    if (form.role === 'ADMINISTRADOR' && !form.pnf_saga_id) {
+      setErrorMsg('El Coordinador debe tener un PNF asociado.');
       return;
     }
     setSaving(true);
@@ -161,7 +161,7 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
       apellido: form.apellido.trim(),
       email: form.email.trim() || null,
       role: form.role,
-      pnf_saga_id: Number(form.pnf_saga_id),
+      pnf_saga_id: form.pnf_saga_id === '' ? null : Number(form.pnf_saga_id),
       profesor_cedula: form.profesor_cedula || null,
     };
     if (!editing || form.password) payload.password = form.password;
@@ -285,14 +285,17 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
                     className={inputCls}
                   >
                     <option value="SUPER_USUARIO">Master — acceso total</option>
-                    <option value="REGULAR">Coordinador — solo su PNF</option>
-                    <option value="PROFESOR">Usuario — solo lectura</option>
+                    <option value="ADMINISTRADOR">Coordinador — solo edita su PNF</option>
+                    <option value="REGULAR">Usuario — solo lectura</option>
+                    <option value="PROFESOR">Docente — portal propio</option>
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>PNF asociado *</label>
+                  <label className={labelCls}>
+                    PNF asociado {form.role === 'ADMINISTRADOR' ? '*' : '(opcional)'}
+                  </label>
                   <select
-                    required
+                    required={form.role === 'ADMINISTRADOR'}
                     value={form.pnf_saga_id}
                     onChange={(e) =>
                       setForm({ ...form, pnf_saga_id: e.target.value === '' ? '' : Number(e.target.value) })

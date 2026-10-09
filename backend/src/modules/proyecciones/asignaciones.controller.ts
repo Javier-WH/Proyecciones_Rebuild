@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { esCoordinadorDeOtroPnf } from '../../plugins/authGuard.js';
 
 interface AsignacionBody {
   proyeccion_id: number;
@@ -74,10 +75,7 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
     `;
     const params: any[] = [periodoCodigo];
 
-    if (user.role === 'REGULAR' && user.pnf_saga_id) {
-      sql += ' AND pr.pnf_saga_id = ?';
-      params.push(user.pnf_saga_id);
-    } else if (pnf_saga_id) {
+    if (pnf_saga_id) {
       sql += ' AND pr.pnf_saga_id = ?';
       params.push(Number(pnf_saga_id));
     }
@@ -193,7 +191,7 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
       return reply.status(400).send({ success: false, message: 'La materia o la sección no pertenecen a la proyección.' });
     }
 
-    if (user.role === 'REGULAR' && user.pnf_saga_id && Number(user.pnf_saga_id) !== Number(val[0].pnf_saga_id)) {
+    if (esCoordinadorDeOtroPnf(user, val[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: 'Solo puede asignar profesores en su PNF.' });
     }
 

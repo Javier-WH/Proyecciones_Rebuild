@@ -21,8 +21,9 @@ import {
 } from './profesores.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
-const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR', 'REGULAR'] as const;
+// Escritura: Master + Coordinador (catálogo global). REGULAR es solo lectura.
 const ADMINS = ['SUPER_USUARIO', 'ADMINISTRADOR'] as const;
+const GESTORES = ADMINS;
 
 export async function profesoresRoutes(fastify: FastifyInstance) {
   // Tipos de contrato (catálogo editable sincronizado con SAGA)

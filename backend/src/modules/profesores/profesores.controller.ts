@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
 import { sagaService } from '../saga/saga.service.js';
+import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -113,8 +114,7 @@ async function ensureTipoContrato(sagaId: number, cache: Map<number, number>): P
 // ---------------------------------------------------------------------------
 
 export async function listProfesoresHandler(request: FastifyRequest, reply: FastifyReply) {
-  const user = request.userPayload!;
-  const { incluir_inactivos, pnf_saga_id, search, para_asignacion } = request.query as {
+  const { incluir_inactivos, pnf_saga_id, search } = request.query as {
     incluir_inactivos?: string;
     pnf_saga_id?: string;
     search?: string;
@@ -134,13 +134,7 @@ export async function listProfesoresHandler(request: FastifyRequest, reply: Fast
       conditions.push('p.activo = 1');
     }
 
-    // Coordinadores (REGULAR) solo ven profesores de su PNF asignado,
-    // salvo cuando el listado se usa para asignar materias (docencia multi-PNF)
-    const esParaAsignacion = para_asignacion === '1' || para_asignacion === 'true';
-    if (user.role === 'REGULAR' && user.pnf_saga_id && !esParaAsignacion) {
-      conditions.push('p.pnf_saga_id = ?');
-      params.push(user.pnf_saga_id);
-    } else if (pnf_saga_id) {
+    if (pnf_saga_id) {
       conditions.push('p.pnf_saga_id = ?');
       params.push(Number(pnf_saga_id));
     }
@@ -207,7 +201,10 @@ export async function createProfesorHandler(request: FastifyRequest, reply: Fast
     }
 
     // Un coordinador solo puede inscribir profesores en su propio PNF
-    const pnfSagaId = user.role === 'REGULAR' && user.pnf_saga_id ? user.pnf_saga_id : body.pnf_saga_id || null;
+    if (user.role === 'ADMINISTRADOR' && !user.pnf_saga_id) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
+    const pnfSagaId = user.role === 'ADMINISTRADOR' ? user.pnf_saga_id : body.pnf_saga_id || null;
     const pnfNombre = body.pnf_nombre?.trim() || (await resolvePnfNombre(pnfSagaId ? Number(pnfSagaId) : null));
 
     const insert: any = await query(
@@ -261,11 +258,14 @@ export async function updateProfesorHandler(request: FastifyRequest, reply: Fast
       return reply.status(400).send({ success: false, message: `La cédula ${cedula} ya está asignada a otro profesor.` });
     }
 
-    // Un coordinador no puede reasignar el profesor fuera de su PNF
-    let pnfSagaId = body.pnf_saga_id !== undefined ? body.pnf_saga_id : current.pnf_saga_id;
-    if (user.role === 'REGULAR' && user.pnf_saga_id) {
-      pnfSagaId = user.pnf_saga_id;
+    // Un coordinador solo edita profesores de su PNF y no puede moverlos a otro
+    if (
+      esCoordinadorDeOtroPnf(user, current.pnf_saga_id) ||
+      (body.pnf_saga_id !== undefined && esCoordinadorDeOtroPnf(user, body.pnf_saga_id))
+    ) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
+    let pnfSagaId = body.pnf_saga_id !== undefined ? body.pnf_saga_id : current.pnf_saga_id;
     const pnfNombre =
       body.pnf_nombre?.trim() ||
       (pnfSagaId !== current.pnf_saga_id ? await resolvePnfNombre(Number(pnfSagaId) || null) : current.pnf_nombre);
@@ -302,9 +302,12 @@ export async function toggleActivoProfesorHandler(request: FastifyRequest, reply
   const { id } = request.params as { id: string };
 
   try {
-    const rows = await query<any[]>('SELECT id, activo FROM profesores WHERE id = ? LIMIT 1', [id]);
+    const rows = await query<any[]>('SELECT id, activo, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1', [id]);
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (esCoordinadorDeOtroPnf(request.userPayload!, rows[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
     const nuevoEstado = rows[0].activo ? 0 : 1;
@@ -348,9 +351,12 @@ export async function uploadFotoProfesorHandler(request: FastifyRequest, reply: 
   }
 
   try {
-    const rows = await query<any[]>('SELECT id, foto_url FROM profesores WHERE id = ? LIMIT 1', [id]);
+    const rows = await query<any[]>('SELECT id, foto_url, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1', [id]);
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (esCoordinadorDeOtroPnf(request.userPayload!, rows[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
     if (!fs.existsSync(FOTOS_DIR)) {
@@ -381,9 +387,12 @@ export async function deleteFotoProfesorHandler(request: FastifyRequest, reply: 
   const { id } = request.params as { id: string };
 
   try {
-    const rows = await query<any[]>('SELECT id, foto_url FROM profesores WHERE id = ? LIMIT 1', [id]);
+    const rows = await query<any[]>('SELECT id, foto_url, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1', [id]);
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (esCoordinadorDeOtroPnf(request.userPayload!, rows[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
     const prevUrl = rows[0].foto_url as string | null;
@@ -535,9 +544,12 @@ export async function setPerfilesProfesorHandler(request: FastifyRequest, reply:
   const ids = [...new Set((perfil_ids || []).map(Number).filter((n) => n > 0))];
 
   try {
-    const prof = await query<any[]>('SELECT id FROM profesores WHERE id = ? LIMIT 1', [id]);
+    const prof = await query<any[]>('SELECT id, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1', [id]);
     if (prof.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (esCoordinadorDeOtroPnf(request.userPayload!, prof[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
     await query('DELETE FROM profesor_perfiles WHERE profesor_id = ?', [id]);
@@ -804,9 +816,12 @@ export async function setDisponibilidadSlotHandler(request: FastifyRequest, repl
   }
 
   try {
-    const prof = await query<any[]>('SELECT id FROM profesores WHERE id = ? LIMIT 1', [id]);
+    const prof = await query<any[]>('SELECT id, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1', [id]);
     if (prof.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (esCoordinadorDeOtroPnf(request.userPayload!, prof[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
     if (body.disponible === false) {
       await query(

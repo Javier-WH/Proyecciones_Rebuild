@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
 import {
   X,
   BookOpen,
@@ -382,6 +383,11 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { user } = useAuth();
+  // El Coordinador solo puede crear proyecciones de su propio PNF
+  const esCoordinador = user?.role === 'ADMINISTRADOR';
+  const pnfFijo = esCoordinador ? user?.pnf_saga_id : null;
+
   // Catalog States
   const [pnfList, setPnfList] = useState<PNF[]>([]);
   const [trayectosList, setTrayectosList] = useState<Trayecto[]>([]);
@@ -428,7 +434,11 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
         apiFetch<TurnoJornada[]>('/horarios/turnos'),
       ]);
 
-      if (resPnf.success && resPnf.data) setPnfList(resPnf.data);
+      if (resPnf.success && resPnf.data) {
+        setPnfList(resPnf.data);
+        // Coordinador: su PNF queda preseleccionado y bloqueado
+        if (pnfFijo != null) setSelectedPnf(pnfFijo);
+      }
       if (resTrayectos.success && resTrayectos.data) setTrayectosList(resTrayectos.data);
       if (resTurnos.success && resTurnos.data) setTurnosList(resTurnos.data);
       if (resTurnosLocales.success && resTurnosLocales.data) setTurnosLocales(resTurnosLocales.data);
@@ -823,15 +833,23 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                     required
                     value={selectedPnf}
                     onChange={(e) => setSelectedPnf(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    disabled={pnfFijo != null}
+                    className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="">-- Seleccione PNF --</option>
-                    {pnfList.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.programa}
-                      </option>
-                    ))}
+                    {pnfList
+                      .filter((p) => pnfFijo == null || Number(p.id) === Number(pnfFijo))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.programa}
+                        </option>
+                      ))}
                   </select>
+                  {pnfFijo != null && (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Como coordinador solo puede crear proyecciones de su PNF asignado.
+                    </p>
+                  )}
                 </div>
 
                 {/* Trayecto */}

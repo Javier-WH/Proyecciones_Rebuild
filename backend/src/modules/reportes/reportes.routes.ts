@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { getPlantillaHandler, putPlantillaHandler } from './reportes.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
-const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR', 'REGULAR'] as const;
+const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR'] as const;
 
 export async function reportesRoutes(fastify: FastifyInstance) {
   // Cualquier usuario lee la plantilla; solo gestores la modifican (el

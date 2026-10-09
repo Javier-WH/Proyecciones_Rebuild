@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { Perfil } from './PerfilesModal.js';
 import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
@@ -58,7 +59,10 @@ interface ProfesorModalProps {
 }
 
 export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, onSuccess, profesor }) => {
+  const { user } = useAuth();
   const editingId = profesor?.id ?? null;
+  // El Coordinador solo puede registrar/editar profesores de su propio PNF
+  const pnfFijo = user?.role === 'ADMINISTRADOR' ? user?.pnf_saga_id ?? null : null;
 
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -95,7 +99,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     setSexo(profesor?.sexo || '');
     setEmail(profesor?.email || '');
     setTelefono(profesor?.telefono || '');
-    setPnfSagaId(profesor?.pnf_saga_id || '');
+    setPnfSagaId(pnfFijo ?? profesor?.pnf_saga_id ?? '');
     setTipoContratoId(profesor?.tipo_contrato_id || '');
     setFotoPreview(profesor?.foto_url || null);
     setFotoDataUrl(null);
@@ -341,19 +345,22 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
               <select
                 value={pnfSagaId}
                 onChange={(e) => setPnfSagaId(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                disabled={pnfFijo != null}
+                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <option value="">Sin PNF asignado</option>
+                {pnfFijo == null && <option value="">Sin PNF asignado</option>}
                 {/* Si el PNF actual no está en SAGA (o SAGA caído), se muestra igual */}
                 {profesor?.pnf_saga_id &&
                   !pnfList.some((p) => p.id === profesor.pnf_saga_id) && (
                     <option value={profesor.pnf_saga_id}>{profesor.pnf_nombre || `PNF #${profesor.pnf_saga_id}`}</option>
                   )}
-                {pnfList.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.programa}
-                  </option>
-                ))}
+                {pnfList
+                  .filter((p) => pnfFijo == null || Number(p.id) === Number(pnfFijo))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.programa}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>

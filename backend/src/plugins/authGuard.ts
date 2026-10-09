@@ -45,3 +45,17 @@ export function authorizeRoles(...allowedRoles: Array<'SUPER_USUARIO' | 'ADMINIS
     }
   };
 }
+
+// true cuando el usuario es un Coordinador (ADMINISTRADOR) intentando tocar
+// datos de un PNF que no es el suyo — incluye el caso "sin PNF asociado",
+// que para ese rol es obligatorio y por tanto prohibido para escribir.
+export function esCoordinadorDeOtroPnf(
+  user: UserTokenPayload,
+  pnfSagaId: number | string | null | undefined
+): boolean {
+  if (user.role !== 'ADMINISTRADOR') return false;
+  if (user.pnf_saga_id == null || pnfSagaId == null) return true;
+  return Number(user.pnf_saga_id) !== Number(pnfSagaId);
+}
+
+export const MSG_PNF_PROHIBIDO = 'Solo puede gestionar información de su PNF asignado.';

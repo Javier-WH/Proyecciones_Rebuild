@@ -47,7 +47,11 @@ interface ProfesorGrupo {
 export const CargaDocentePage: React.FC = () => {
   const { user } = useAuth();
   const { colorDePnf } = usePnfColors();
-  const puedeAsignar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
+  const esCoordinador = user?.role === 'ADMINISTRADOR';
+  const puedeAsignar = user?.role === 'SUPER_USUARIO' || esCoordinador;
+  // El coordinador solo gestiona materias/profesores de su propio PNF
+  const puedeEditarPnf = (pnf?: number | null) =>
+    puedeAsignar && (!esCoordinador || (pnf != null && Number(pnf) === Number(user?.pnf_saga_id)));
 
   // Punto discreto con el color identificativo del PNF (slate si no tiene)
   const pnfDot = (sagaId: number | null | undefined) => (
@@ -442,22 +446,24 @@ export const CargaDocentePage: React.FC = () => {
             {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, span)}
             {puedeAsignar && (
               <td className="py-3 px-4">
-                <div className="flex items-center justify-center gap-1">
-                  <button
-                    onClick={() => setModalAsignar({ open: true, row: r })}
-                    className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
-                    title="Reasignar a otro profesor"
-                  >
-                    <UserSearch className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleAssign(r, null)}
-                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                    title="Quitar materia"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+                {puedeEditarPnf(r.pnf_saga_id) && (
+                  <div className="flex items-center justify-center gap-1">
+                    <button
+                      onClick={() => setModalAsignar({ open: true, row: r })}
+                      className="p-1.5 text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+                      title="Reasignar a otro profesor"
+                    >
+                      <UserSearch className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleAssign(r, null)}
+                      className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      title="Quitar materia"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </td>
             )}
           </tr>
@@ -468,7 +474,7 @@ export const CargaDocentePage: React.FC = () => {
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
             <td colSpan={6} className="py-2 px-4">
-              {puedeAsignar ? (
+              {puedeEditarPnf(p.pnf_saga_id) ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
                   className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer uppercase"
@@ -575,6 +581,7 @@ export const CargaDocentePage: React.FC = () => {
             {idx === 0 && dedicacionCell(p.tipo_contrato_nombre, p.tipo_contrato_horas, dataSpan)}
             {puedeAsignar && (
               <td className="py-3 px-4">
+                {puedeEditarPnf(m.base.pnf_saga_id) && (
                 <div className="flex items-center justify-center gap-1">
                   <button
                     onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
@@ -597,6 +604,7 @@ export const CargaDocentePage: React.FC = () => {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+                )}
               </td>
             )}
           </tr>
@@ -608,7 +616,7 @@ export const CargaDocentePage: React.FC = () => {
           <tr className="border-b border-slate-800/60">
             {n === 0 && profesorCell(p, 1)}
             <td colSpan={6 + lapsoColsVista.length * 2} className="py-2 px-4">
-              {puedeAsignar ? (
+              {puedeEditarPnf(p.pnf_saga_id) ? (
                 <button
                   onClick={() => setModalMaterias({ open: true, profesor: p })}
                   className="w-full py-2 border border-dashed border-slate-700 hover:border-emerald-500/50 rounded-xl text-[11px] font-semibold text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/5 flex items-center justify-center gap-2 transition-colors cursor-pointer uppercase"
@@ -710,6 +718,7 @@ export const CargaDocentePage: React.FC = () => {
             )}
             {puedeAsignar && (
               <td className="py-3 px-4 text-center">
+                {puedeEditarPnf(m.base.pnf_saga_id) && (
                 <button
                   onClick={() => setModalAsignar({ open: true, row: rowObj, todosLapsos: true })}
                   className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -717,6 +726,7 @@ export const CargaDocentePage: React.FC = () => {
                   <UserSearch className="w-3.5 h-3.5" />
                   <span>Asignar</span>
                 </button>
+                )}
               </td>
             )}
           </tr>
@@ -1053,6 +1063,7 @@ export const CargaDocentePage: React.FC = () => {
                       )}
                       {puedeAsignar && (
                         <td className="py-3 px-4 text-center">
+                          {puedeEditarPnf(r.pnf_saga_id) && (
                           <button
                             onClick={() => setModalAsignar({ open: true, row: r })}
                             className="px-2.5 py-1.5 bg-slate-800 hover:bg-emerald-600 border border-slate-700 hover:border-emerald-500 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -1060,6 +1071,7 @@ export const CargaDocentePage: React.FC = () => {
                             <UserSearch className="w-3.5 h-3.5" />
                             <span>Asignar</span>
                           </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -1085,7 +1097,7 @@ export const CargaDocentePage: React.FC = () => {
       <AgregarMateriaModal
         isOpen={modalMaterias.open}
         profesor={modalMaterias.profesor}
-        rows={rows}
+        rows={esCoordinador ? rows.filter((r) => Number(r.pnf_saga_id) === Number(user?.pnf_saga_id)) : rows}
         lapsoInicial={!pivoted ? filterLapso : null}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}

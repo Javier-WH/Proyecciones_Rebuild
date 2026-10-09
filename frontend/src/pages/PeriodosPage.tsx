@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
 import {
   CalendarDays,
   Plus,
@@ -28,6 +29,9 @@ export interface PeriodoAcademico {
 }
 
 export const PeriodosPage: React.FC = () => {
+  const { user } = useAuth();
+  // Solo el Master crea/edita/elimina periodos; Coordinador y Usuario solo los ven.
+  const puedeGestionarPeriodos = user?.role === 'SUPER_USUARIO';
   const [periodos, setPeriodos] = useState<PeriodoAcademico[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -180,13 +184,15 @@ export const PeriodosPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center gap-2 transition-all cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Registrar Periodo</span>
-        </button>
+        {puedeGestionarPeriodos && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center gap-2 transition-all cursor-pointer self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Registrar Periodo</span>
+          </button>
+        )}
       </div>
 
       {/* Main Table / List */}
@@ -202,13 +208,15 @@ export const PeriodosPage: React.FC = () => {
           <p className="text-xs text-slate-500 mb-4">
             Registre un nuevo periodo (ejemplo: 2026-1) para comenzar a asignar proyecciones académicas.
           </p>
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Registrar Periodo Académico</span>
-          </button>
+          {puedeGestionarPeriodos && (
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Registrar Periodo Académico</span>
+            </button>
+          )}
         </div>
       ) : (
         <div className="border border-slate-800 rounded-3xl overflow-hidden bg-slate-900/80 shadow-xl">
@@ -228,20 +236,24 @@ export const PeriodosPage: React.FC = () => {
                   <td className="py-4 px-6 font-semibold text-white text-sm">{p.nombre}</td>
                   <td className="py-4 px-6 text-center">{getEstadoBadge(p.estado)}</td>
                   <td className="py-4 px-6 text-right space-x-2">
-                    <button
-                      onClick={() => handleOpenEditModal(p)}
-                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                      title="Editar periodo"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => abrirBorrado(p)}
-                      className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                      title="Eliminar periodo"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {puedeGestionarPeriodos && (
+                      <>
+                        <button
+                          onClick={() => handleOpenEditModal(p)}
+                          className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          title="Editar periodo"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => abrirBorrado(p)}
+                          className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Eliminar periodo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

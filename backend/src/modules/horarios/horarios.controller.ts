@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
 import { sagaService } from '../saga/saga.service.js';
+import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
 const TIPOS_AULA = ['AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO', 'INSTALACION_DEPORTIVA', 'SALA_LECTURA'] as const;
 const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
@@ -277,6 +278,12 @@ export async function updatePnfColorHandler(request: FastifyRequest, reply: Fast
   const pnfSagaId = Number(sagaId);
   if (isNaN(pnfSagaId)) {
     return reply.status(400).send({ success: false, message: 'sagaId inválido.' });
+  }
+
+  // El Coordinador solo personaliza el color de su propio PNF
+  const user = request.userPayload!;
+  if (esCoordinadorDeOtroPnf(user, pnfSagaId)) {
+    return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
   }
 
   // Validar formato #RRGGBB; null/'' vacío = sin color

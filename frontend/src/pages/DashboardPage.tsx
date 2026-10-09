@@ -105,9 +105,9 @@ export const DashboardPage: React.FC = () => {
       case 'SUPER_USUARIO':
         return <span className="inline-block whitespace-nowrap bg-purple-500/10 text-purple-300/80 border border-purple-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Super Usuario</span>;
       case 'ADMINISTRADOR':
-        return <span className="inline-block whitespace-nowrap bg-blue-500/10 text-blue-300/80 border border-blue-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Administrador</span>;
+        return <span className="inline-block whitespace-nowrap bg-blue-500/10 text-blue-300/80 border border-blue-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Coordinador</span>;
       case 'REGULAR':
-        return <span className="inline-block whitespace-nowrap bg-emerald-500/10 text-emerald-300/80 border border-emerald-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Coordinador PNF</span>;
+        return <span className="inline-block whitespace-nowrap bg-emerald-500/10 text-emerald-300/80 border border-emerald-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Usuario</span>;
       case 'PROFESOR':
         return <span className="inline-block whitespace-nowrap bg-amber-500/10 text-amber-300/80 border border-amber-500/20 text-[10px] px-3 py-0.5 rounded-full font-medium tracking-wide">Docente</span>;
       default:
@@ -116,7 +116,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const esAdmin = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR';
-  const puedeGestionarDocentes = esAdmin || user?.role === 'REGULAR';
+  const puedeGestionarDocentes = esAdmin;
 
   const moduloClases: Record<string, { icon: string; tag: string; hover: string; btn: string }> = {
     blue:    { icon: 'bg-blue-500/10 border-blue-500/20 text-blue-400',       tag: 'text-blue-400 bg-blue-500/10',       hover: 'hover:border-blue-500/50',    btn: 'hover:bg-blue-600' },

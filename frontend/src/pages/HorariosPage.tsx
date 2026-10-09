@@ -85,7 +85,7 @@ interface DispSlot {
 
 export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick }) => {
   const { user } = useAuth();
-  const puedeEditar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
+  const puedeEditar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR';
 
   const [tab, setTab] = useState<HorariosSubTab>(subTab ?? 'horario');
   useEffect(() => {
@@ -216,6 +216,13 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     secciones[0] ??
     null;
   const turnoSeccion = seccion ? turnos.find((t) => t.saga_id === seccion.turno_saga_id) : undefined;
+
+  // El coordinador solo edita el horario de secciones de su propio PNF;
+  // el resto de la grilla queda en modo lectura.
+  const puedeEditarSeccion =
+    puedeEditar &&
+    seccion != null &&
+    (user?.role !== 'ADMINISTRADOR' || Number(seccion.pnf_saga_id) === Number(user.pnf_saga_id));
 
   const materiasSeccion = useMemo(
     () => (seccion ? rowsLapso.filter((r) => r.seccion_id === seccion.seccion_id) : []),
@@ -876,7 +883,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-          {puedeEditar && tab === 'horario' && (
+          {puedeEditarSeccion && tab === 'horario' && (
             <>
               <button
                 onClick={() => generar('completar')}
@@ -942,7 +949,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                     <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between gap-2">
                       <span>Violaciones del lapso</span>
                       <div className="flex items-center gap-2">
-                        {puedeEditar && violaciones.length > 0 && (
+                        {puedeEditarSeccion && violaciones.length > 0 && (
                           <button
                             onClick={resolverAulas}
                             disabled={resolviendo}
@@ -1301,7 +1308,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 config={config}
                 trimestre={lapso.n}
                 tipoProyeccion={lapso.tipo}
-                puedeEditar={puedeEditar}
+                puedeEditar={puedeEditarSeccion}
                 forzar={forzar}
                 resaltar={resaltar}
                 enError={celdasEnError}

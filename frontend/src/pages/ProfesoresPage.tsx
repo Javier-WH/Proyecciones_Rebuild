@@ -28,7 +28,11 @@ import {
 
 export const ProfesoresPage: React.FC = () => {
   const { user } = useAuth();
-  const puedeGestionar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR' || user?.role === 'REGULAR';
+  const esCoordinador = user?.role === 'ADMINISTRADOR';
+  const puedeGestionar = user?.role === 'SUPER_USUARIO' || esCoordinador;
+  // El coordinador solo edita profesores de su propio PNF
+  const puedeEditarProf = (p: { pnf_saga_id: number | null }) =>
+    puedeGestionar && (!esCoordinador || (p.pnf_saga_id != null && Number(p.pnf_saga_id) === Number(user?.pnf_saga_id)));
 
   const [profesores, setProfesores] = useState<Profesor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -320,6 +324,7 @@ export const ProfesoresPage: React.FC = () => {
                   </td>
                   {puedeGestionar && (
                     <td className="py-3.5 px-5 text-right">
+                      {puedeEditarProf(p) && (
                       <div className="inline-flex items-center gap-1">
                         <button
                           onClick={() => setModalProfesor({ open: true, profesor: p })}
@@ -347,6 +352,7 @@ export const ProfesoresPage: React.FC = () => {
                           {p.activo ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                         </button>
                       </div>
+                      )}
                     </td>
                   )}
                 </tr>

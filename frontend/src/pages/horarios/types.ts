@@ -78,6 +78,7 @@ export interface SeccionRef {
   seccion_nombre: string;
   turno_saga_id: number;
   turno_nombre: string;
+  pnf_saga_id?: number | null;
   pnf_nombre: string;
   proyeccion_nombre: string;
   trayecto_saga_id?: number;
@@ -230,6 +231,7 @@ export function seccionesDe(rows: MateriaAsignableRow[]): SeccionRef[] {
         seccion_nombre: r.seccion_nombre,
         turno_saga_id: r.turno_saga_id ?? 0,
         turno_nombre: r.turno_nombre,
+        pnf_saga_id: r.pnf_saga_id,
         pnf_nombre: r.pnf_nombre,
         proyeccion_nombre: r.proyeccion_nombre,
         trayecto_saga_id: r.trayecto_saga_id,

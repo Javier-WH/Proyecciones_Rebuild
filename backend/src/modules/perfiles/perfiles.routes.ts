@@ -8,7 +8,7 @@ import {
 } from './perfiles.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
-const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR', 'REGULAR'] as const;
+const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR'] as const;
 
 export async function perfilesRoutes(fastify: FastifyInstance) {
   // Rutas estáticas antes que /:id
