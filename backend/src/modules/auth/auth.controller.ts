@@ -1,7 +1,12 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
-import { verifyPassword } from '../../utils/security.js';
+import { verifyPassword, hashPassword } from '../../utils/security.js';
 import { UserTokenPayload } from '../../plugins/authGuard.js';
+import {
+  PREGUNTAS_SEGURIDAD,
+  RECUPERAR_CANTIDAD,
+  normalizarRespuesta,
+} from './securityQuestions.js';
 
 interface UserRow {
   id: number;
@@ -249,5 +254,132 @@ export async function meHandler(request: FastifyRequest, reply: FastifyReply) {
   } catch (error) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error recuperando información del usuario.' });
+  }
+}
+
+// GET /api/auth/security-questions — catálogo público de preguntas de
+// seguridad (lo usa el modal "Mi cuenta" para configurarlas).
+export async function securityQuestionsHandler(_request: FastifyRequest, reply: FastifyReply) {
+  return reply.send({ success: true, data: { preguntas: PREGUNTAS_SEGURIDAD } });
+}
+
+// GET /api/auth/recovery-questions?username=X — devuelve RECUPERAR_CANTIDAD
+// preguntas al azar de las que el usuario configuró. Es público: es el primer
+// paso del flujo "olvidé mi contraseña".
+export async function recoveryQuestionsHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { username } = request.query as { username?: string };
+  if (!username?.trim()) {
+    return reply.status(400).send({ success: false, message: 'Ingrese su nombre de usuario.' });
+  }
+
+  try {
+    const users = await query<any[]>(
+      'SELECT id, activo FROM users WHERE username = ? LIMIT 1',
+      [username.trim()]
+    );
+    if (users.length === 0 || !users[0].activo) {
+      return reply.status(404).send({
+        success: false,
+        message: 'No se encontró una cuenta activa con ese usuario.',
+      });
+    }
+
+    const rows = await query<any[]>(
+      'SELECT pregunta_idx FROM user_security_answers WHERE user_id = ?',
+      [users[0].id]
+    );
+    if (rows.length < RECUPERAR_CANTIDAD) {
+      return reply.status(400).send({
+        success: false,
+        message:
+          'Esta cuenta no tiene preguntas de seguridad configuradas. ' +
+          'Contacte al administrador para restablecer su contraseña.',
+      });
+    }
+
+    // RECUPERAR_CANTIDAD preguntas al azar del set configurado por el usuario
+    const mezcladas = rows
+      .map((r) => r.pregunta_idx)
+      .filter((i) => i >= 0 && i < PREGUNTAS_SEGURIDAD.length)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, RECUPERAR_CANTIDAD);
+
+    return reply.send({
+      success: true,
+      data: {
+        preguntas: mezcladas.map((idx) => ({ idx, texto: PREGUNTAS_SEGURIDAD[idx] })),
+      },
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error obteniendo las preguntas.' });
+  }
+}
+
+// POST /api/auth/recover-password — segundo paso: verifica las respuestas a
+// las preguntas sorteadas y, si TODAS son correctas, actualiza la contraseña.
+export async function recoverPasswordHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as {
+    username?: string;
+    respuestas?: { idx?: number; respuesta?: string }[];
+    password?: string;
+  };
+
+  const username = body.username?.trim();
+  const nuevas = body.password ?? '';
+  const respuestas = Array.isArray(body.respuestas) ? body.respuestas : [];
+
+  if (!username || nuevas.length < 6 || respuestas.length < RECUPERAR_CANTIDAD) {
+    return reply.status(400).send({
+      success: false,
+      message:
+        `Debe responder las ${RECUPERAR_CANTIDAD} preguntas y elegir una contraseña ` +
+        'de al menos 6 caracteres.',
+    });
+  }
+
+  try {
+    const users = await query<any[]>(
+      'SELECT id, activo FROM users WHERE username = ? LIMIT 1',
+      [username]
+    );
+    if (users.length === 0 || !users[0].activo) {
+      return reply.status(404).send({ success: false, message: 'Cuenta no encontrada.' });
+    }
+    const userId = users[0].id;
+
+    const idxs = [...new Set(respuestas.map((r) => Number(r.idx)))].filter(
+      (i) => Number.isInteger(i) && i >= 0 && i < PREGUNTAS_SEGURIDAD.length
+    );
+    const guardadas = await query<any[]>(
+      `SELECT pregunta_idx, respuesta_hash FROM user_security_answers
+       WHERE user_id = ? AND pregunta_idx IN (${idxs.map(() => '?').join(',') || 'NULL'})`,
+      [userId, ...idxs]
+    );
+
+    // Verifica cada respuesta contra su hash; todas deben ser correctas
+    const hashPorIdx = new Map<number, string>(
+      guardadas.map((g) => [g.pregunta_idx, g.respuesta_hash])
+    );
+    for (const r of respuestas) {
+      const hash = hashPorIdx.get(Number(r.idx));
+      const texto = normalizarRespuesta(r.respuesta ?? '');
+      if (!hash || !texto || !(await verifyPassword(texto, hash))) {
+        return reply.status(401).send({
+          success: false,
+          message: 'Las respuestas no coinciden con las registradas.',
+        });
+      }
+    }
+
+    const hashed = await hashPassword(nuevas);
+    await query('UPDATE users SET password = ? WHERE id = ?', [hashed, userId]);
+    return reply.send({
+      success: true,
+      message: 'Contraseña actualizada exitosamente. Ya puede iniciar sesión.',
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error recuperando la contraseña.' });
   }
 }

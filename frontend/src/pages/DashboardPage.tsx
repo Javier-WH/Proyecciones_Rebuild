@@ -16,6 +16,7 @@ import { TiposContratoModal } from './TiposContratoModal.js';
 import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorPanelModal } from './ProfesorPanelModal.js';
 import { PermisosRolModal } from './PermisosRolModal.js';
+import { MiCuentaModal } from './MiCuentaModal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
 import {
@@ -42,7 +43,8 @@ import {
   ShieldCheck,
   RefreshCw,
   Info,
-  HelpCircle
+  HelpCircle,
+  UserRound
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -63,6 +65,7 @@ export const DashboardPage: React.FC = () => {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [acercaOpen, setAcercaOpen] = useState(false);
   const [permisosOpen, setPermisosOpen] = useState(false);
+  const [miCuentaOpen, setMiCuentaOpen] = useState(false);
   const [panelProfesor, setPanelProfesor] = useState<{
     id: number;
     nombre: string;
@@ -378,15 +381,6 @@ export const DashboardPage: React.FC = () => {
 
               {/* Menú de configuración y sesión — el docente ve solo logout directo */}
               <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
-                {user?.role === 'PROFESOR' ? (
-                  <button
-                    onClick={() => setLogoutConfirmOpen(true)}
-                    title="Cerrar sesión"
-                    className="p-2 rounded-xl border bg-slate-800 hover:bg-red-500/15 text-slate-300 hover:text-red-300 border-slate-700/60 hover:border-red-500/40 transition-colors cursor-pointer"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
-                ) : (
                 <div className="relative">
                   <button
                     onClick={() => setConfigMenuOpen((v) => !v)}
@@ -455,13 +449,34 @@ export const DashboardPage: React.FC = () => {
                             </button>
                           </>
                         )}
+                        {/* Mi cuenta: toda cuenta real edita sus propios datos;
+                            los invitados (docente por cédula) no tienen cuenta */}
+                        {!user?.invitado && (
+                          <button
+                            onClick={() => {
+                              setConfigMenuOpen(false);
+                              setMiCuentaOpen(true);
+                            }}
+                            className={`w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer ${
+                              esAdmin ? '' : 'rounded-t-2xl'
+                            }`}
+                          >
+                            <UserRound className="w-4 h-4 text-violet-400" />
+                            <div className="text-left">
+                              <div className="font-semibold text-xs">Mi Cuenta</div>
+                              <div className="text-[10px] text-slate-500">
+                                Datos, contraseña y preguntas de seguridad
+                              </div>
+                            </div>
+                          </button>
+                        )}
                         <a
                           href="/manual/index.html"
                           target="_blank"
                           rel="noreferrer"
                           onClick={() => setConfigMenuOpen(false)}
                           className={`w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer ${
-                            esAdmin ? '' : 'rounded-t-2xl'
+                            esAdmin || !user?.invitado ? '' : 'rounded-t-2xl'
                           }`}
                         >
                           <HelpCircle className="w-4 h-4 text-emerald-400" />
@@ -501,7 +516,6 @@ export const DashboardPage: React.FC = () => {
                     </>
                   )}
                 </div>
-                )}
               </div>
             </div>
           </div>
@@ -652,6 +666,9 @@ export const DashboardPage: React.FC = () => {
       <PerfilesModal isOpen={perfilesOpen} onClose={() => setPerfilesOpen(false)} />
       <ProfesorPanelModal profesor={panelProfesor} onClose={() => setPanelProfesor(null)} />
       {permisosOpen && <PermisosRolModal role={user?.role} onClose={() => setPermisosOpen(false)} />}
+
+      {/* Mi Cuenta — datos personales, contraseña y preguntas de seguridad */}
+      {miCuentaOpen && <MiCuentaModal onClose={() => setMiCuentaOpen(false)} />}
 
       {/* Acerca de — información del sistema */}
       {acercaOpen && (

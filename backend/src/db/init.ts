@@ -517,6 +517,20 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // 9g. Respuestas de seguridad para recuperación de contraseña: cada usuario
+  // elige N preguntas del catálogo (guardado por índice) y se almacena el hash
+  // bcrypt de la respuesta normalizada — nunca el texto plano.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_security_answers (
+      user_id INT NOT NULL,
+      pregunta_idx INT NOT NULL,
+      respuesta_hash VARCHAR(255) NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, pregunta_idx),
+      CONSTRAINT fk_security_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
   const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);
   if (existingUsers.length === 0) {

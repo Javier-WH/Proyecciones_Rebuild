@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
-import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2, GraduationCap, IdCard, X } from 'lucide-react';
+import { RecuperarPasswordModal } from './RecuperarPasswordModal.js';
+import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2, GraduationCap, IdCard, X, KeyRound } from 'lucide-react';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUptll from '../images/UPTLL_logo_transparent_outlined.png';
 
@@ -12,6 +13,7 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [profModalOpen, setProfModalOpen] = useState(false);
+  const [recuperarOpen, setRecuperarOpen] = useState(false);
   const [cedula, setCedula] = useState('');
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState<string | null>(null);
@@ -184,20 +186,30 @@ export const LoginPage: React.FC = () => {
               </button>
             </form>
 
-            {/* Acceso docente por cédula */}
-            <div className="mt-6 pt-5 border-t border-slate-800 text-center">
+            {/* Recuperación y acceso docente */}
+            <div className="mt-6 pt-5 border-t border-slate-800 text-center space-y-3">
               <button
                 type="button"
-                onClick={() => {
-                  setProfModalOpen(true);
-                  setProfError(null);
-                  setCedula('');
-                }}
-                className="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                onClick={() => setRecuperarOpen(true)}
+                className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
               >
-                <GraduationCap className="w-4 h-4" />
-                <span>Ingresar como profesor</span>
+                <KeyRound className="w-4 h-4" />
+                <span>¿Olvidaste tu contraseña?</span>
               </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfModalOpen(true);
+                    setProfError(null);
+                    setCedula('');
+                  }}
+                  className="inline-flex items-center gap-2 text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  <span>Ingresar como profesor</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -276,6 +288,9 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal: recuperar contraseña por preguntas de seguridad */}
+      {recuperarOpen && <RecuperarPasswordModal onClose={() => setRecuperarOpen(false)} />}
 
       {/* Footer */}
       <footer className="w-full border-t border-slate-900 bg-slate-950/80 py-4 px-6 text-center text-xs text-slate-400 z-10">

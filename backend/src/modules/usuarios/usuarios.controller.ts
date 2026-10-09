@@ -1,6 +1,11 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
-import { hashPassword } from '../../utils/security.js';
+import { hashPassword, verifyPassword } from '../../utils/security.js';
+import {
+  PREGUNTAS_SEGURIDAD,
+  PREGUNTAS_REQUERIDAS,
+  normalizarRespuesta,
+} from '../auth/securityQuestions.js';
 
 type UserRole = 'SUPER_USUARIO' | 'ADMINISTRADOR' | 'REGULAR' | 'PROFESOR';
 const ROLES_VALIDOS: UserRole[] = ['SUPER_USUARIO', 'ADMINISTRADOR', 'REGULAR', 'PROFESOR'];
@@ -184,5 +189,165 @@ export async function toggleActivoUsuarioHandler(request: FastifyRequest, reply:
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error cambiando el estado del usuario.' });
+  }
+}
+
+// ── Auto-edición de la propia cuenta ─────────────────────────────────────────
+// Cualquier usuario autenticado (no invitado) puede editar SU cuenta: usuario,
+// nombre, apellido, email y contraseña. No puede tocar su rol, PNF ni la
+// cédula de profesor asociada — eso solo lo hace un Master.
+
+interface SelfBody {
+  username?: string;
+  nombre?: string;
+  apellido?: string;
+  email?: string | null;
+  password_actual?: string;
+  password_nueva?: string;
+}
+
+const esInvitado = (request: FastifyRequest) =>
+  request.userPayload?.invitado || (request.userPayload?.id ?? 0) <= 0;
+
+// PUT /api/usuarios/me — edición de los propios datos
+export async function updateSelfHandler(request: FastifyRequest, reply: FastifyReply) {
+  if (esInvitado(request)) {
+    return reply.status(403).send({
+      success: false,
+      message: 'Las sesiones de invitado no tienen cuenta editable.',
+    });
+  }
+  const id = request.userPayload!.id;
+  const body = request.body as SelfBody;
+
+  const username = body.username?.trim();
+  const nombre = body.nombre?.trim();
+  const apellido = body.apellido?.trim();
+  if (!username || !nombre || !apellido) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Usuario, nombre y apellido son obligatorios.',
+    });
+  }
+
+  const quierePassword = !!body.password_nueva;
+  if (quierePassword) {
+    if ((body.password_nueva ?? '').length < 6) {
+      return reply.status(400).send({
+        success: false,
+        message: 'La nueva contraseña debe tener al menos 6 caracteres.',
+      });
+    }
+    if (!body.password_actual) {
+      return reply.status(400).send({
+        success: false,
+        message: 'Debe ingresar su contraseña actual para cambiarla.',
+      });
+    }
+  }
+
+  try {
+    const rows = await query<any[]>('SELECT id, password FROM users WHERE id = ? LIMIT 1', [id]);
+    if (rows.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Usuario no encontrado.' });
+    }
+
+    if (quierePassword && !(await verifyPassword(body.password_actual!, rows[0].password))) {
+      return reply.status(401).send({
+        success: false,
+        message: 'La contraseña actual no es correcta.',
+      });
+    }
+
+    if (quierePassword) {
+      const hashed = await hashPassword(body.password_nueva!);
+      await query(
+        'UPDATE users SET username = ?, password = ?, nombre = ?, apellido = ?, email = ? WHERE id = ?',
+        [username, hashed, nombre, apellido, body.email?.trim() || null, id]
+      );
+    } else {
+      await query(
+        'UPDATE users SET username = ?, nombre = ?, apellido = ?, email = ? WHERE id = ?',
+        [username, nombre, apellido, body.email?.trim() || null, id]
+      );
+    }
+
+    return reply.send({ success: true, message: 'Datos actualizados exitosamente.' });
+  } catch (error: any) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return reply.status(400).send({
+        success: false,
+        message: 'El nombre de usuario o el correo ya están en uso.',
+      });
+    }
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error actualizando la cuenta.' });
+  }
+}
+
+// GET /api/usuarios/me/security-questions — índices de las preguntas que el
+// usuario configuró (nunca las respuestas, solo qué preguntas eligió).
+export async function mySecurityQuestionsHandler(request: FastifyRequest, reply: FastifyReply) {
+  if (esInvitado(request)) {
+    return reply.status(403).send({ success: false, message: 'Sesión de invitado.' });
+  }
+  try {
+    const rows = await query<any[]>(
+      'SELECT pregunta_idx FROM user_security_answers WHERE user_id = ? ORDER BY pregunta_idx',
+      [request.userPayload!.id]
+    );
+    return reply.send({
+      success: true,
+      data: { preguntas: rows.map((r) => r.pregunta_idx) },
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error consultando las preguntas.' });
+  }
+}
+
+// PUT /api/usuarios/me/security-questions — reemplaza el set completo:
+// exactamente PREGUNTAS_REQUERIDAS preguntas distintas, todas con respuesta.
+export async function updateMySecurityQuestionsHandler(request: FastifyRequest, reply: FastifyReply) {
+  if (esInvitado(request)) {
+    return reply.status(403).send({ success: false, message: 'Sesión de invitado.' });
+  }
+  const userId = request.userPayload!.id;
+  const body = request.body as { respuestas?: { idx?: number; respuesta?: string }[] };
+  const respuestas = Array.isArray(body.respuestas) ? body.respuestas : [];
+
+  const limpias = respuestas
+    .map((r) => ({ idx: Number(r.idx), texto: normalizarRespuesta(r.respuesta ?? '') }))
+    .filter((r) => Number.isInteger(r.idx) && r.idx >= 0 && r.idx < PREGUNTAS_SEGURIDAD.length);
+  const unicas = new Map(limpias.map((r) => [r.idx, r.texto]));
+
+  if (
+    unicas.size !== PREGUNTAS_REQUERIDAS ||
+    [...unicas.values()].some((t) => t.length === 0)
+  ) {
+    return reply.status(400).send({
+      success: false,
+      message:
+        `Debe elegir ${PREGUNTAS_REQUERIDAS} preguntas diferentes ` +
+        'y responderlas todas.',
+    });
+  }
+
+  try {
+    await query('DELETE FROM user_security_answers WHERE user_id = ?', [userId]);
+    for (const [idx, texto] of unicas) {
+      const hash = await hashPassword(texto);
+      await query(
+        'INSERT INTO user_security_answers (user_id, pregunta_idx, respuesta_hash) VALUES (?, ?, ?)',
+        [userId, idx, hash]
+      );
+    }
+    return reply.send({
+      success: true,
+      message: 'Preguntas de seguridad guardadas exitosamente.',
+    });
+  } catch (error) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error guardando las preguntas.' });
   }
 }
