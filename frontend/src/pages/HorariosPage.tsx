@@ -98,6 +98,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
 
   const [rows, setRows] = useState<MateriaAsignableRow[]>([]);
   const [periodo, setPeriodo] = useState<string | null>(null);
+  const [periodoNombre, setPeriodoNombre] = useState<string | null>(null);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [entries, setEntries] = useState<HorarioEntry[]>([]);
@@ -753,7 +754,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     setLoading(true);
     setErrorMsg(null);
     const [rCarga, rTurnos, rAulas, rProf, rPnfs, rConfig] = await Promise.all([
-      apiFetch<{ periodo: string | null; rows: MateriaAsignableRow[] }>('/proyecciones/carga-docente'),
+      apiFetch<{ periodo: string | null; periodo_nombre?: string | null; rows: MateriaAsignableRow[] }>('/proyecciones/carga-docente'),
       apiFetch<Turno[]>('/horarios/turnos'),
       apiFetch<Aula[]>('/horarios/aulas'),
       apiFetch<ProfesorLite[]>('/profesores'),
@@ -763,6 +764,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     if (rCarga.success && rCarga.data) {
       setRows(rCarga.data.rows || []);
       setPeriodo(rCarga.data.periodo);
+      setPeriodoNombre(rCarga.data.periodo_nombre ?? null);
     } else {
       setErrorMsg(rCarga.message || 'Error cargando la carga docente.');
     }
@@ -1370,6 +1372,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         isOpen={reporteOpen}
         onClose={() => setReporteOpen(false)}
         periodo={periodo}
+        periodoNombre={periodoNombre}
         lapsoActual={`${lapso.tipo}:${lapso.n}`}
         lapsos={lapsos}
         rows={rows}

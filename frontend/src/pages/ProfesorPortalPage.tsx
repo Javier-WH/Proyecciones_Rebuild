@@ -351,6 +351,7 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
         isOpen={reporteOpen}
         onClose={() => setReporteOpen(false)}
         periodo={periodoCodigo}
+        periodoNombre={periodoNombre}
         lapsoActual={lapsoSel ?? lapsos[0]?.[0] ?? 'TRIMESTRAL:1'}
         lapsos={lapsos.map(([k]) => k)}
         rows={rows}

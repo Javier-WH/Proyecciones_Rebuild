@@ -33,6 +33,7 @@ interface ReporteHorarioModalProps {
   isOpen: boolean;
   onClose: () => void;
   periodo: string | null;
+  periodoNombre?: string | null;
   lapsoActual: string; // 'TRIMESTRAL:1' — sus secciones vienen pre-marcadas
   lapsos: string[]; // todos los lapsos con carga docente ('TRIMESTRAL:1' … 'SEMESTRAL:2')
   rows: MateriaAsignableRow[];
@@ -153,6 +154,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   isOpen,
   onClose,
   periodo,
+  periodoNombre,
   lapsoActual,
   lapsos,
   rows,
@@ -364,7 +366,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       lineas: [
         ...ENCABEZADO,
         `SECCIÓN ${s.seccion_nombre} — ${s.proyeccion_nombre} — TURNO ${s.turno_nombre.toUpperCase()}`,
-        `${g.label.toUpperCase()} — PERIODO ${periodo ?? ''}`,
+        `${g.label.toUpperCase()} — PERIODO ${periodoNombre || periodo || ''}`,
       ],
       dias,
       filas,
@@ -428,7 +430,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     }
     return {
       nombre: nombreHoja,
-      lineas: [...ENCABEZADO, `${titulo} — ${g.label.toUpperCase()}`, `PERIODO ${periodo ?? ''}`],
+      lineas: [...ENCABEZADO, `${titulo} — ${g.label.toUpperCase()}`, `PERIODO ${periodoNombre || periodo || ''}`],
       dias,
       filas,
       ...fusionesDe(filas, dias.length),
@@ -877,7 +879,7 @@ td.clase { vertical-align: middle; }
             </button>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            Periodo {periodo ?? '—'} · Una hoja por cada elemento seleccionado.
+            Periodo {periodoNombre || periodo || '—'} · Una hoja por cada elemento seleccionado.
           </p>
         </div>
 
