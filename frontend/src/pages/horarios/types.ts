@@ -53,6 +53,7 @@ export interface HorarioEntry {
   profesor_id: number | null;
   prof_nombres: string | null;
   prof_apellidos: string | null;
+  prof_pnf_saga_id: number | null; // PNF del docente asignado (alcance del coordinador)
   dia_semana: number;
   bloque_id: number;
   aula_id: number;

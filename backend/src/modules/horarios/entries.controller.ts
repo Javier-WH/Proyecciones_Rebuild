@@ -74,6 +74,7 @@ const ENTRY_SELECT = `
          e.materia_id, m.nombre AS materia_nombre, m.horas_semanales,
          e.seccion_id, s.nombre AS seccion_nombre, s.turno_saga_id, s.turno_nombre,
          e.profesor_id, pf.nombres AS prof_nombres, pf.apellidos AS prof_apellidos,
+         pf.pnf_saga_id AS prof_pnf_saga_id,
          e.dia_semana, e.bloque_id, e.aula_id,
          a.codigo AS aula_codigo, a.nombre AS aula_nombre,
          b.orden AS bloque_orden, b.hora_inicio, b.hora_fin, b.es_receso, b.turno_id,

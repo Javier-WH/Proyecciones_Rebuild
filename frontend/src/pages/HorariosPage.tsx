@@ -74,6 +74,7 @@ interface Violacion {
   error: string;
   titulo?: string; // línea destacada en el panel/tooltip (choques)
   lineas?: string[]; // viñetas con la ficha de cada clase involucrada
+  entryIds?: number[]; // clases involucradas (alcance del coordinador)
 }
 
 // Slot en que un profesor NO está disponible (tabla profesor_disponibilidad = bloqueos)
@@ -244,6 +245,25 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     return { propios: propios.length > 0 ? propios : lapsos, otros: propios.length > 0 ? otros : [] };
   }, [rows, seccion, lapsos, vista]);
 
+  // Alcance del Coordinador: solo puede resolver los errores que tocan una
+  // clase de su PNF (sección propia) o a un profesor de su PNF (a ese docente
+  // puede desasignarlo desde Carga Docente aunque la clase sea de otro PNF).
+  // Master y Usuario ven todos los errores; un coordinador sin PNF, ninguno.
+  const esErrorEnAlcance = useMemo(() => {
+    if (user?.role !== 'ADMINISTRADOR') return () => true;
+    const miPnf = user?.pnf_saga_id;
+    if (miPnf == null) return () => false;
+    const porId = new Map(entries.map((e) => [e.id, e]));
+    return (entryId: number) => {
+      const e = porId.get(entryId);
+      return (
+        !!e &&
+        (Number(e.pnf_saga_id) === Number(miPnf) ||
+          (e.prof_pnf_saga_id != null && Number(e.prof_pnf_saga_id) === Number(miPnf)))
+      );
+    };
+  }, [user, entries]);
+
   // Auditoría del lapso: choques de sección/profesor/aula, clases en receso o
   // fuera de los días del turno, y violaciones de las reglas de generación
   // (mínimo de horas seguidas por sesión / máximo de horas por día).
@@ -290,6 +310,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           titulo: 'Clase en receso',
           error: 'La clase quedó en un bloque de receso de más de 10 minutos:',
           lineas: [ficha(e), cuando(e)],
+          entryIds: [e.id],
         });
         continue;
       }
@@ -303,6 +324,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           titulo: 'Día no habilitado',
           error: `El turno '${t.nombre}' no tiene habilitado ese día:`,
           lineas: [ficha(e), cuando(e)],
+          entryIds: [e.id],
         });
       }
       // Profesor en un slot que marcó como no disponible (traslapa por hora real)
@@ -325,6 +347,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               `El profesor ${profDe(e)} no está disponible el ${DIAS_NOMBRES[e.dia_semana]} ` +
               `de ${fmtHoraCfg(hit.hora_inicio, usa12)} a ${fmtHoraCfg(hit.hora_fin, usa12)}:`,
             lineas: [ficha(e), cuando(e)],
+            entryIds: [e.id],
           });
         }
       }
@@ -393,6 +416,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               titulo,
               error: descFn(local, otro),
               lineas: [ficha(local), ficha(otro), solape(a, b)],
+              entryIds: [a.id, b.id],
             });
           }
         }
@@ -422,6 +446,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
             `La materia tiene ${ord.length}h el ${DIAS_NOMBRES[dia]} ` +
             `(máximo ${config.max_horas_dia}h por día):`,
           lineas: [ficha(ord[0])],
+          entryIds: ord.map((e) => e.id),
         });
       }
       // Sesiones = runs de bloques consecutivos por orden (un receso corta el run)
@@ -439,6 +464,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               `${fmtHoraCfg(run[0].hora_inicio, usa12)}–${fmtHoraCfg(run[run.length - 1].hora_fin, usa12)} ` +
               `(mínimo ${config.min_horas_bloque}h seguidas):`,
             lineas: [ficha(run[0])],
+            entryIds: run.map((e) => e.id),
           });
         }
       };
@@ -451,8 +477,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       }
       cerrarRun();
     }
-    return out;
-  }, [entries, secciones, turnos, config, dispProfs, lapso]);
+    // Coordinador: solo los errores que puede resolver (los demás son de
+    // otros PNF y no le corresponden).
+    return out.filter((v) => !v.entryIds || v.entryIds.some(esErrorEnAlcance));
+  }, [entries, secciones, turnos, config, dispProfs, lapso, esErrorEnAlcance]);
 
   // Celdas (bloque:día) involucradas en alguna violación, con sus mensajes:
   // las tarjetas las marcan con un punto rojo cuyo tooltip lista los errores.
@@ -562,6 +590,8 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         ? e.trimestre === lapso.n
         : e.trimestre !== 2 && seccionesSemestrales.has(e.seccion_id);
     const add = (id: number, txt: string) => {
+      // El aviso solo se pinta en clases que el usuario puede tocar
+      if (!esErrorEnAlcance(id)) return;
       const arr = avisos.get(id) ?? [];
       if (!arr.includes(txt)) arr.push(txt);
       avisos.set(id, arr);
@@ -622,7 +652,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       }
     }
     return { avisos, parejas };
-  }, [entries, lapso, usa12, pnfOptions, seccionesSemestrales]);
+  }, [entries, lapso, usa12, pnfOptions, seccionesSemestrales, esErrorEnAlcance]);
   const avisosParciales = parciales.avisos;
   const parejasParciales = parciales.parejas;
 
@@ -730,14 +760,21 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   ]);
 
   const irAViolacion = (v: Violacion) => {
-    const s = secciones.find((x) => x.seccion_id === v.seccion_id);
+    // En choques entre dos secciones, aterriza en la que el usuario puede
+    // editar (la de su PNF si es coordinador), no necesariamente en `local`.
+    const porId = new Map(entries.map((e) => [e.id, e]));
+    const seccionDestino =
+      v.entryIds
+        ?.map((id) => porId.get(id))
+        .find((e) => e && esErrorEnAlcance(e.id))?.seccion_id ?? v.seccion_id;
+    const s = secciones.find((x) => x.seccion_id === seccionDestino);
     setVista('seccion');
     if (s) {
       setPnfSel(s.pnf_nombre);
       setTrayectoSel(s.trayecto_nombre);
       setTurnoSel(s.turno_nombre);
     }
-    setSeccionId(v.seccion_id);
+    setSeccionId(seccionDestino);
     setErroresOpen(false);
     setResaltar(new Set(v.bloques.map((b) => `${b}:${v.dia}`)));
     window.setTimeout(() => setResaltar(null), 8000);
