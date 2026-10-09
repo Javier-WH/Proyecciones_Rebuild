@@ -4,7 +4,7 @@ Sistema web para la gestión de proyecciones académicas, carga docente y elabor
 
 Permite crear proyecciones por PNF/trayecto, asignar profesores a unidades curriculares por sección y lapso, definir la disponibilidad docente, generar horarios automáticamente respetando conflictos de aula/sección/profesor, exportar reportes a Excel/PDF y exponer el horario de un docente a sistemas externos (app de asistencias).
 
-> Documentos relacionados: [`SYSTEM_SPEC.md`](SYSTEM_SPEC.md) (especificación funcional) y [`REGLAS_HORARIOS.md`](REGLAS_HORARIOS.md) (reglas del módulo de horarios).
+> Documentos relacionados: [`SYSTEM_SPEC.md`](SYSTEM_SPEC.md) (especificación funcional), [`REGLAS_HORARIOS.md`](REGLAS_HORARIOS.md) (reglas del módulo de horarios) y [`docs/MANUAL_USUARIO.md`](docs/MANUAL_USUARIO.md) (manual de usuario con capturas — también disponible dentro de la app: menú ⚙ → **Ayuda**).
 
 ---
 
@@ -74,7 +74,7 @@ Archivo `backend/.env` (ver `backend/.env.example`):
 | `API_USER` / `API_PASSWORD` | — | Credenciales SAGA |
 | `EXTERNAL_API_KEY` | *(vacío = deshabilitado)* | Clave fija para `/api/externo`. Sin ella el endpoint responde 503. Generar una cadena larga y aleatoria |
 
-El frontend **no necesita `.env`**: en dev usa el proxy de Vite (`/api` → `127.0.0.1:4000`).
+El frontend **no necesita `.env`**: en dev el proxy de Vite redirige `/api` y `/public` → `127.0.0.1:4000` (este último sirve las fotos de profesores del backend). El manual de usuario es estático del propio frontend (`frontend/public/manual`, accesible en `/manual/index.html`).
 
 ---
 
@@ -172,14 +172,25 @@ El frontend envía `Authorization: Bearer <token>` en cada request (ver `apiFetc
 
 ### Roles
 
-| Rol | Alcance |
-|---|---|
-| `SUPER_USUARIO` | Todo + gestión de usuarios |
-| `ADMINISTRADOR` | Todo excepto gestión de usuarios |
-| `REGULAR` | Gestión de su PNF (coordinador): proyecciones, horarios, asignaciones |
-| `PROFESOR` | **Solo lectura** + editar **su propia** disponibilidad (`PUT /profesores/:id/disponibilidad` — el handler verifica que el id sea el suyo) |
+| Rol | Etiqueta UI | Alcance |
+|---|---|---|
+| `SUPER_USUARIO` | Master | Acceso total sin restricciones + gestión de usuarios |
+| `ADMINISTRADOR` | Coordinador | Ve todo e imprime todo; escribe **solo en su PNF**. Requiere `pnf_saga_id` obligatorio — sin él, toda escritura acotada a PNF → 403 |
+| `REGULAR` | Usuario | **Solo lectura** en todo el sistema |
+| `PROFESOR` | Docente | Portal propio: solo lectura + editar **su propia** disponibilidad (`PUT /profesores/:id/disponibilidad` — el handler verifica que el id sea el suyo) |
 
-Guards (`backend/src/plugins/authGuard.ts`): `authenticate` verifica el JWT; `authorizeRoles(...)` filtra por rol. Ambos se aplican como `preHandler` por ruta.
+Reglas específicas del **Coordinador** (`ADMINISTRADOR`), aplicadas en cada handler:
+
+- **Periodos**: solo lectura — crear/editar/eliminar es exclusivo de Master.
+- **Proyecciones**: crear/editar/activar/borrar solo con `pnf_saga_id` igual al suyo.
+- **Horarios**: muta entries/genera/resuelve aulas solo de su PNF; la lectura de la grilla no se filtra.
+- **Carga docente**: asigna solo materias de su PNF **a cualquier profesor**; puede *quitar* una materia de otro PNF únicamente cuando el profesor asignado es de su PNF.
+- **Profesores**: crea/edita solo docentes de su PNF (los ve todos).
+- **Catálogos globales** (aulas, turnos, tipos de contrato, perfiles docentes): editable por Master + Coordinador.
+- **Color de PNF**: Master todos; Coordinador solo el suyo.
+- **Reportes**: imprime cualquier reporte sin restricción; puede editar plantillas de encabezado.
+
+Guards (`backend/src/plugins/authGuard.ts`): `authenticate` verifica el JWT; `authorizeRoles(...)` filtra por rol (ambos como `preHandler` por ruta); `esCoordinadorDeOtroPnf(user, pnf)` centraliza en los handlers la validación "Coordinador vs PNF ajeno" (true también cuando no tiene PNF).
 
 ---
 
@@ -290,35 +301,36 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/carga-docente` | JWT | Matriz profesor×materia×sección×lapso del periodo |
-| PUT | `/asignaciones` | GESTORES | Asignar/quitar profesor a materia×sección×lapso |
-| POST / GET | `/` | JWT | Crear / listar proyecciones |
-| GET / PUT / DELETE | `/:id` | JWT | Detalle / editar / eliminar |
-| PUT | `/:id/toggle-active` | JWT | Activar/desactivar proyección |
+| PUT | `/asignaciones` | ESCRITORES + regla PNF | Asignar/quitar profesor. Coord: solo asigna materias de su PNF (a cualquier docente); quita materias ajenas solo si el docente es suyo |
+| POST | `/` | ESCRITORES + PNF | Crear proyección (Coord: solo de su PNF) |
+| GET | `/`, `/:id` | JWT | Listar / detalle |
+| PUT / DELETE | `/:id` | ESCRITORES + PNF | Editar / eliminar (Coord: solo su PNF) |
+| PUT | `/:id/toggle-active` | ESCRITORES + PNF | Activar/desactivar (Coord: solo su PNF) |
 
 ### `/api/periodos`
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/`, `/activos` | JWT | Listar todos / solo activos |
-| POST | `/` | JWT | Crear periodo |
-| PUT / DELETE | `/:id` | JWT | Editar / eliminar |
+| POST | `/` | MASTER | Crear periodo |
+| PUT / DELETE | `/:id` | MASTER | Editar / eliminar |
 
 ### `/api/profesores`
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/`, `/:id` | JWT | Listar (`?para_asignacion=1&incluir_inactivos=1`) / detalle |
-| POST | `/` | GESTORES | Crear profesor local |
-| PUT | `/:id` | GESTORES | Editar |
-| PUT | `/:id/toggle-activo` | GESTORES | Activar/desactivar |
-| PUT / DELETE | `/:id/foto` | GESTORES | Subir (base64, ≤3 MB) / borrar foto |
-| POST | `/sync` | GESTORES | Sincronizar docentes desde SAGA |
+| POST | `/` | ESCRITORES + PNF | Crear profesor local (Coord: solo de su PNF) |
+| PUT | `/:id` | ESCRITORES + PNF | Editar (Coord: solo su PNF) |
+| PUT | `/:id/toggle-activo` | ESCRITORES + PNF | Activar/desactivar |
+| PUT / DELETE | `/:id/foto` | ESCRITORES + PNF | Subir (base64, ≤3 MB) / borrar foto |
+| POST | `/sync` | ESCRITORES | Sincronizar docentes desde SAGA |
 | GET | `/:id/perfiles`, `/:id/perfiles-materias` | JWT | Perfiles del docente y sus materias afines |
-| PUT | `/:id/perfiles` | GESTORES | Reemplazar perfiles |
-| GET | `/:id/disponibilidad` | JWT | Slots bloqueados |
-| PUT | `/:id/disponibilidad` | GESTORES + PROFESOR*(solo la propia)* | Marcar/desmarcar slot bloqueado |
-| GET/POST/PUT/DELETE | `/tipos-contrato…` | GET: JWT · resto: ADMINS | CRUD de dedicaciones |
-| POST | `/tipos-contrato/sync` | ADMINS | Sincronizar dedicaciones desde SAGA |
+| PUT | `/:id/perfiles` | ESCRITORES + PNF | Reemplazar perfiles (Coord: solo su PNF) |
+| GET | `/:id/disponibilidad` | JWT | Slots bloqueados (PROFESOR: solo la propia) |
+| PUT | `/:id/disponibilidad` | ESCRITORES + PROFESOR*(solo la propia)* | Marcar/desmarcar slot bloqueado (Coord: solo profesores de su PNF) |
+| GET/POST/PUT/DELETE | `/tipos-contrato…` | GET: JWT · resto: ESCRITORES | CRUD de dedicaciones |
+| POST | `/tipos-contrato/sync` | ESCRITORES | Sincronizar dedicaciones desde SAGA |
 
 ### `/api/perfiles`
 
@@ -326,14 +338,14 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 |---|---|---|---|
 | GET | `/materias-catalogo` | JWT | Catálogo de materias para armar perfiles |
 | GET | `/` | JWT | Listar perfiles |
-| POST / PUT / DELETE | `/`, `/:id` | GESTORES | CRUD de perfiles |
+| POST / PUT / DELETE | `/`, `/:id` | ESCRITORES | CRUD de perfiles |
 
 ### `/api/usuarios` — solo `SUPER_USUARIO`
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/` | Listar usuarios |
-| POST | `/` | Crear usuario (cualquier rol) |
+| POST | `/` | Crear usuario (cualquier rol; rol Coordinador exige `pnf_saga_id`) |
 | PUT | `/:id` | Editar usuario |
 | PUT | `/:id/toggle-activo` | Activar/desactivar |
 
@@ -342,23 +354,23 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/aulas`, `/materias`, `/pnfs`, `/turnos`, `/config`, `/entries` | JWT | Catálogos y entries del lapso (`?periodo=&tipo=&trimestre=`) |
-| POST/PUT/DELETE | `/aulas…` | GESTORES | CRUD de aulas |
-| PUT | `/pnfs/:sagaId/color` | GESTORES | Color del PNF en la UI |
-| POST / DELETE | `/turnos`, `/turnos/:id` | ADMINS | Crear/eliminar turno |
-| PUT | `/turnos/:id`, `/turnos/:id/bloques` | GESTORES | Editar turno / redefinir bloques |
-| DELETE | `/turnos/:id/entries` | GESTORES | Borrar entries del turno |
-| PUT | `/config` | ADMINS | Reglas del generador (`horario_config`) |
-| PUT | `/entries` | GESTORES | Upsert de una clase (valida conflictos por tiempo real) |
-| POST | `/entries/swap`, `/move-group`, `/schedule-group`, `/unschedule`, `/aula-grupo`, `/resolver-aulas` | GESTORES | Operaciones de la grilla (intercambiar, mover, desagendar, cambiar aula…) |
-| DELETE | `/entries/:id` | GESTORES | Borrar una clase |
-| POST | `/generar` | GESTORES | Generación automática del horario del lapso |
+| POST/PUT/DELETE | `/aulas…` | ESCRITORES | CRUD de aulas (catálogo global) |
+| PUT | `/pnfs/:sagaId/color` | ESCRITORES + PNF | Color del PNF en la UI (Coord: solo el suyo) |
+| POST / DELETE | `/turnos`, `/turnos/:id` | ESCRITORES | Crear/eliminar turno |
+| PUT | `/turnos/:id`, `/turnos/:id/bloques` | ESCRITORES | Editar turno / redefinir bloques |
+| DELETE | `/turnos/:id/entries` | ESCRITORES + PNF | Borrar entries del turno (Coord: solo su PNF) |
+| PUT | `/config` | ESCRITORES | Reglas del generador (`horario_config`) |
+| PUT | `/entries` | ESCRITORES + PNF | Upsert de una clase — valida conflictos por tiempo real (Coord: solo su PNF) |
+| POST | `/entries/swap`, `/move-group`, `/schedule-group`, `/unschedule`, `/aula-grupo`, `/resolver-aulas` | ESCRITORES + PNF | Operaciones de la grilla (Coord: solo su PNF) |
+| DELETE | `/entries/:id` | ESCRITORES + PNF | Borrar una clase (Coord: solo su PNF) |
+| POST | `/generar` | ESCRITORES + PNF | Generación automática del lapso (Coord: scopeada a su PNF) |
 
 ### `/api/reportes` — plantillas de encabezado
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/plantilla/:reporte` | JWT | Plantilla guardada (`horarios_seccion`, `horarios_aulas`, `horarios_profesores`, `carga_docente`) |
-| PUT | `/plantilla/:reporte` | GESTORES | Guardar plantilla (PROFESOR → 403) |
+| PUT | `/plantilla/:reporte` | ESCRITORES | Guardar plantilla (PROFESOR/REGULAR → 403) |
 
 ### `/api/externo` — integraciones (API key, solo lectura)
 
@@ -368,7 +380,7 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 
 > Solo se registran métodos GET: no existe forma de escribir por este prefijo.
 
-**Grupos de roles**: `GESTORES` = SUPER_USUARIO + ADMINISTRADOR + REGULAR · `ADMINS` = SUPER_USUARIO + ADMINISTRADOR · `MASTER` = SUPER_USUARIO.
+**Grupos de roles**: `ESCRITORES` = SUPER_USUARIO + ADMINISTRADOR (Coordinador) · `MASTER` = solo SUPER_USUARIO · `+ PNF` = el Coordinador además debe ser dueño del recurso (`esCoordinadorDeOtroPnf`). `REGULAR` (Usuario) y `PROFESOR` reciben 403 en toda escritura — salvo la disponibilidad propia del docente.
 
 ---
 
@@ -494,4 +506,5 @@ No hay suite de tests automatizados; la verificación es por typecheck + smoke t
 | `403` en mutaciones | Rol insuficiente (ej. PROFESOR editando) | Esperado — solo lectura |
 | Puerto 4000/3000 ocupado | Proceso previo vivo | `taskkill` / cambiar `PORT` |
 | Frontend sin datos en dev | Backend no levantado | El proxy `/api` apunta a `127.0.0.1:4000` |
-| Fotos de profesores rotas | Ruta `/public/...` duplicada | Las rutas deben ser `/profesores/x.png` (sin `/public`) |
+| Fotos de profesores rotas en dev | `/public/*` caía en el fallback SPA de Vite | Resuelto: `vite.config.ts` proxea `/public` → `:4000` |
+| La app muestra otra aplicación en `:3000` | Service worker/caché de una app anterior en el mismo origen | DevTools → Application → "Clear site data" + Unregister del SW |
