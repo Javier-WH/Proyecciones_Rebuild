@@ -19,8 +19,8 @@
   th { background: #f1f5f9; }
   .nota { background: #f0fdf4; border-left: 4px solid var(--acento); padding: 8px 14px; margin: 1em 0; }
   .aviso { background: #fef3c7; border-left: 4px solid #d97706; padding: 8px 14px; margin: 1em 0; }
-  .captura { border: 2px dashed #94a3b8; background: #f8fafc; border-radius: 8px; padding: 2.2cm 1cm; margin: 1.2em 0; text-align: center; color: #64748b; page-break-inside: avoid; }
-  .captura img { max-width: 100%; }
+  .captura { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin: 1.2em 0; text-align: center; page-break-inside: avoid; }
+  .captura img { max-width: 100%; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.15); } .captura figcaption { margin-top: 8px; color: #475569; font-size: 9.5pt; }
   .captura .num { font-weight: bold; color: var(--verde); }
   code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 10pt; }
   .indice { page-break-after: always; }
@@ -80,7 +80,7 @@
   <li>Escriba la dirección del sistema (la que le indique el administrador, por ejemplo <code>http://servidor:3000</code>).</li>
   <li>Verá la pantalla de <strong>Iniciar Sesión</strong>. Escriba su <strong>usuario</strong> y <strong>contraseña</strong> y presione el botón <strong>Iniciar Sesión</strong>.</li>
 </ol>
-<div class="captura"><span class="num">📷 Captura 1 — 01-login.png</span><br>Pantalla completa de inicio de sesión.</div>
+<figure class="captura"><img src="screenshots/01-login.png" alt="Pantalla completa de inicio de sesión."><figcaption><strong>Captura 1.</strong> Pantalla completa de inicio de sesión.</figcaption></figure>
 <div class="aviso">⚠️ <strong>Si la contraseña falla:</strong> verifique que no tenga activada la tecla de mayúsculas (Bloq Mayús) y vuelva a intentarlo. Si el problema continúa, solicite al administrador que restablezca su cuenta.</div>
 <p><strong>Los profesores no usan usuario y contraseña</strong>: en la misma pantalla hay un enlace <strong>"Ingresar como profesor"</strong> (Acceso Docente) donde solo escriben su número de cédula. Vea la sección 10.</p>
 
@@ -94,7 +94,7 @@
   <tr><td><strong>Carga Docente</strong></td><td>Asignar qué profesor dicta cada materia</td></tr>
   <tr><td><strong>Horarios</strong></td><td>La grilla de clases: armar, mover y generar el horario</td></tr>
 </table>
-<div class="captura"><span class="num">📷 Captura 2 — 02-inicio.png</span><br>Página principal mostrando la barra lateral y el resumen.</div>
+<figure class="captura"><img src="screenshots/02-inicio.png" alt="Página principal mostrando la barra lateral y el resumen."><figcaption><strong>Captura 2.</strong> Página principal mostrando la barra lateral y el resumen.</figcaption></figure>
 <p>Botones que verá en casi todas las pantallas:</p>
 <ul>
   <li><strong>Actualizar</strong> (icono de flechas circulares): vuelve a cargar los datos más recientes.</li>
@@ -110,7 +110,7 @@
   <li>Crear el periodo nuevo cuando inicie el año escolar.</li>
   <li>Cambiar el estado de un periodo (<em>PLANIFICACIÓN → ACTIVO → CERRADO</em>).</li>
 </ul>
-<div class="captura"><span class="num">📷 Captura 3 — 03-periodos.png</span><br>Pantalla de Periodos Académicos con el periodo activo visible.</div>
+<figure class="captura"><img src="screenshots/03-periodos.png" alt="Pantalla de Periodos Académicos con el periodo activo visible."><figcaption><strong>Captura 3.</strong> Pantalla de Periodos Académicos con el periodo activo visible.</figcaption></figure>
 <div class="aviso">⚠️ <strong>Importante:</strong> solo debe haber <strong>un</strong> periodo ACTIVO a la vez. El horario y los reportes se generan sobre el periodo activo.</div>
 
 <h2>5. Crear una proyección</h2>
@@ -130,8 +130,8 @@
   <li>Marque las <strong>materias</strong> que se ofrecerán y defina las <strong>secciones</strong> (con su turno: Mañana, Tarde, Nocturno o Diurno).</li>
   <li>Guarde. La proyección queda creada y <strong>activa</strong>.</li>
 </ol>
-<div class="captura"><span class="num">📷 Captura 4 — 04-nueva-proyeccion.png</span><br>La ventana "Nueva Proyección" con sus campos.</div>
-<div class="captura"><span class="num">📷 Captura 5 — 05-lista-proyecciones.png</span><br>La lista de proyecciones activas.</div>
+<figure class="captura"><img src="screenshots/04-nueva-proyeccion.png" alt="La ventana &quot;Nueva Proyección&quot; con sus campos."><figcaption><strong>Captura 4.</strong> La ventana &quot;Nueva Proyección&quot; con sus campos.</figcaption></figure>
+<figure class="captura"><img src="screenshots/05-lista-proyecciones.png" alt="La lista de proyecciones activas."><figcaption><strong>Captura 5.</strong> La lista de proyecciones activas.</figcaption></figure>
 <ul>
   <li>Para <strong>editar</strong> una proyección: haga clic sobre ella en la lista.</li>
   <li>Si una proyección ya no se ofrecerá, puede <strong>desactivarla</strong> (no se borra la información).</li>
@@ -142,7 +142,7 @@
 <p>En la sección <strong>Profesores</strong> verá la lista de docentes con su foto, cédula, PNF y dedicación.</p>
 <h3>Sincronizar con SAGA</h3>
 <p>El botón <strong>"Sincronizar desde SAGA"</strong> trae automáticamente los docentes registrados en el sistema central de la universidad. Úselo al inicio de cada periodo o cuando se incorpore personal nuevo.</p>
-<div class="captura"><span class="num">📷 Captura 6 — 06-profesores.png</span><br>Lista de profesores y el botón de sincronización.</div>
+<figure class="captura"><img src="screenshots/06-profesores.png" alt="Lista de profesores y el botón de sincronización."><figcaption><strong>Captura 6.</strong> Lista de profesores y el botón de sincronización.</figcaption></figure>
 <h3>Datos de un profesor</h3>
 <p>Haciendo <strong>doble clic</strong> sobre un profesor (o con los botones de su fila) puede:</p>
 <ul>
@@ -153,20 +153,20 @@
   <li><strong>Registrar su disponibilidad</strong>: marcar las horas en las que <strong>no</strong> puede dar clase (ver sección 8).</li>
   <li><strong>Desactivarlo</strong> si ya no trabaja en la institución (no se borra su historial).</li>
 </ul>
-<div class="captura"><span class="num">📷 Captura 7 — 07-profesor-modal.png</span><br>Ventana de datos del profesor.</div>
+<figure class="captura"><img src="screenshots/07-profesor-modal.png" alt="Ventana de datos del profesor."><figcaption><strong>Captura 7.</strong> Ventana de datos del profesor.</figcaption></figure>
 
 <h2>7. Carga docente (asignar profesores)</h2>
 <p>La pantalla <strong>Carga Docente</strong> es donde se decide <strong>qué profesor dicta cada materia en cada sección y lapso</strong>.</p>
 <h3>La tabla</h3>
 <p>Cada fila es una materia de una sección. Las columnas de lapso (TRIMESTRE 1, TRIMESTRE 2…) muestran las <strong>horas</strong> de esa materia en cada lapso y el <strong>total</strong> de horas del profesor.</p>
-<div class="captura"><span class="num">📷 Captura 8 — 08-carga-docente.png</span><br>La tabla de carga docente.</div>
+<figure class="captura"><img src="screenshots/08-carga-docente.png" alt="La tabla de carga docente."><figcaption><strong>Captura 8.</strong> La tabla de carga docente.</figcaption></figure>
 <h3>Asignar o cambiar un profesor</h3>
 <ol>
   <li>Ubique la materia (puede usar el buscador o los filtros de arriba).</li>
   <li>Presione el botón de <strong>asignar</strong> (icono de persona con lupa) en la fila.</li>
   <li>Elija el profesor en la ventana y confirme.</li>
 </ol>
-<div class="captura"><span class="num">📷 Captura 9 — 09-asignar.png</span><br>Ventana para elegir el profesor.</div>
+<figure class="captura"><img src="screenshots/09-asignar.png" alt="Ventana para elegir el profesor."><figcaption><strong>Captura 9.</strong> Ventana para elegir el profesor.</figcaption></figure>
 <ul>
   <li>Para <strong>quitar</strong> una asignación, use el botón ✖ de la fila.</li>
   <li>Las materias sin asignar aparecen en el bloque <strong>"SIN ASIGNAR"</strong> — y puede filtrar solo esas con el botón correspondiente.</li>
@@ -195,7 +195,7 @@
   <li>Cada materia pendiente por agendar aparece como una <strong>tarjeta</strong>; para ponerla en el horario, <strong>arrástrela</strong> con el mouse hasta el día y hora deseados.</li>
   <li>Para quitar una clase, arrástrela fuera o use su opción de desagendar.</li>
 </ul>
-<div class="captura"><span class="num">📷 Captura 10 — 10-grilla.png</span><br>La grilla del horario de una sección.</div>
+<figure class="captura"><img src="screenshots/10-grilla.png" alt="La grilla del horario de una sección."><figcaption><strong>Captura 10.</strong> La grilla del horario de una sección.</figcaption></figure>
 <h3>Conflictos (el punto rojo)</h3>
 <p>Si una clase choca — porque el <strong>aula</strong>, el <strong>profesor</strong> o la <strong>sección</strong> ya tienen otra clase a esa hora — el sistema lo marca con un <strong>punto rojo</strong> y le avisa qué está en conflicto.</p>
 <ul>
@@ -203,7 +203,7 @@
   <li>Los turnos <strong>Mañana</strong> y <strong>Tarde</strong> no chocan entre sí; el turno <strong>Diurno</strong> puede chocar con ambos (sus horas se solapan).</li>
   <li>Las materias sin profesor asignado también se pueden agendar.</li>
 </ul>
-<div class="captura"><span class="num">📷 Captura 11 — 11-conflicto.png</span><br>Una clase con el punto rojo de conflicto.</div>
+<figure class="captura"><img src="screenshots/11-conflicto.png" alt="Una clase con el punto rojo de conflicto."><figcaption><strong>Captura 11.</strong> Una clase con el punto rojo de conflicto.</figcaption></figure>
 <h3>Generar el horario automáticamente</h3>
 <p>El botón <strong>"Generar horario"</strong> agenda automáticamente las materias pendientes respetando:</p>
 <ul>
@@ -217,7 +217,7 @@
   <li><strong>Regenerar</strong>: borra el horario del lapso y lo construye desde cero (pide confirmación).</li>
 </ul>
 <p>Lo que no pudo agendarse queda en la lista de <strong>pendientes</strong> con el motivo.</p>
-<div class="captura"><span class="num">📷 Captura 12 — 12-generar.png</span><br>Botones de generación y ventana de configuración de horarios.</div>
+<figure class="captura"><img src="screenshots/12-generar.png" alt="Botones de generación y ventana de configuración de horarios."><figcaption><strong>Captura 12.</strong> Botones de generación y ventana de configuración de horarios.</figcaption></figure>
 <h3>Turnos, bloques y aulas</h3>
 <ul>
   <li><strong>Turnos y Bloques</strong>: define las horas de clase de cada turno (ej. Mañana: 7:00–12:00 en bloques de 45 min) y qué días de la semana aplica.</li>
@@ -234,7 +234,7 @@
   <li>Marque las casillas de lo que necesita.</li>
   <li>Presione <strong>Imprimir</strong> (abre el diálogo de impresión del navegador — puede guardar como PDF) o <strong>Excel</strong> (descarga el archivo <code>.xlsx</code>).</li>
 </ol>
-<div class="captura"><span class="num">📷 Captura 13 — 13-reporte.png</span><br>Ventana del reporte de horarios.</div>
+<figure class="captura"><img src="screenshots/13-reporte.png" alt="Ventana del reporte de horarios."><figcaption><strong>Captura 13.</strong> Ventana del reporte de horarios.</figcaption></figure>
 <h3>Editar el encabezado (membrete)</h3>
 <p>Los reportes llevan un encabezado institucional (nombre de la universidad, título, periodo). Para cambiarlo:</p>
 <ol>
@@ -243,9 +243,9 @@
   <li><strong>Se guarda automáticamente</strong> al terminar de escribir — no hay botón de guardar.</li>
   <li><strong>"Restaurar encabezado"</strong> devuelve el texto original.</li>
 </ol>
-<div class="captura"><span class="num">📷 Captura 14 — 14-encabezado.png</span><br>Pestaña de edición del encabezado.</div>
+<figure class="captura"><img src="screenshots/14-encabezado.png" alt="Pestaña de edición del encabezado."><figcaption><strong>Captura 14.</strong> Pestaña de edición del encabezado.</figcaption></figure>
 <div class="aviso">⚠️ El encabezado es <strong>el mismo para todos los usuarios</strong>: si usted lo cambia, cambia para todo el sistema. Los profesores no pueden editarlo.</div>
-<div class="captura"><span class="num">📷 Captura 15 — 15-reporte-carga.png</span><br>Ventana del reporte de carga docente.</div>
+<figure class="captura"><img src="screenshots/15-reporte-carga.png" alt="Ventana del reporte de carga docente."><figcaption><strong>Captura 15.</strong> Ventana del reporte de carga docente.</figcaption></figure>
 
 <h2>10. El portal del profesor</h2>
 <p>Los docentes <strong>no tienen usuario ni contraseña</strong> y no ven el panel de coordinación. Su acceso es así:</p>
@@ -253,15 +253,15 @@
   <li>En la pantalla de inicio de sesión, haga clic en <strong>"Ingresar como profesor"</strong> (Acceso Docente).</li>
   <li>Escriba su <strong>número de cédula</strong> (sin puntos ni guiones) y presione <strong>Ingresar</strong>.</li>
 </ol>
-<div class="captura"><span class="num">📷 Captura 16 — 16-acceso-docente.png</span><br>Pantalla de acceso por cédula.</div>
+<figure class="captura"><img src="screenshots/16-acceso-docente.png" alt="Pantalla de acceso por cédula."><figcaption><strong>Captura 16.</strong> Pantalla de acceso por cédula.</figcaption></figure>
 <h3>Qué puede hacer el profesor</h3>
 <ul>
   <li><strong>Ver sus materias</strong> asignadas ("Mis Materias").</li>
   <li><strong>Ver e imprimir su horario</strong> semanal.</li>
   <li><strong>Registrar su disponibilidad</strong>: marcar en la grilla los horarios en los que <strong>no puede</strong> dar clase (reuniones, otros trabajos, etc.). Es <strong>lo único que puede editar</strong>.</li>
 </ul>
-<div class="captura"><span class="num">📷 Captura 17 — 17-portal.png</span><br>Portal del profesor.</div>
-<div class="captura"><span class="num">📷 Captura 18 — 18-mi-horario.png</span><br>Horario del profesor con botón de impresión.</div>
+<figure class="captura"><img src="screenshots/17-portal.png" alt="Portal del profesor."><figcaption><strong>Captura 17.</strong> Portal del profesor.</figcaption></figure>
+<figure class="captura"><img src="screenshots/18-mi-horario.png" alt="Horario del profesor con botón de impresión."><figcaption><strong>Captura 18.</strong> Horario del profesor con botón de impresión.</figcaption></figure>
 <div class="aviso">⚠️ <strong>El profesor no puede</strong> modificar proyecciones, asignaciones, horarios, encabezados de reportes ni ningún dato del sistema — solo su propia disponibilidad. Esto está bloqueado también a nivel de servidor.</div>
 <h3>Por qué es importante la disponibilidad</h3>
 <p>El <strong>generador automático</strong> de horarios respeta la disponibilidad registrada: si el docente marcó que no puede los lunes, el sistema no le pondrá clase ese día. Pídales que la registren <strong>antes</strong> de generar el horario.</p>

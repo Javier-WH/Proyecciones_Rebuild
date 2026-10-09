@@ -45,7 +45,7 @@ En resumen, el sistema le permite:
 2. Escriba la dirección del sistema (la que le indique el administrador, por ejemplo `http://servidor:3000`).
 3. Verá la pantalla de **Iniciar Sesión**. Escriba su **usuario** y **contraseña** y presione el botón **Iniciar Sesión**.
 
-📷 **Captura 1** — `01-login.png`: pantalla completa de inicio de sesión.
+![Captura 1 — pantalla completa de inicio de sesión.](screenshots/01-login.png)
 
 > ⚠️ **Si la contraseña falla:** verifique que no tenga activada la tecla de mayúsculas (Bloq Mayús) y vuelva a intentarlo. Si el problema continúa, solicite al administrador que restablezca su cuenta.
 
@@ -65,7 +65,7 @@ Al entrar verá la página principal. A la izquierda hay una **barra lateral** c
 | 📊 **Carga Docente** | Asignar qué profesor dicta cada materia |
 | 🗓️ **Horarios** | La grilla de clases: armar, mover y generar el horario |
 
-📷 **Captura 2** — `02-inicio.png`: página principal mostrando la barra lateral y el resumen.
+![Captura 2 — página principal mostrando la barra lateral y el resumen.](screenshots/02-inicio.png)
 
 Botones que verá en casi todas las pantallas:
 
@@ -85,7 +85,7 @@ Para verlos, vaya a la pantalla de **Periodos Académicos** (desde el menú o la
 - Crear el periodo nuevo cuando inicie el año escolar.
 - Cambiar el estado de un periodo (*PLANIFICACIÓN → ACTIVO → CERRADO*).
 
-📷 **Captura 3** — `03-periodos.png`: pantalla de Periodos Académicos con el periodo activo visible.
+![Captura 3 — pantalla de Periodos Académicos con el periodo activo visible.](screenshots/03-periodos.png)
 
 > ⚠️ **Importante:** solo debe haber **un** periodo ACTIVO a la vez. El horario y los reportes se generan sobre el periodo activo.
 
@@ -107,9 +107,9 @@ La **proyección** es la oferta académica de un trayecto de un PNF para el peri
 4. Marque las **materias** que se ofrecerán y defina las **secciones** (con su turno: Mañana, Tarde, Nocturno o Diurno).
 5. Guarde. La proyección queda creada y **activa**.
 
-📷 **Captura 4** — `04-nueva-proyeccion.png`: la ventana "Nueva Proyección" con sus campos.
+![Captura 4 — la ventana "Nueva Proyección" con sus campos.](screenshots/04-nueva-proyeccion.png)
 
-📷 **Captura 5** — `05-lista-proyecciones.png`: la lista de proyecciones activas.
+![Captura 5 — la lista de proyecciones activas.](screenshots/05-lista-proyecciones.png)
 
 - Para **editar** una proyección: haga clic sobre ella en la lista.
 - Si una proyección ya no se ofrecerá, puede **desactivarla** (no se borra la información).
@@ -126,7 +126,7 @@ En la sección **Profesores** verá la lista de docentes con su foto, cédula, P
 
 El botón **"Sincronizar desde SAGA"** trae automáticamente los docentes registrados en el sistema central de la universidad. Úselo al inicio de cada periodo o cuando se incorpore personal nuevo.
 
-📷 **Captura 6** — `06-profesores.png`: lista de profesores y el botón de sincronización.
+![Captura 6 — lista de profesores y el botón de sincronización.](screenshots/06-profesores.png)
 
 ### Datos de un profesor
 
@@ -139,7 +139,7 @@ Haciendo **doble clic** sobre un profesor (o con los botones de su fila) puede:
 - **Registrar su disponibilidad**: marcar las horas en las que **no** puede dar clase (ver sección 8).
 - **Desactivarlo** si ya no trabaja en la institución (no se borra su historial).
 
-📷 **Captura 7** — `07-profesor-modal.png`: ventana de datos del profesor.
+![Captura 7 — ventana de datos del profesor.](screenshots/07-profesor-modal.png)
 
 ---
 
@@ -151,7 +151,7 @@ La pantalla **Carga Docente** es donde se decide **qué profesor dicta cada mate
 
 Cada fila es una materia de una sección. Las columnas de lapso (TRIMESTRE 1, TRIMESTRE 2…) muestran las **horas** de esa materia en cada lapso y el **total** de horas del profesor.
 
-📷 **Captura 8** — `08-carga-docente.png`: la tabla de carga docente.
+![Captura 8 — la tabla de carga docente.](screenshots/08-carga-docente.png)
 
 ### Asignar o cambiar un profesor
 
@@ -159,7 +159,7 @@ Cada fila es una materia de una sección. Las columnas de lapso (TRIMESTRE 1, TR
 2. Presione el botón de **asignar** (icono de persona con lupa 🔍) en la fila.
 3. Elija el profesor en la ventana y confirme.
 
-📷 **Captura 9** — `09-asignar.png`: ventana para elegir el profesor.
+![Captura 9 — ventana para elegir el profesor.](screenshots/09-asignar.png)
 
 - Para **quitar** una asignación, use el botón ✖ de la fila.
 - Las materias sin asignar aparecen en el bloque **"SIN ASIGNAR"** — y puede filtrar solo esas con el botón correspondiente.
@@ -193,7 +193,7 @@ La sección **Horarios** es la grilla de clases: filas = bloques de hora, column
 - Cada materia pendiente por agendar aparece como una **tarjeta**; para ponerla en el horario, **arrástrela** con el mouse hasta el día y hora deseados.
 - Para quitar una clase, arrástrela fuera o use su opción de desagendar.
 
-📷 **Captura 10** — `10-grilla.png`: la grilla del horario de una sección.
+![Captura 10 — la grilla del horario de una sección.](screenshots/10-grilla.png)
 
 ### Conflictos (el punto rojo)
 
@@ -203,7 +203,7 @@ Si una clase choca — porque el **aula**, el **profesor** o la **sección** ya 
 - Los turnos **Mañana** y **Tarde** no chocan entre sí; el turno **Diurno** puede chocar con ambos (sus horas se solapan).
 - Las materias sin profesor asignado también se pueden agendar.
 
-📷 **Captura 11** — `11-conflicto.png`: una clase con el punto rojo de conflicto.
+![Captura 11 — una clase con el punto rojo de conflicto.](screenshots/11-conflicto.png)
 
 ### Generar el horario automáticamente
 
@@ -220,7 +220,7 @@ Hay dos opciones:
 
 Lo que no pudo agendarse queda en la lista de **pendientes** con el motivo.
 
-📷 **Captura 12** — `12-generar.png`: botones de generación y ventana de configuración de horarios.
+![Captura 12 — botones de generación y ventana de configuración de horarios.](screenshots/12-generar.png)
 
 ### Turnos, bloques y aulas
 
@@ -243,7 +243,7 @@ Desde **Horarios** y desde **Carga Docente** hay un botón **"Imprimir / Excel"*
 2. Marque las casillas de lo que necesita.
 3. Presione **Imprimir** (abre el diálogo de impresión del navegador — puede guardar como PDF) o **Excel** (descarga el archivo `.xlsx`).
 
-📷 **Captura 13** — `13-reporte.png`: ventana del reporte de horarios.
+![Captura 13 — ventana del reporte de horarios.](screenshots/13-reporte.png)
 
 ### Editar el encabezado (membrete)
 
@@ -254,11 +254,11 @@ Los reportes llevan un encabezado institucional (nombre de la universidad, títu
 3. **Se guarda automáticamente** al terminar de escribir — no hay botón de guardar.
 4. **"Restaurar encabezado"** devuelve el texto original.
 
-📷 **Captura 14** — `14-encabezado.png`: pestaña de edición del encabezado.
+![Captura 14 — pestaña de edición del encabezado.](screenshots/14-encabezado.png)
 
 > ⚠️ El encabezado es **el mismo para todos los usuarios**: si usted lo cambia, cambia para todo el sistema. Los profesores no pueden editarlo.
 
-📷 **Captura 15** — `15-reporte-carga.png`: ventana del reporte de carga docente.
+![Captura 15 — ventana del reporte de carga docente.](screenshots/15-reporte-carga.png)
 
 ---
 
@@ -269,7 +269,7 @@ Los docentes **no tienen usuario ni contraseña** y no ven el panel de coordinac
 1. En la pantalla de inicio de sesión, haga clic en **"Ingresar como profesor"** (Acceso Docente).
 2. Escriba su **número de cédula** (sin puntos ni guiones) y presione **Ingresar**.
 
-📷 **Captura 16** — `16-acceso-docente.png`: pantalla de acceso por cédula.
+![Captura 16 — pantalla de acceso por cédula.](screenshots/16-acceso-docente.png)
 
 ### Qué puede hacer el profesor
 
@@ -277,8 +277,8 @@ Los docentes **no tienen usuario ni contraseña** y no ven el panel de coordinac
 - **Ver e imprimir su horario** semanal.
 - **Registrar su disponibilidad**: marcar en la grilla los horarios en los que **no puede** dar clase (reuniones, otros trabajos, etc.). Es **lo único que puede editar**.
 
-📷 **Captura 17** — `17-portal.png`: portal del profesor.
-📷 **Captura 18** — `18-mi-horario.png`: horario del profesor con botón de impresión.
+![Captura 17 — portal del profesor.](screenshots/17-portal.png)
+![Captura 18 — horario del profesor con botón de impresión.](screenshots/18-mi-horario.png)
 
 > ⚠️ **El profesor no puede** modificar proyecciones, asignaciones, horarios, encabezados de reportes ni ningún dato del sistema — solo su propia disponibilidad. Esto está bloqueado también a nivel de servidor.
 
