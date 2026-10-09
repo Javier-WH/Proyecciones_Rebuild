@@ -89,6 +89,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const [pnfSel, setPnfSel] = useState<number[]>([]); // vacío = reporte general
   const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
   const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
+  const [incluirSinAsignar, setIncluirSinAsignar] = useState(false); // agrega un bloque "Sin Profesor" al final de cada hoja
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
   const [vista, setVista] = useState<'seleccion' | 'encabezado'>('seleccion');
   // Evita guardar el default sobre la plantilla de BD antes de cargarla
@@ -148,9 +149,17 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   // Agrupa filas por docente dentro de un lapso; filtra por PNF asociado (null = todos)
   const profesDe = (lapso: LapsoRef, pnfId: number | null): ProfReporte[] => {
     const grupos = new Map<number, ReporteRow[]>();
+    const sinAsignar: ReporteRow[] = [];
     for (const r of rows) {
-      if (r.profesor_id == null) continue;
       if (r.tipo_proyeccion !== lapso.tipo || r.trimestre !== lapso.n) continue;
+      if (r.profesor_id == null) {
+        // Materias sin docente: van al bloque "Sin Profesor" cuando el check está activo.
+        // En hoja por PNF solo entran las del PNF seleccionado (por PNF de la materia).
+        if (incluirSinAsignar && (pnfId === null || r.pnf_saga_id === pnfId)) {
+          sinAsignar.push(r);
+        }
+        continue;
+      }
       const prof = profMap.get(r.profesor_id);
       if (pnfId !== null) {
         if (incluirOtrosPnf) {
@@ -169,7 +178,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
       }
       g.push(r);
     }
-    return [...grupos.entries()]
+    const lista = [...grupos.entries()]
       .map(([id, items]) => {
         const prof = profMap.get(id);
         const nombre = (
@@ -182,6 +191,18 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         return { nombre, cedula, dedicacion, items, total: items.reduce((acc, r) => acc + (r.horas_semanales || 0), 0) };
       })
       .sort((a, b) => a.cedula - b.cedula);
+    // Bloque "Sin Profesor": siempre al final de la hoja, como un docente más
+    if (sinAsignar.length > 0) {
+      sinAsignar.sort((a, b) => a.materia_nombre.localeCompare(b.materia_nombre));
+      lista.push({
+        nombre: 'SIN PROFESOR',
+        cedula: Number.MAX_SAFE_INTEGER,
+        dedicacion: '',
+        items: sinAsignar,
+        total: sinAsignar.reduce((acc, r) => acc + (r.horas_semanales || 0), 0),
+      });
+    }
+    return lista;
   };
 
   // Una hoja por (PNF seleccionado × lapso) — o por lapso cuando es reporte general
@@ -219,7 +240,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     }
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pnfSel, lapsoSel, incluirOtrosPnf, lapsos, rows, profMap, pnfOptions]);
+  }, [pnfSel, lapsoSel, incluirOtrosPnf, incluirSinAsignar, lapsos, rows, profMap, pnfOptions]);
 
   const linea = (tpl: string, hoja: HojaReporte): string =>
     tpl
@@ -628,6 +649,21 @@ td.ded { text-align: center; vertical-align: middle; }
                 </span>
               </label>
             )}
+            <label
+              className="mt-2 flex items-start gap-2 text-[11px] text-slate-400 cursor-pointer select-none"
+              title="Agrega al final de cada hoja un bloque 'Sin Profesor' con las materias que no tienen docente asignado"
+            >
+              <input
+                type="checkbox"
+                checked={incluirSinAsignar}
+                onChange={(e) => setIncluirSinAsignar(e.target.checked)}
+                className="w-3.5 h-3.5 mt-0.5 accent-emerald-500 cursor-pointer"
+              />
+              <span>
+                <span className="font-semibold text-slate-300">Incluir materias sin profesor</span>: se
+                agregan al final de cada hoja en un bloque &quot;Sin Profesor&quot;
+              </span>
+            </label>
           </div>
 
           {/* Selector de lapsos a incluir */}
