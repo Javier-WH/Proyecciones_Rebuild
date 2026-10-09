@@ -309,7 +309,19 @@ Los docentes **no tienen usuario ni contraseña** y no ven el panel de coordinac
 - **Registrar su disponibilidad**: marcar en la grilla los horarios en los que **no puede** dar clase (reuniones, otros trabajos, etc.). Es **lo único que puede editar**.
 
 ![Captura 17 — portal del profesor.](screenshots/17-portal.png)
-![Captura 18 — horario del profesor con botón de impresión.](screenshots/18-mi-horario.png)
+
+### Ajustar su disponibilidad
+
+En la pestaña **"Mi Disponibilidad"** el docente ve una grilla con los días de la semana y los bloques de hora. **Haga clic en una celda** para alternarla:
+
+- ✅ **Verde = disponible**: puede recibir clases en esa hora.
+- ⛔ **Rojo = no disponible**: el generador evitará ponerle clases ahí.
+
+Cada clic se guarda al instante — no hace falta botón de guardar. En la parte inferior derecha se muestra el conteo de bloques marcados como no disponibles.
+
+> 💡 La disponibilidad es una **preferencia que el generador respeta**, no una garantía absoluta: si la carga académica no lo permite, la coordinación puede ajustar la asignación.
+
+![Captura 18 — pestaña "Mi Disponibilidad" del portal del profesor.](screenshots/18-disponibilidad.png)
 
 > ⚠️ **El profesor no puede** modificar proyecciones, asignaciones, horarios, encabezados de reportes ni ningún dato del sistema — solo su propia disponibilidad. Esto está bloqueado también a nivel de servidor.
 
