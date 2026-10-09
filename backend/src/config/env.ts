@@ -18,4 +18,8 @@ export const env = {
   API_URL: process.env.API_URL || 'http://127.0.0.1:8000/api/v1',
   API_USER: process.env.API_USER || 'defaultAdmin',
   API_PASSWORD: process.env.API_PASSWORD || '123456789',
+
+  // Clave para integraciones externas (app de asistencias, etc.)
+  // Sin default: si está vacía, /api/externo responde 503.
+  EXTERNAL_API_KEY: process.env.EXTERNAL_API_KEY || '',
 };
