@@ -62,7 +62,7 @@ interface SeccionGridProps {
   puedeEditar: boolean;
   forzar?: boolean; // permite guardar movimientos con conflictos por solape
   resaltar?: Set<string> | null; // claves 'bloque_id:dia' a resaltar (viene del panel de errores)
-  enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
+  enError?: Map<number, ErrorClase[]> | null; // entry_id → violaciones (punto rojo + tooltip)
   advertencias?: Map<number, string[]>; // entry.id → avisos (triángulo amarillo)
   avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
   onChanged: () => void;
@@ -270,17 +270,16 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     return ocup;
   };
 
-  // Mensajes de error de esta tarjeta (incluye celdas que absorbe por rowspan)
+  // Mensajes de error de esta tarjeta (incluye las celdas que absorbe por
+  // rowspan): se buscan por entry_id, no por celda — los bloque_id se repiten
+  // entre secciones del mismo turno.
   const celdaEnError = (bloqueIdx: number, dia: number, n: number): ErrorClase[] => {
     if (!enError) return [];
     const msgs: ErrorClase[] = [];
-    let restantes = n;
-    for (let i = bloqueIdx; i < bloques.length && restantes > 0; i++) {
-      if (bloques[i].es_receso) break;
-      for (const t of enError.get(`${bloques[i].id}:${dia}`) ?? []) {
+    for (const e of runEntriesDe(bloqueIdx, dia, n)) {
+      for (const t of enError.get(e.id) ?? []) {
         if (!msgs.some((m) => m.titulo === t.titulo && m.texto === t.texto)) msgs.push(t);
       }
-      restantes--;
     }
     return msgs;
   };

@@ -483,19 +483,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     return out.filter((v) => !v.entryIds || v.entryIds.some(esErrorEnAlcance));
   }, [entries, secciones, turnos, config, dispProfs, lapso, esErrorEnAlcance]);
 
-  // Celdas (bloque:día) involucradas en alguna violación, con sus mensajes:
-  // las tarjetas las marcan con un punto rojo cuyo tooltip lista los errores.
-  const celdasEnError = useMemo(() => {
-    const m = new Map<string, ErrorClase[]>();
+  // Entries involucrados en alguna violación, con sus mensajes: las tarjetas
+  // los marcan con un punto rojo cuyo tooltip lista los errores. La clave es el
+  // id del entry (no bloque:día): los bloque_id se comparten entre secciones
+  // del mismo turno, así que indexar por celda pintaría errores ajenos.
+  const erroresPorEntry = useMemo(() => {
+    const m = new Map<number, ErrorClase[]>();
     for (const v of violaciones) {
-      for (const b of v.bloques) {
-        const k = `${b}:${v.dia}`;
-        const arr = m.get(k) ?? [];
+      for (const id of v.entryIds ?? []) {
+        const arr = m.get(id) ?? [];
         arr.push({
           titulo: v.titulo,
           texto: v.lineas?.length ? `${v.error} ${v.lineas.join(' · ')}` : v.error,
         });
-        m.set(k, arr);
+        m.set(id, arr);
       }
     }
     return m;
@@ -1360,7 +1361,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 puedeEditar={puedeEditarSeccion}
                 forzar={forzar}
                 resaltar={resaltar}
-                enError={celdasEnError}
+                enError={erroresPorEntry}
                 advertencias={advertenciasPorEntry}
                 avisosParciales={avisosParciales}
                 onChanged={fetchEntries}
@@ -1378,7 +1379,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               entries={entriesAula}
               turnos={turnos}
               formato12={usa12}
-              enError={celdasEnError}
+              enError={erroresPorEntry}
               advertencias={advertenciasPorEntry}
               avisosParciales={avisosParciales}
               parejasParciales={parejasConflicto}
@@ -1393,7 +1394,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
               entries={entriesProfesor}
               turnos={turnos}
               formato12={usa12}
-              enError={celdasEnError}
+              enError={erroresPorEntry}
               advertencias={advertenciasPorEntry}
               avisosParciales={avisosParciales}
               parejasParciales={parejasConflicto}

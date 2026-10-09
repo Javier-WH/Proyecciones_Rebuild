@@ -13,7 +13,7 @@ interface VistaRecursoProps {
   entries: HorarioEntry[]; // ya filtradas por recurso
   turnos: Turno[];
   formato12?: boolean; // vista 12h; la BD siempre guarda 24h
-  enError?: Map<string, ErrorClase[]> | null; // 'bloque_id:dia' → violaciones (punto rojo + tooltip)
+  enError?: Map<number, ErrorClase[]> | null; // entry_id → violaciones (punto rojo + tooltip)
   advertencias?: Map<number, string[]>; // entry.id → avisos (triángulo amarillo)
   avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
   parejasParciales?: Map<number, number[]>; // entry.id → ids de las clases T2/semestre que le chocan
@@ -319,7 +319,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
     errores: [
       ...new Map(
         g
-          .flatMap((x) => enError?.get(`${x.bloque_id}:${x.dia_semana}`) ?? [])
+          .flatMap((x) => enError?.get(x.id) ?? [])
           .map((t) => [`${t.titulo}|${t.texto}`, t])
       ).values(),
     ],
@@ -386,7 +386,7 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                                         entry={e}
                                         compacto={items.length > 1}
                                         usa12h={formato12}
-                                        errores={enError?.get(`${e.bloque_id}:${e.dia_semana}`) ?? []}
+                                        errores={enError?.get(e.id) ?? []}
                                         advertencias={advertencias?.get(e.id)}
                                         avisosParciales={avisosParciales?.get(e.id)}
                                         ocultarAula={ocultarAula}
@@ -437,18 +437,17 @@ export const VistaRecurso: React.FC<VistaRecursoProps> = ({ titulo, entries, tur
                       // Errores de la tarjeta o de alguna celda que absorbe por rowspan
                       const errsDe = (e?: HorarioEntry): ErrorClase[] => {
                         if (!enError) return [];
-                        if (e) return enError.get(`${e.bloque_id}:${e.dia_semana}`) ?? [];
+                        if (e) return enError.get(e.id) ?? [];
                         const acc: ErrorClase[] = [];
-                        const push = (k: string) => {
-                          for (const t of enError.get(k) ?? []) {
+                        const push = (x: HorarioEntry) => {
+                          for (const t of enError.get(x.id) ?? []) {
                             if (!acc.some((m) => m.titulo === t.titulo && m.texto === t.texto))
                               acc.push(t);
                           }
                         };
-                        for (const x of items) push(`${x.bloque_id}:${x.dia_semana}`);
+                        for (const x of items) push(x);
                         for (let k = 0; k < (sp?.n ?? 1); k++) {
-                          for (const x of porCelda.get(`${bi}:${fIdx + k}:${d}`) ?? [])
-                            push(`${x.bloque_id}:${x.dia_semana}`);
+                          for (const x of porCelda.get(`${bi}:${fIdx + k}:${d}`) ?? []) push(x);
                         }
                         return acc;
                       };
