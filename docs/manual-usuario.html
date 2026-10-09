@@ -82,7 +82,10 @@
 </ol>
 <figure class="captura"><img src="screenshots/01-login.png" alt="Pantalla completa de inicio de sesión."><figcaption><strong>Captura 1.</strong> Pantalla completa de inicio de sesión.</figcaption></figure>
 <div class="aviso">⚠️ <strong>Si la contraseña falla:</strong> verifique que no tenga activada la tecla de mayúsculas (Bloq Mayús) y vuelva a intentarlo. Si el problema continúa, solicite al administrador que restablezca su cuenta.</div>
-<p><strong>Los profesores no usan usuario y contraseña</strong>: en la misma pantalla hay un enlace <strong>"Ingresar como profesor"</strong> (Acceso Docente) donde solo escriben su número de cédula. Vea la sección 10.</p>
+<h3>¿Olvidó su contraseña?</h3>
+<p>Debajo del botón de acceso hay un enlace <strong>"¿Olvidaste tu contraseña?"</strong>. El sistema le mostrará <strong>2 de las preguntas de seguridad</strong> que usted configuró en <em>Mi Cuenta</em> (ver sección 3); si las responde correctamente, podrá elegir una contraseña nueva sin llamar al administrador.</p>
+<div class="nota">💡 Las respuestas <strong>no distinguen mayúsculas ni tildes</strong>: "José", "jose" y "JOSE" se aceptan igual. Si aún no configuró sus preguntas, deberá pedir al administrador que restablezca su clave.</div>
+<p><strong>Los profesores no usan usuario y contraseña</strong>: en la misma línea, a la derecha, está el enlace <strong>"Ingresar como profesor"</strong> (Acceso Docente) donde solo escriben su número de cédula. Vea la sección 10.</p>
 
 <h2>3. Conociendo la pantalla</h2>
 <p>Al entrar verá la página principal. A la izquierda hay una <strong>barra lateral</strong> con las secciones del sistema:</p>
@@ -101,6 +104,15 @@
   <li><strong>Reporte</strong> o <strong>Imprimir / Excel</strong>: genera el documento para imprimir o descargar.</li>
   <li>Cuadro de <strong>Buscar</strong>: filtra la lista que está viendo (por nombre, cédula, materia…).</li>
 </ul>
+<h3>El menú de la tuerca ⚙️ y Mi Cuenta</h3>
+<p>En la esquina superior derecha hay un icono de <strong>engranaje</strong> con opciones de configuración (usuarios, horarios, PNF — algunas solo para el administrador) y, para todos:</p>
+<ul>
+  <li><strong>Mi Cuenta</strong>: edite su propio usuario, nombre, correo y <strong>contraseña</strong> (pide la actual para cambiarla). Aquí también se configuran las <strong>preguntas de seguridad</strong>: elija <strong>6 de 20 preguntas</strong> y escriba sus respuestas — sirven para recuperar la clave desde el login. Hacer clic en la tarjeta <strong>Usuario @su-nombre</strong> de la página principal abre esta misma ventana.</li>
+  <li><strong>Ayuda</strong>: abre este manual.</li>
+  <li><strong>Acerca de</strong>: información del sistema.</li>
+  <li><strong>Cerrar Sesión</strong>.</li>
+</ul>
+<p>También en la página principal, la tarjeta <strong>"Nivel de Permiso"</strong> se puede pulsar para ver la lista exacta de lo que su rol puede y no puede hacer.</p>
 
 <h2>4. Periodos académicos</h2>
 <p>Un <strong>periodo</strong> es el lapso académico completo (por ejemplo <em>2026-2027</em>). Las proyecciones y horarios pertenecen a un periodo.</p>
@@ -147,7 +159,13 @@
 <p>Haciendo <strong>doble clic</strong> sobre un profesor (o con los botones de su fila) puede:</p>
 <ul>
   <li><strong>Editar sus datos</strong> (nombre, correo, teléfono, dedicación).</li>
-  <li><strong>Asignarle un PNF</strong> (importante para el filtro "Mis profesores").</li>
+  <li><strong>Asignarle un PNF</strong> (importante para el filtro "Mis profesores").
+    <ul>
+      <li>Si un docente aparece <strong>"Sin PNF asignado"</strong>, cualquier coordinador puede <strong>reclamarlo</strong>: en la ficha elija su PNF en el selector y guarde.</li>
+      <li>Para <strong>quitarle</strong> a un docente de su PNF, elija <strong>"Sin PNF asignado"</strong> en ese mismo selector.</li>
+      <li>Un coordinador <strong>no puede</strong> mover docentes a un PNF distinto del suyo, ni editar docentes de otros PNF (esos botones simplemente no aparecen).</li>
+    </ul>
+  </li>
   <li><strong>Definir sus perfiles</strong>: las áreas en las que puede dictar (ej. <em>Matemáticas</em>, <em>Informática</em>). Los perfiles sirven como <strong>sugerencia</strong> de afinidad al asignar materias.</li>
   <li><strong>Subir su foto</strong>.</li>
   <li><strong>Registrar su disponibilidad</strong>: marcar las horas en las que <strong>no</strong> puede dar clase (ver sección 8).</li>
@@ -171,6 +189,7 @@
   <li>Para <strong>quitar</strong> una asignación, use el botón ✖ de la fila.</li>
   <li>Las materias sin asignar aparecen en el bloque <strong>"SIN ASIGNAR"</strong> — y puede filtrar solo esas con el botón correspondiente.</li>
 </ul>
+<div class="nota">ℹ️ <strong>Reglas para el coordinador:</strong> puede asignar <strong>sus</strong> materias a <strong>cualquier</strong> docente, incluso de otro PNF. Solo no puede <strong>quitar</strong> materias ajenas — salvo cuando el docente asignado es de su propio PNF (ahí sí puede retirarlo). Tampoco puede editar la ficha de docentes de otros PNF.</div>
 <h3>Filtros útiles (parte superior de la pantalla)</h3>
 <ul>
   <li><strong>Lapso</strong>: ver solo Trimestre 1, 2, 3 (o todos).</li>
@@ -204,6 +223,9 @@
   <li>Las materias sin profesor asignado también se pueden agendar.</li>
 </ul>
 <figure class="captura"><img src="screenshots/11-conflicto.png" alt="Una clase con el punto rojo de conflicto."><figcaption><strong>Captura 11.</strong> Una clase con el punto rojo de conflicto.</figcaption></figure>
+<h3>El panel "Errores" (⚠️)</h3>
+<p>El botón <strong>Errores</strong> (arriba a la derecha) abre la lista de todos los problemas detectados: choques de aula, profesor o sección, clases en receso, docente no disponible y reglas de generación incumplidas. Cada error tiene un botón que <strong>lleva directo a la sección afectada</strong> para corregirlo.</p>
+<div class="nota">ℹ️ El <strong>coordinador solo ve los errores que puede resolver</strong>: los que involucran clases o docentes de su PNF. Los conflictos de otros PNF no se le muestran — el administrador (Master) sí los ve todos y puede resolverlos.</div>
 <h3>Generar el horario automáticamente</h3>
 <p>El botón <strong>"Generar horario"</strong> agenda automáticamente las materias pendientes respetando:</p>
 <ul>
@@ -234,6 +256,10 @@
   <li>Marque las casillas de lo que necesita.</li>
   <li>Presione <strong>Imprimir</strong> (abre el diálogo de impresión del navegador — puede guardar como PDF) o <strong>Excel</strong> (descarga el archivo <code>.xlsx</code>).</li>
 </ol>
+<ul>
+  <li>En el reporte de <strong>carga docente</strong>, la casilla <strong>"Incluir materias sin profesor"</strong> agrega al final de cada hoja un bloque <strong>"SIN PROFESOR"</strong> con las materias que aún no tienen docente asignado.</li>
+  <li>Cada página impresa lleva el número de hoja en la esquina superior derecha (formato <code>1/3</code>).</li>
+</ul>
 <figure class="captura"><img src="screenshots/13-reporte.png" alt="Ventana del reporte de horarios."><figcaption><strong>Captura 13.</strong> Ventana del reporte de horarios.</figcaption></figure>
 <h3>Editar el encabezado (membrete)</h3>
 <p>Los reportes llevan un encabezado institucional (nombre de la universidad, título, periodo). Para cambiarlo:</p>
@@ -275,6 +301,10 @@ No. Todo lo que guarda (proyecciones, asignaciones, clases agendadas, disponibil
 El generador muestra el motivo de cada una: normalmente falta de aulas libres, profesor sin disponibilidad en esos días, o que ya no quedan bloques contiguos. Ajuste disponibilidad/aulas y vuelva a generar (o agende esas a mano).</p>
 <p><strong>¿Puedo mover una clase aunque haya conflicto?</strong><br>
 Sí, existe un modo que lo permite (el conflicto queda marcado con el punto rojo para resolverlo después). Úselo con cuidado.</p>
+<p><strong>Olvidé mi contraseña. ¿Qué hago?</strong><br>
+En el login, enlace <strong>"¿Olvidaste tu contraseña?"</strong>: escribe su usuario, responde las 2 preguntas de seguridad que le salgan (de las 6 que configuró en <em>Mi Cuenta</em>) y elige clave nueva. Si nunca configuró preguntas, solo el administrador puede restablecerla.</p>
+<p><strong>¿Qué puede hacer cada nivel de permiso?</strong><br>
+<strong>Master</strong>: todo, sin restricciones. <strong>Coordinador</strong>: lo ve todo e imprime todo, pero solo crea/edita/elimina lo de su PNF (proyecciones, asignaciones, horarios, docentes); los docentes "sin PNF" los puede reclamar para su PNF. <strong>Usuario</strong>: solo lectura. <strong>Docente</strong>: su horario y su disponibilidad, nada más. Para el detalle exacto, haga clic en la tarjeta <strong>"Nivel de Permiso"</strong> del inicio.</p>
 <p><strong>¿Cómo cambio el membrete de los reportes?</strong><br>
 Desde la ventana del reporte, pestaña <strong>Encabezado</strong> — se guarda solo (ver sección 9).</p>
 <p><strong>El profesor dice que no puede entrar.</strong><br>
