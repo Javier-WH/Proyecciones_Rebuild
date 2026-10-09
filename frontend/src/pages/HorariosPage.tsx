@@ -64,6 +64,7 @@ interface ProfesorLite {
   id: number;
   nombres: string;
   apellidos: string;
+  pnf_saga_id: number | null;
 }
 
 interface Violacion {
@@ -781,9 +782,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   };
 
   // Abre el modal de edición del profesor actualmente seleccionado en la vista
+  // Profesor mostrado en la vista por docente y si el usuario puede editarlo:
+  // Master siempre; Coordinador solo si es de su PNF o no tiene PNF.
+  const profSel = profesores.find((p) => p.id === (profesorId ?? profesores[0]?.id));
+  const puedeEditarProfSel =
+    !!profSel &&
+    (user?.role === 'SUPER_USUARIO' ||
+      (user?.role === 'ADMINISTRADOR' &&
+        user?.pnf_saga_id != null &&
+        (profSel.pnf_saga_id == null ||
+          Number(profSel.pnf_saga_id) === Number(user.pnf_saga_id))));
+
   const editarProfesorSel = async () => {
     const id = profesorId ?? profesores[0]?.id;
-    if (!id) return;
+    if (!id || !puedeEditarProfSel) return;
     const res = await apiFetch<Profesor>(`/profesores/${id}`);
     if (res.success && res.data) setProfEdit(res.data);
     else mostrarAviso(res.message || 'No se pudo cargar el profesor.', true);
@@ -1320,7 +1332,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                   value={profesorId ?? profesores[0]?.id ?? null}
                   onChange={setProfesorId}
                 />
-                {puedeEditar && (
+                {puedeEditarProfSel && (
                   <button
                     onClick={editarProfesorSel}
                     title="Editar profesor"
