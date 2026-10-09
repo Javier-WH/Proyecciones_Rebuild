@@ -30,9 +30,13 @@ export const ProfesoresPage: React.FC = () => {
   const { user } = useAuth();
   const esCoordinador = user?.role === 'ADMINISTRADOR';
   const puedeGestionar = user?.role === 'SUPER_USUARIO' || esCoordinador;
-  // El coordinador solo edita profesores de su propio PNF
+  // El coordinador edita profesores de su PNF o sin PNF (los "sin PNF" están
+  // disponibles para cualquier coordinador, que puede reclamarlos)
   const puedeEditarProf = (p: { pnf_saga_id: number | null }) =>
-    puedeGestionar && (!esCoordinador || (p.pnf_saga_id != null && Number(p.pnf_saga_id) === Number(user?.pnf_saga_id)));
+    puedeGestionar &&
+    (!esCoordinador ||
+      (user?.pnf_saga_id != null &&
+        (p.pnf_saga_id == null || Number(p.pnf_saga_id) === Number(user.pnf_saga_id))));
 
   const [profesores, setProfesores] = useState<Profesor[]>([]);
   const [loading, setLoading] = useState(true);

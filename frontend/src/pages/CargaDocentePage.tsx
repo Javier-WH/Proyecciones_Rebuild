@@ -58,9 +58,10 @@ export const CargaDocentePage: React.FC = () => {
   // Quitar: materia propia, o materia ajena cuyo profesor asignado es de su PNF
   const puedeQuitarMateria = (materiaPnf?: number | null, profPnf?: number | null) =>
     puedeAsignar && (!esCoordinador || esMioPnf(materiaPnf) || esMioPnf(profPnf));
-  // Editar ficha del docente: Master siempre; Coordinador solo de su PNF
+  // Editar ficha del docente: Master siempre; Coordinador de su PNF o sin PNF
   const puedeEditarProfesor = (p: Profesor) =>
-    user?.role === 'SUPER_USUARIO' || (esCoordinador && esMioPnf(p.pnf_saga_id));
+    user?.role === 'SUPER_USUARIO' ||
+    (esCoordinador && user?.pnf_saga_id != null && (p.pnf_saga_id == null || esMioPnf(p.pnf_saga_id)));
 
   // Punto discreto con el color identificativo del PNF (slate si no tiene)
   const pnfDot = (sagaId: number | null | undefined) => (

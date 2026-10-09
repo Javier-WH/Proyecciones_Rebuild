@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
 import { sagaService } from '../saga/saga.service.js';
-import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
+import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,6 +27,20 @@ interface TipoContratoBody {
 
 const MAX_FOTO_BYTES = 2 * 1024 * 1024; // 2 MB de foto decodificada
 const FOTOS_DIR = path.join(process.cwd(), 'public', 'profesores');
+
+// Para docentes, "sin PNF" (null) significa no reclamado: cualquier Coordinador
+// puede gestionarlo y asociarlo a su PNF. A diferencia de
+// esCoordinadorDeOtroPnf — usado en proyecciones/horarios, donde null = ajeno —
+// aquí solo se bloquea cuando el profesor pertenece a OTRO PNF (o el
+// coordinador no tiene PNF, caso prohibido para su rol).
+function profesorFueraDelAlcance(
+  user: { role: string; pnf_saga_id?: number | null },
+  profPnf: number | string | null | undefined
+): boolean {
+  if (user.role !== 'ADMINISTRADOR') return false;
+  if (user.pnf_saga_id == null) return true;
+  return profPnf != null && Number(profPnf) !== Number(user.pnf_saga_id);
+}
 
 function normalizeCedula(raw: any): string {
   return String(raw ?? '')
@@ -200,11 +214,15 @@ export async function createProfesorHandler(request: FastifyRequest, reply: Fast
       });
     }
 
-    // Un coordinador solo puede inscribir profesores en su propio PNF
+    // El Coordinador registra profesores de su PNF o sin PNF — nunca de otro
     if (user.role === 'ADMINISTRADOR' && !user.pnf_saga_id) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
-    const pnfSagaId = user.role === 'ADMINISTRADOR' ? user.pnf_saga_id : body.pnf_saga_id || null;
+    const pnfPedido = body.pnf_saga_id ? Number(body.pnf_saga_id) : null;
+    if (profesorFueraDelAlcance(user, pnfPedido)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
+    const pnfSagaId = user.role === 'ADMINISTRADOR' ? pnfPedido : body.pnf_saga_id || null;
     const pnfNombre = body.pnf_nombre?.trim() || (await resolvePnfNombre(pnfSagaId ? Number(pnfSagaId) : null));
 
     const insert: any = await query(
@@ -258,17 +276,22 @@ export async function updateProfesorHandler(request: FastifyRequest, reply: Fast
       return reply.status(400).send({ success: false, message: `La cédula ${cedula} ya está asignada a otro profesor.` });
     }
 
-    // Un coordinador solo edita profesores de su PNF y no puede moverlos a otro
+    // El Coordinador edita profesores de su PNF o sin PNF; el PNF nuevo solo
+    // puede ser el suyo o null (quita la asociación) — nunca otro PNF.
+    const pnfNuevo =
+      body.pnf_saga_id !== undefined ? body.pnf_saga_id || null : current.pnf_saga_id;
     if (
-      esCoordinadorDeOtroPnf(user, current.pnf_saga_id) ||
-      (body.pnf_saga_id !== undefined && esCoordinadorDeOtroPnf(user, body.pnf_saga_id))
+      profesorFueraDelAlcance(user, current.pnf_saga_id) ||
+      profesorFueraDelAlcance(user, pnfNuevo)
     ) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
-    let pnfSagaId = body.pnf_saga_id !== undefined ? body.pnf_saga_id : current.pnf_saga_id;
+    const pnfSagaId = pnfNuevo;
     const pnfNombre =
-      body.pnf_nombre?.trim() ||
-      (pnfSagaId !== current.pnf_saga_id ? await resolvePnfNombre(Number(pnfSagaId) || null) : current.pnf_nombre);
+      pnfSagaId == null
+        ? ''
+        : body.pnf_nombre?.trim() ||
+          (pnfSagaId !== current.pnf_saga_id ? await resolvePnfNombre(Number(pnfSagaId) || null) : current.pnf_nombre);
 
     await query(
       `UPDATE profesores SET
@@ -306,7 +329,7 @@ export async function toggleActivoProfesorHandler(request: FastifyRequest, reply
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
     }
-    if (esCoordinadorDeOtroPnf(request.userPayload!, rows[0].pnf_saga_id)) {
+    if (profesorFueraDelAlcance(request.userPayload!, rows[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
@@ -355,7 +378,7 @@ export async function uploadFotoProfesorHandler(request: FastifyRequest, reply: 
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
     }
-    if (esCoordinadorDeOtroPnf(request.userPayload!, rows[0].pnf_saga_id)) {
+    if (profesorFueraDelAlcance(request.userPayload!, rows[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
@@ -391,7 +414,7 @@ export async function deleteFotoProfesorHandler(request: FastifyRequest, reply: 
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
     }
-    if (esCoordinadorDeOtroPnf(request.userPayload!, rows[0].pnf_saga_id)) {
+    if (profesorFueraDelAlcance(request.userPayload!, rows[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
@@ -548,7 +571,7 @@ export async function setPerfilesProfesorHandler(request: FastifyRequest, reply:
     if (prof.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
     }
-    if (esCoordinadorDeOtroPnf(request.userPayload!, prof[0].pnf_saga_id)) {
+    if (profesorFueraDelAlcance(request.userPayload!, prof[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
 
@@ -820,7 +843,7 @@ export async function setDisponibilidadSlotHandler(request: FastifyRequest, repl
     if (prof.length === 0) {
       return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
     }
-    if (esCoordinadorDeOtroPnf(request.userPayload!, prof[0].pnf_saga_id)) {
+    if (profesorFueraDelAlcance(request.userPayload!, prof[0].pnf_saga_id)) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
     if (body.disponible === false) {

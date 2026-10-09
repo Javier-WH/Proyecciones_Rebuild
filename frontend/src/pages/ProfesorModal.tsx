@@ -61,8 +61,10 @@ interface ProfesorModalProps {
 export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, onSuccess, profesor }) => {
   const { user } = useAuth();
   const editingId = profesor?.id ?? null;
-  // El Coordinador solo puede registrar/editar profesores de su propio PNF
-  const pnfFijo = user?.role === 'ADMINISTRADOR' ? user?.pnf_saga_id ?? null : null;
+  const esCoordinador = user?.role === 'ADMINISTRADOR';
+  // El Coordinador puede asociar profesores a su PNF o dejarlos sin PNF —
+  // nunca moverlos a un PNF distinto al suyo
+  const pnfPropio = esCoordinador ? (user?.pnf_saga_id ?? null) : null;
 
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -99,7 +101,9 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     setSexo(profesor?.sexo || '');
     setEmail(profesor?.email || '');
     setTelefono(profesor?.telefono || '');
-    setPnfSagaId(pnfFijo ?? profesor?.pnf_saga_id ?? '');
+    // En edición se muestra el PNF real ('' = sin PNF); en alta, por defecto
+    // el PNF del coordinador cuando tiene uno
+    setPnfSagaId(profesor?.pnf_saga_id ?? pnfPropio ?? '');
     setTipoContratoId(profesor?.tipo_contrato_id || '');
     setFotoPreview(profesor?.foto_url || null);
     setFotoDataUrl(null);
@@ -170,7 +174,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
       email: email.trim() || undefined,
       telefono: telefono.trim() || undefined,
       pnf_saga_id: pnfSagaId === '' ? null : Number(pnfSagaId),
-      pnf_nombre: pnfObj?.programa || profesor?.pnf_nombre || '',
+      pnf_nombre: pnfSagaId === '' ? '' : pnfObj?.programa || profesor?.pnf_nombre || '',
       tipo_contrato_id: tipoContratoId === '' ? null : Number(tipoContratoId),
     };
 
@@ -345,17 +349,18 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
               <select
                 value={pnfSagaId}
                 onChange={(e) => setPnfSagaId(e.target.value === '' ? '' : Number(e.target.value))}
-                disabled={pnfFijo != null}
+                disabled={esCoordinador && pnfPropio == null}
                 className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {pnfFijo == null && <option value="">Sin PNF asignado</option>}
+                <option value="">Sin PNF asignado</option>
                 {/* Si el PNF actual no está en SAGA (o SAGA caído), se muestra igual */}
                 {profesor?.pnf_saga_id &&
+                  profesor.pnf_saga_id !== pnfPropio &&
                   !pnfList.some((p) => p.id === profesor.pnf_saga_id) && (
                     <option value={profesor.pnf_saga_id}>{profesor.pnf_nombre || `PNF #${profesor.pnf_saga_id}`}</option>
                   )}
                 {pnfList
-                  .filter((p) => pnfFijo == null || Number(p.id) === Number(pnfFijo))
+                  .filter((p) => pnfPropio == null || Number(p.id) === Number(pnfPropio))
                   .map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.programa}
