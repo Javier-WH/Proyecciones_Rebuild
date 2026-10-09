@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import ExcelJS from 'exceljs';
 import { Profesor } from './ProfesorModal.js';
 import { imprimirHtml } from '../utils/print.js';
+import { logoDataUri, logoBase64 } from '../utils/logo.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import { X, FileSpreadsheet, Printer, Users, AlertTriangle } from 'lucide-react';
 
@@ -211,9 +212,22 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         wrapText: true,
       };
       const fuenteDatos: Partial<ExcelJS.Font> = { size: 9 };
+      const logoImg = wb.addImage({ base64: await logoBase64(), extension: 'png' });
 
       for (const hoja of hojas) {
         const ws = wb.addWorksheet(hoja.nombreHoja);
+        // Logo institucional: 21px desde la izquierda, 7.50" desde arriba
+        // (EMU: px × 9525, pulgadas × 914400; nativeColOff sí lo lee
+        // Anchor aunque el tipo público solo declare { col, row })
+        ws.addImage(logoImg, {
+          tl: {
+            nativeCol: 0,
+            nativeColOff: 200025,
+            nativeRow: 0,
+            nativeRowOff: 6858000,
+          } as unknown as { col: number; row: number },
+          ext: { width: 127, height: 60 },
+        });
         ws.columns = [
           { width: 34 }, // A Profesor
           { width: 46 }, // B Unidad Curricular
@@ -381,11 +395,12 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   };
 
   // ------------------------- IMPRESIÓN DIRECTA -------------------------
-  const imprimir = () => {
+  const imprimir = async () => {
     if (hojas.length === 0) {
       setAviso('No hay docentes con carga para la selección realizada.');
       return;
     }
+    const logo = await logoDataUri();
     const secciones = hojas
       .map((hoja) => {
         const encabezado = header
@@ -408,7 +423,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
               .join('')}</tbody>`
           )
           .join('');
-        return `<section class="hoja">${encabezado}
+        return `<section class="hoja"><img class="logo" src="${logo}" alt="">${encabezado}
 <table>
 <thead>
 <tr><th rowspan="2">Profesor</th><th rowspan="2">Unidad Curricular</th><th rowspan="2">PNF</th><th rowspan="2">Trayecto</th><th rowspan="2">Sección</th><th rowspan="2">Turno</th><th colspan="2">${escapeHtml(hoja.lapsoLabel)}</th><th rowspan="2">Dedicación</th></tr>
@@ -423,8 +438,9 @@ ${filas}
 <style>
 @page { size: letter landscape; margin: 1.2cm 1.5cm; }
 body { font-family: Calibri, Arial, sans-serif; font-size: 10pt; color: #000; }
-.hoja { page-break-after: always; }
+.hoja { page-break-after: always; position: relative; }
 .hoja:last-child { page-break-after: auto; }
+img.logo { position: absolute; left: 0; top: 0; height: 1.3cm; }
 .hline { text-align: center; font-weight: bold; line-height: 1.35; }
 table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 thead { display: table-header-group; }

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
 import { imprimirHtml } from '../utils/print.js';
+import { logoDataUri, logoBase64 } from '../utils/logo.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import {
   HorarioEntry,
@@ -491,9 +492,22 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       const thin: Partial<ExcelJS.Border> = { style: 'thin' };
       const borde: Partial<ExcelJS.Borders> = { top: thin, left: thin, bottom: thin, right: thin };
       const nombrar = crearNombradorHojas();
+      const logoImg = wb.addImage({ base64: await logoBase64(), extension: 'png' });
 
       for (const h of hojas) {
         const ws = wb.addWorksheet(nombrar(h.nombre));
+        // Logo institucional: 21px desde la izquierda, 7.50" desde arriba
+        // (EMU: px × 9525, pulgadas × 914400; nativeColOff sí lo lee
+        // Anchor aunque el tipo público solo declare { col, row })
+        ws.addImage(logoImg, {
+          tl: {
+            nativeCol: 0,
+            nativeColOff: 200025,
+            nativeRow: 0,
+            nativeRowOff: 6858000,
+          } as unknown as { col: number; row: number },
+          ext: { width: 127, height: 60 },
+        });
         const cols = 1 + h.dias.length;
         ws.columns = [{ width: 14 }, ...h.dias.map(() => ({ width: 26 }))];
 
@@ -575,11 +589,12 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   };
 
   // ------------------------- IMPRESIÓN -------------------------
-  const imprimir = () => {
+  const imprimir = async () => {
     if (hojas.length === 0) {
       setAviso('No hay nada seleccionado.');
       return;
     }
+    const logo = await logoDataUri();
     const seccionesHtml = hojas
       .map((h) => {
         const encabezado = h.lineas.map((l) => `<div class="hline">${escapeHtml(l)}</div>`).join('');
@@ -609,7 +624,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           })
           .join('');
         const thDias = h.dias.map((d) => `<th>${escapeHtml(DIAS_NOMBRES[d])}</th>`).join('');
-        return `<section class="hoja">${encabezado}
+        return `<section class="hoja"><img class="logo" src="${logo}" alt="">${encabezado}
 <table><thead><tr><th>Hora</th>${thDias}</tr></thead><tbody>${filas}</tbody></table></section>`;
       })
       .join('\n');
@@ -618,8 +633,9 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
 <style>
 @page { size: letter landscape; margin: 1.2cm 1.4cm; }
 body { font-family: Calibri, Arial, sans-serif; font-size: 9pt; color: #000; }
-.hoja { page-break-after: always; }
+.hoja { page-break-after: always; position: relative; }
 .hoja:last-child { page-break-after: auto; }
+img.logo { position: absolute; left: 0; top: 0; height: 1.46cm; }
 .hline { text-align: center; font-weight: bold; line-height: 1.35; }
 table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
 th, td { border: 1px solid #000; padding: 3px 4px; font-size: 8pt; vertical-align: top; overflow-wrap: break-word; }
