@@ -17,6 +17,23 @@
   background: radial-gradient(circle at 10% 20%, rgba(15, 23, 42, 0.95) 0%, rgba(30, 58, 138, 0.9) 90%);
 }
 
+/* Luz parpadeante para los indicadores de conflicto en las tarjetas de horario */
+@keyframes luz-error {
+  0%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.95))
+      drop-shadow(0 0 12px rgba(239, 68, 68, 0.5));
+  }
+  50% {
+    opacity: 0.3;
+    filter: drop-shadow(0 0 1px rgba(239, 68, 68, 0.35));
+  }
+}
+.luz-error {
+  animation: luz-error 1.1s ease-in-out infinite;
+}
+
 /* Slider de confirmación (deslizar hasta el final para habilitar acción destructiva) */
 input[type='range'].slide-confirm {
   -webkit-appearance: none;

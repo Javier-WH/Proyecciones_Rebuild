@@ -60,8 +60,10 @@ export const ClaseCard: React.FC<{
             setTip({ x: r.left + r.width / 2, y: r.top, flip: r.top < 190 });
           }}
           onMouseLeave={() => setTip(null)}
-          className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-red-300/70 shadow-[0_0_6px_2px_rgba(239,68,68,0.7)] animate-pulse cursor-help"
-        />
+          className="absolute top-0 right-0 p-1 cursor-help"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-red-500 luz-error" />
+        </span>
       )}
       {tip && errores && errores.length > 0 &&
         createPortal(
@@ -622,8 +624,10 @@ const MiniAvisos: React.FC<{
         <span
           onMouseEnter={(e) => show(e, 'conflictos', item.errores!.map((x) => `${x.titulo ? x.titulo + ': ' : ''}${x.texto}`))}
           onMouseLeave={() => setTip(null)}
-          className={`${cls} rounded-full bg-red-500 ring-1 ring-red-300 animate-pulse`}
-        />
+          className={cls}
+        >
+          <AlertTriangle className="w-3 h-3 text-red-500 luz-error" />
+        </span>
       )}
       {item.advertencias && item.advertencias.length > 0 && (
         <span
