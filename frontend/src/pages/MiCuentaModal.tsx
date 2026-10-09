@@ -116,6 +116,17 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
   const guardarPreguntas = async () => {
     setMsgPreguntas(null);
+    // Nada configurado en absoluto: sin preguntas no hay forma de recuperar
+    const todoVacio = slots.every((s) => s.idx === '' && !s.respuesta.trim());
+    if (todoVacio) {
+      setMsgPreguntas({
+        ok: false,
+        texto:
+          'No tienes manera de recuperar tu contraseña. Debes elegir ' +
+          `${PREGUNTAS_REQUERIDAS} preguntas y escribir sus respuestas.`,
+      });
+      return;
+    }
     const elegidas = slots.map((s) => s.idx).filter((i): i is number => i !== '');
     const duplicadas = new Set(elegidas).size !== elegidas.length;
     if (elegidas.length !== PREGUNTAS_REQUERIDAS || duplicadas) {
