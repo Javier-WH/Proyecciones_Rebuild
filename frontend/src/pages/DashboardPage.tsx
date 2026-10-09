@@ -19,6 +19,7 @@ import { PermisosRolModal } from './PermisosRolModal.js';
 import { MiCuentaModal } from './MiCuentaModal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
+import fotoCreador from '../images/Creator.png';
 import {
   GraduationCap,
   Briefcase,
@@ -706,21 +707,28 @@ export const DashboardPage: React.FC = () => {
               Plataforma para la creación de proyecciones académicas, asignación de carga docente y
               generación automática de horarios de la UPTLL "Juana Ramírez".
             </p>
-            <div className="mt-4 pt-4 border-t border-slate-800">
-              <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">
-                Desarrollado por
-              </p>
-              <p className="text-sm font-semibold text-slate-200">
-                Francisco Javier Rodríguez Hernández
-              </p>
-              <a
-                href="https://javier-wh.github.io"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                javier-wh.github.io
-              </a>
+            <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-center gap-4">
+              <div className="text-left">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">
+                  Desarrollado por
+                </p>
+                <p className="text-sm font-semibold text-slate-200">
+                  Francisco Javier Rodríguez Hernández
+                </p>
+                <a
+                  href="https://javier-wh.github.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  javier-wh.github.io
+                </a>
+              </div>
+              <img
+                src={fotoCreador}
+                alt="Francisco Javier Rodríguez Hernández"
+                className="h-16 w-auto object-contain shrink-0 [-webkit-mask-image:linear-gradient(to_right,transparent,black_35%),linear-gradient(to_bottom,transparent,black_35%)] [-webkit-mask-composite:source-in] [mask-image:linear-gradient(to_right,transparent,black_35%),linear-gradient(to_bottom,transparent,black_35%)] [mask-composite:intersect]"
+              />
             </div>
             <p className="text-[10px] text-slate-600 mt-4">
               UPTLL Juana Ramírez — Sistema de Proyecciones Académicas © {new Date().getFullYear()}
