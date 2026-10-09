@@ -348,7 +348,9 @@ export const DashboardPage: React.FC = () => {
 
             {/* Right Profile & Actions */}
             <div className="flex items-center gap-4">
-              {/* SAGA Status Indicator — clic para reintentar y resincronizar cachés */}
+              {/* SAGA Status Indicator — clic para reintentar y resincronizar
+                  cachés; el docente no lo ve (no gestiona catálogos SAGA) */}
+              {user?.role !== 'PROFESOR' && (
               <button
                 onClick={resincronizarSaga}
                 disabled={loadingSaga}
@@ -379,6 +381,7 @@ export const DashboardPage: React.FC = () => {
                   <span className="text-red-400 flex items-center gap-1 font-medium"><XCircle className="w-3.5 h-3.5" /> Desconectado</span>
                 )}
               </button>
+              )}
 
               {/* Menú de configuración y sesión — el docente ve solo logout directo */}
               <div className="flex items-center gap-3 pl-3 border-l border-slate-800">
