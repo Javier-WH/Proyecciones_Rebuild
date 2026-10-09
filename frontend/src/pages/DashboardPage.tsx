@@ -40,7 +40,8 @@ import {
   IdCard,
   ShieldCheck,
   RefreshCw,
-  Info
+  Info,
+  HelpCircle
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -452,14 +453,27 @@ export const DashboardPage: React.FC = () => {
                             </button>
                           </>
                         )}
+                        <a
+                          href="/manual/index.html"
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => setConfigMenuOpen(false)}
+                          className={`w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer ${
+                            esAdmin ? '' : 'rounded-t-2xl'
+                          }`}
+                        >
+                          <HelpCircle className="w-4 h-4 text-emerald-400" />
+                          <div className="text-left">
+                            <div className="font-semibold text-xs">Ayuda</div>
+                            <div className="text-[10px] text-slate-500">Manual de usuario con capturas</div>
+                          </div>
+                        </a>
                         <button
                           onClick={() => {
                             setConfigMenuOpen(false);
                             setAcercaOpen(true);
                           }}
-                          className={`w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer ${
-                            esAdmin ? '' : 'rounded-t-2xl'
-                          }`}
+                          className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
                         >
                           <Info className="w-4 h-4 text-cyan-400" />
                           <div className="text-left">
@@ -467,6 +481,7 @@ export const DashboardPage: React.FC = () => {
                             <div className="text-[10px] text-slate-500">Información del sistema</div>
                           </div>
                         </button>
+
                         <button
                           onClick={() => {
                             setConfigMenuOpen(false);
