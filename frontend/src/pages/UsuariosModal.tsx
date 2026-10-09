@@ -150,6 +150,18 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    const uname = form.username.trim().toLowerCase();
+    const esAdminSys = editing?.username.toLowerCase() === 'admin';
+    // 'admin' es el Master de rescate que el servidor garantiza al arrancar:
+    // no se puede crear otro ni renombrar al existente
+    if (uname === 'admin' && !esAdminSys) {
+      setErrorMsg("El nombre de usuario 'admin' está reservado para el sistema.");
+      return;
+    }
+    if (esAdminSys && uname !== 'admin') {
+      setErrorMsg("El usuario 'admin' no puede renombrarse.");
+      return;
+    }
     if (form.role === 'ADMINISTRADOR' && !form.pnf_saga_id) {
       setErrorMsg('El Coordinador debe tener un PNF asociado.');
       return;

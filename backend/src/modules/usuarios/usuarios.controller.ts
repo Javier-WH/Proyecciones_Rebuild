@@ -61,6 +61,13 @@ export async function createUsuarioHandler(request: FastifyRequest, reply: Fasti
   if (password.length < 6) {
     return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });
   }
+  // 'admin' es reservado: es el Master de rescate que el seed garantiza al arrancar
+  if (username.toLowerCase() === 'admin') {
+    return reply.status(400).send({
+      success: false,
+      message: "El nombre de usuario 'admin' está reservado para el sistema.",
+    });
+  }
   // Solo el Coordinador (ADMINISTRADOR) requiere obligatoriamente un PNF
   if (role === 'ADMINISTRADOR' && !pnfSagaId) {
     return reply.status(400).send({ success: false, message: 'El Coordinador debe tener un PNF asociado.' });
@@ -132,9 +139,18 @@ export async function updateUsuarioHandler(request: FastifyRequest, reply: Fasti
   }
 
   try {
-    const existing = await query<any[]>('SELECT id FROM users WHERE id = ? LIMIT 1', [id]);
+    const existing = await query<any[]>('SELECT id, username FROM users WHERE id = ? LIMIT 1', [id]);
     if (existing.length === 0) {
       return reply.status(404).send({ success: false, message: 'Usuario no encontrado.' });
+    }
+    // 'admin' es reservado del sistema: solo puede editarse a sí mismo, nadie
+    // puede tomar ese nombre ni renombrarlo.
+    const nombreReservado = existing[0].username.toLowerCase() === 'admin';
+    if (username.toLowerCase() === 'admin' ? !nombreReservado : nombreReservado) {
+      return reply.status(400).send({
+        success: false,
+        message: "El nombre de usuario 'admin' está reservado para el sistema.",
+      });
     }
 
     if (body.password) {
@@ -229,7 +245,6 @@ export async function updateSelfHandler(request: FastifyRequest, reply: FastifyR
       message: 'Usuario, nombre y apellido son obligatorios.',
     });
   }
-
   const quierePassword = !!body.password_nueva;
   if (quierePassword) {
     if ((body.password_nueva ?? '').length < 6) {
@@ -247,9 +262,20 @@ export async function updateSelfHandler(request: FastifyRequest, reply: FastifyR
   }
 
   try {
-    const rows = await query<any[]>('SELECT id, password FROM users WHERE id = ? LIMIT 1', [id]);
+    const rows = await query<any[]>('SELECT id, username, password FROM users WHERE id = ? LIMIT 1', [id]);
     if (rows.length === 0) {
       return reply.status(404).send({ success: false, message: 'Usuario no encontrado.' });
+    }
+    // 'admin' es reservado: solo el usuario que ya se llama así puede
+    // conservarlo; nadie puede adoptarlo desde Mi Cuenta.
+    if (
+      username.toLowerCase() === 'admin' &&
+      rows[0].username.toLowerCase() !== 'admin'
+    ) {
+      return reply.status(400).send({
+        success: false,
+        message: "El nombre de usuario 'admin' está reservado para el sistema.",
+      });
     }
 
     if (quierePassword && !(await verifyPassword(body.password_actual!, rows[0].password))) {

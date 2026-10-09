@@ -531,18 +531,35 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // 10. Verificar y crear usuario Super Usuario por defecto (admin / admin123)
-  const [existingUsers] = await db.query<any[]>('SELECT id FROM users WHERE username = ?', ['admin']);
-  if (existingUsers.length === 0) {
+  // 10. Garantizar que SIEMPRE exista al menos un Master activo. Si no hay
+  // ninguno (ej. todos degradados/desactivados por SQL), se crea o restaura
+  // 'admin' con admin123 y rol SUPER_USUARIO — 'admin' es un username
+  // reservado del sistema (la app no permite crear/editar otro con ese nombre).
+  const [masters] = await db.query<any[]>(
+    "SELECT id FROM users WHERE role = 'SUPER_USUARIO' AND activo = 1 LIMIT 1"
+  );
+  if (masters.length === 0) {
     const hashedPassword = await hashPassword('admin123');
-    await db.query(
-      `INSERT INTO users (username, password, nombre, apellido, email, role, activo) 
-       VALUES (?, ?, ?, ?, ?, ?, 1)`,
-      ['admin', hashedPassword, 'Administrador', 'Principal', 'admin@uptll.edu.ve', 'SUPER_USUARIO']
+    const [adminRow] = await db.query<any[]>(
+      'SELECT id FROM users WHERE username = ? LIMIT 1',
+      ['admin']
     );
-    console.log('✅ Usuario por defecto creado: admin / admin123 (SUPER_USUARIO)');
+    if (adminRow.length === 0) {
+      await db.query(
+        `INSERT INTO users (username, password, nombre, apellido, email, role, activo)
+         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        ['admin', hashedPassword, 'Administrador', 'Principal', 'admin@uptll.edu.ve', 'SUPER_USUARIO']
+      );
+      console.log('✅ Usuario por defecto creado: admin / admin123 (SUPER_USUARIO)');
+    } else {
+      await db.query(
+        "UPDATE users SET password = ?, role = 'SUPER_USUARIO', activo = 1 WHERE id = ?",
+        [hashedPassword, adminRow[0].id]
+      );
+      console.log('♻️ Usuario admin restaurado como Master activo (admin / admin123)');
+    }
   } else {
-    console.log('ℹ️ Usuario admin existente en base de datos.');
+    console.log('ℹ️ Ya existe al menos un usuario Master activo.');
   }
 
   await db.end();
