@@ -62,6 +62,14 @@ export function buildApp() {
 
   app.register(jwt, {
     secret: env.JWT_SECRET,
+    verify: {
+      // Tolerancia de ±1h (milisegundos, fast-jwt): en servidores con RTC
+      // viejo el reloj puede quedar con deriva tras un corte eléctrico.
+      // Además fast-jwt no rechaza 'iat' en el futuro, así que un reloj
+      // ATRASADO post-reinicio no invalida las sesiones existentes; el
+      // riesgo real es un salto hacia adelante (exp) que esto amortigua.
+      clockTolerance: 3_600_000,
+    },
   });
 
   // 2. Archivos públicos estáticos
