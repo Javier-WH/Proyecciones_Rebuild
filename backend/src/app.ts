@@ -37,10 +37,14 @@ export function buildApp() {
   // como mejora futura.
   app.register(helmet, { contentSecurityPolicy: false });
 
-  // Rate limit global permisivo; las rutas de autenticación lo endurecen
-  // por ruta (ver auth.routes.ts).
+  // Rate limit global muy alto (~100 req/s sostenidas por IP): el editor
+  // de horarios encadena mutación + recargas del grid y un límite bajo
+  // interrumpía el trabajo normal en la LAN. Sigue existiendo solo como
+  // red de seguridad ante un bucle de peticiones descontrolado; las rutas
+  // de autenticación mantienen su límite estricto de 10/min por ruta
+  // (ver auth.routes.ts).
   app.register(rateLimit, {
-    max: 300,
+    max: 6000,
     timeWindow: '1 minute',
     errorResponseBuilder: () => ({
       success: false,
