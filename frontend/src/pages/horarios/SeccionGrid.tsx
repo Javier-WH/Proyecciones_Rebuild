@@ -31,6 +31,7 @@ import {
   traslapan,
   esRivalParcial,
   relacionLapsos,
+  sortAulas,
   colorMateria,
   normMateria,
   ErrorClase,
@@ -97,13 +98,33 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   // sin cambiar de vista. También funciona mientras se arrastra.
   const [shiftOn, setShiftOn] = useState(false);
   const [profeHover, setProfeHover] = useState<number | null>(null);
+  // Ctrl+hover sobre una celda vacía: tooltip con las aulas libres de ese
+  // bloque (las del PNF de la sección primero).
+  const [ctrlOn, setCtrlOn] = useState(false);
+  const [celdaHover, setCeldaHover] = useState<{
+    dia: number;
+    tramos: Bloque[]; // bloques que cubre la celda (1 o las de un span)
+    x: number;
+    y: number;
+  } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const usa12 = !!config.formato_12h; // vista 12h; la BD siempre guarda 24h
 
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftOn(true); };
-    const up = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftOn(false); };
-    const off = () => { setShiftOn(false); setProfeHover(null); };
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') setShiftOn(true);
+      if (e.key === 'Control') setCtrlOn(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') setShiftOn(false);
+      if (e.key === 'Control') setCtrlOn(false);
+    };
+    const off = () => {
+      setShiftOn(false);
+      setCtrlOn(false);
+      setProfeHover(null);
+      setCeldaHover(null);
+    };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', off);
@@ -264,6 +285,32 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       entries.find((x) => x.profesor_id === profePeek);
     return src ? `${src.prof_apellidos ?? ''} ${src.prof_nombres ?? ''}`.trim() : '';
   }, [profePeek, materias, entries]);
+
+  // Ctrl+hover sobre celda vacía: aulas libres en TODOS los tramos que
+  // cubre la celda (en un span fusionado el aula debe estar libre en cada
+  // sub-bloque). Las aulas del PNF de la sección van primero.
+  const aulasLibresHover = useMemo(() => {
+    if (!ctrlOn || !celdaHover || activo) return null;
+    const ocup = new Set<number>();
+    for (const e of entries) {
+      if (esRivalParcial(tipoProyeccion, trimestre, e)) continue;
+      if (e.dia_semana !== celdaHover.dia) continue;
+      if (
+        celdaHover.tramos.some((b) =>
+          traslapan(b.hora_inicio, b.hora_fin, e.hora_inicio, e.hora_fin)
+        )
+      ) {
+        ocup.add(e.aula_id);
+      }
+    }
+    const pnf = seccion.pnf_saga_id ?? null;
+    const libres = sortAulas(aulasActivas.filter((a) => !ocup.has(a.id))).sort(
+      (a, b) =>
+        Number(pnf != null && b.pnf_saga_id === pnf) -
+        Number(pnf != null && a.pnf_saga_id === pnf)
+    );
+    return { libres, ocupadas: ocup.size };
+  }, [ctrlOn, celdaHover, activo, entries, aulasActivas, tipoProyeccion, trimestre, seccion.pnf_saga_id]);
 
   // Advertencias (triángulo amarillo) de una celda: union de las de todo el run
   const advertenciasDe = (run: HorarioEntry[], entry?: HorarioEntry) => {
@@ -694,6 +741,54 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         </div>
       )}
 
+      {/* Ctrl+hover sobre celda vacía: aulas libres de ese bloque */}
+      {celdaHover && aulasLibresHover && (
+        <div
+          className="fixed z-[60] w-64 max-w-[80vw] rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl shadow-black/50 p-3 pointer-events-none"
+          style={{
+            left: Math.min(celdaHover.x + 14, window.innerWidth - 270),
+            top: Math.min(celdaHover.y + 14, window.innerHeight - 200),
+          }}
+        >
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1.5">
+            Aulas libres · {DIAS_CORTOS[celdaHover.dia]}{' '}
+            {fmtHoraCfg(celdaHover.tramos[0].hora_inicio, usa12)}
+          </p>
+          {aulasLibresHover.libres.length === 0 ? (
+            <p className="text-xs text-red-300">
+              Sin aulas libres en este bloque
+              {aulasLibresHover.ocupadas > 0 ? ` (${aulasLibresHover.ocupadas} ocupadas)` : ''}.
+            </p>
+          ) : (
+            <>
+              <ul className="space-y-1">
+                {aulasLibresHover.libres.slice(0, 5).map((a) => {
+                  const esPnf =
+                    seccion.pnf_saga_id != null && a.pnf_saga_id === seccion.pnf_saga_id;
+                  return (
+                    <li key={a.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className={`truncate ${esPnf ? 'text-purple-200 font-semibold' : 'text-slate-200'}`}>
+                        {a.nombre}
+                      </span>
+                      {esPnf && (
+                        <span className="px-1.5 py-0.5 rounded border text-[9px] font-semibold text-purple-300 bg-purple-500/10 border-purple-500/30 shrink-0">
+                          PNF
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {aulasLibresHover.libres.length > 5 && (
+                <p className="text-[10px] text-slate-500 mt-1.5">
+                  +{aulasLibresHover.libres.length - 5} más…
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Panel de materias pendientes (droppable para desagendar) */}
         <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} onHoverProfe={setProfeHover} />
@@ -782,6 +877,18 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                               : []
                           }
                           onHoverProfe={setProfeHover}
+                          onHoverCelda={
+                            !entry && !activo
+                              ? (x, y) =>
+                                  setCeldaHover({
+                                    dia: d,
+                                    tramos: bloques.slice(bIdx, bIdx + (sp?.n ?? 1)),
+                                    x,
+                                    y,
+                                  })
+                              : undefined
+                          }
+                          onLeaveCelda={() => setCeldaHover(null)}
                           esSwap={
                             !!activo &&
                             !!entry &&
@@ -808,6 +915,8 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           <p className="mt-1.5 text-[10px] text-slate-500">
             Mantén <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Shift</kbd> presionado
             y pasa el mouse sobre una materia para iluminar los bloques que ya tiene ocupados su profesor.
+            Con <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Ctrl</kbd> sobre
+            una celda vacía ves qué aulas están libres en ese bloque.
           </p>
         </div>
       </div>
@@ -1124,8 +1233,10 @@ const Celda: React.FC<{
   avisosParciales?: string[];
   ocupadaProfe?: HorarioEntry[]; // ⇧+peek: clases del profesor que caen aquí
   onHoverProfe?: (id: number | null) => void;
+  onHoverCelda?: (x: number, y: number) => void; // Ctrl+peek: entra a celda vacía
+  onLeaveCelda?: () => void;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, onHoverProfe, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, onHoverProfe, onHoverCelda, onLeaveCelda, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   const ocupada = !!ocupadaProfe?.length;
@@ -1159,7 +1270,15 @@ const Celda: React.FC<{
   }
 
   return (
-    <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }} title={ocupadaTxt}>
+    <td
+      ref={setNodeRef}
+      rowSpan={span}
+      className={cls}
+      style={{ height: '3.5rem' }}
+      title={ocupadaTxt}
+      onMouseEnter={onHoverCelda ? (e) => onHoverCelda(e.clientX, e.clientY) : undefined}
+      onMouseLeave={onLeaveCelda}
+    >
       {entry && (
         <div className="absolute inset-0 p-0.5">
           <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} avisosParciales={avisosParciales} onAbrirMenu={onAbrirMenu} onHoverProfe={onHoverProfe} />
