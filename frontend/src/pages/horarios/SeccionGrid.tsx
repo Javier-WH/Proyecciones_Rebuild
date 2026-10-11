@@ -104,6 +104,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   const [celdaHover, setCeldaHover] = useState<{
     dia: number;
     tramos: Bloque[]; // bloques que cubre la celda (1 o las de un span)
+    aulaActual?: string; // aula de la clase que tapa la celda, si hay una
     x: number;
     y: number;
   } | null>(null);
@@ -753,6 +754,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1.5">
             Aulas libres · {DIAS_CORTOS[celdaHover.dia]}{' '}
             {fmtHoraCfg(celdaHover.tramos[0].hora_inicio, usa12)}
+            {celdaHover.aulaActual && (
+              <span className="normal-case font-medium text-slate-400">
+                {' '}· actual: {celdaHover.aulaActual}
+              </span>
+            )}
           </p>
           {aulasLibresHover.libres.length === 0 ? (
             <p className="text-xs text-red-300">
@@ -878,11 +884,12 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           }
                           onHoverProfe={setProfeHover}
                           onHoverCelda={
-                            !entry && !activo
+                            !activo
                               ? (x, y) =>
                                   setCeldaHover({
                                     dia: d,
                                     tramos: bloques.slice(bIdx, bIdx + (sp?.n ?? 1)),
+                                    aulaActual: entry?.aula_nombre,
                                     x,
                                     y,
                                   })
@@ -916,7 +923,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
             Mantén <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Shift</kbd> presionado
             y pasa el mouse sobre una materia para iluminar los bloques que ya tiene ocupados su profesor.
             Con <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Ctrl</kbd> sobre
-            una celda vacía ves qué aulas están libres en ese bloque.
+            cualquier bloque ves qué aulas están libres ahí (incluso sobre una clase).
           </p>
         </div>
       </div>
