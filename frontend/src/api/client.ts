@@ -16,17 +16,43 @@ export interface ApiOpciones extends RequestInit {
   silencioso?: boolean; // fetchs de fondo: no disparan el indicador
 }
 
+// Timeout generoso: la red de la institución se congestiona; sin él, un
+// fetch colgado dejaría el indicador visible indefinidamente (fetch() no
+// tiene timeout nativo).
+const TIMEOUT_MS = 45_000;
+
 let pendientes = 0;
 let etiquetaActual: string | null = null;
+let sinRespuesta = false;
+let enLinea = typeof navigator === 'undefined' ? true : navigator.onLine;
 const suscriptores = new Set<() => void>();
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('offline', () => {
+    enLinea = false;
+    notificarRed();
+  });
+  window.addEventListener('online', () => {
+    enLinea = true;
+    notificarRed();
+  });
+}
+
 export function estadoRed() {
-  return { pendientes, etiqueta: etiquetaActual };
+  return { pendientes, etiqueta: etiquetaActual, sinRespuesta, enLinea };
 }
 
 export function suscribirRed(fn: () => void): () => void {
   suscriptores.add(fn);
   return () => suscriptores.delete(fn);
+}
+
+// El aviso "el servidor no responde" persiste hasta que el usuario lo
+// descarta; el aviso "sin conexión" (enLinea) se retira solo al volver
+// la red.
+export function descartarAvisoRed() {
+  sinRespuesta = false;
+  notificarRed();
 }
 
 function notificarRed() {
@@ -57,6 +83,14 @@ export async function apiFetch<T = any>(
   options: ApiOpciones = {}
 ): Promise<ApiResponse<T>> {
   const { etiqueta, silencioso, ...fetchOptions } = options;
+
+  // Sin red ni siquiera se intenta: el fetch colgaría hasta el timeout.
+  // La capa "sin conexión" del indicador ya está visible por el listener
+  // de 'offline'.
+  if (!enLinea) {
+    return { success: false, message: 'Sin conexión con el servidor.' };
+  }
+
   if (!silencioso) iniciarPeticion(etiqueta);
   const token = localStorage.getItem('token');
 
@@ -71,9 +105,18 @@ export async function apiFetch<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), TIMEOUT_MS);
+  const senialLlamador = fetchOptions.signal;
+  if (senialLlamador) {
+    if (senialLlamador.aborted) controlador.abort();
+    else senialLlamador.addEventListener('abort', () => controlador.abort(), { once: true });
+  }
+
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...fetchOptions,
+      signal: controlador.signal,
       headers,
     });
 
@@ -102,11 +145,23 @@ export async function apiFetch<T = any>(
     return data;
   } catch (error) {
     console.error(`Error en apiFetch (${endpoint}):`, error);
+    // El servidor nunca respondió (timeout, conexión rechazada, reset):
+    // el banner grande de <IndicadorRed/> lo hace evidente al usuario.
+    if (!silencioso) {
+      sinRespuesta = true;
+      notificarRed();
+    }
+    const agotado = controlador.signal.aborted && !senialLlamador?.aborted;
     return {
       success: false,
-      message: 'Fallo de conexión con el servidor backend.',
+      message: senialLlamador?.aborted
+        ? 'Operación cancelada.'
+        : agotado
+          ? 'El servidor no respondió a tiempo. La red puede estar congestionada; inténtelo de nuevo.'
+          : 'Fallo de conexión con el servidor backend.',
     };
   } finally {
+    clearTimeout(temporizador);
     if (!silencioso) terminarPeticion();
   }
 }

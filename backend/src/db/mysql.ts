@@ -14,6 +14,11 @@ export function getDbPool(): Pool {
       waitForConnections: true,
       connectionLimit: 10, // Optimizado para servidor de 4GB RAM
       queueLimit: 0,
+      // Sin esto, un MySQL inalcanzable deja el request colgado en el
+      // servidor hasta que TCP se rinda (minutos). mysql2 v3 ya no honra
+      // `acquireTimeout`, así que la espera en cola del pool la acota el
+      // timeout de 45s del cliente (apiFetch).
+      connectTimeout: 10_000,
       enableKeepAlive: true,
       keepAliveInitialDelay: 0,
     });
