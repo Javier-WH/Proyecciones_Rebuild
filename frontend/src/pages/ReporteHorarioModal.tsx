@@ -28,6 +28,7 @@ import {
   minutos,
   traslapan,
   pnfLabel,
+  ordenTrayecto,
 } from './horarios/types.js';
 
 interface ReporteHorarioModalProps {
@@ -66,6 +67,7 @@ interface HojaRep {
   filas: FilaRep[];
   spans: Map<string, number>; // 'filaIdx:diaIdx' → alto del bloque fusionado
   cubiertas: Set<string>; // celdas absorbidas por un span (no se dibujan)
+  leyenda?: { trayecto: string; items: string[] }[]; // pie de hoja: materias asignadas por trayecto
 }
 
 // Firma de una celda para decidir si se fusiona con la de arriba: mismas
@@ -193,6 +195,8 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
   const [profQuery, setProfQuery] = useState('');
   const [pnfTab, setPnfTab] = useState('');
   const [ocupReal, setOcupReal] = useState(false);
+  // Leyenda de materias asignadas al pie de las hojas de profesores (opcional)
+  const [leyendaProf, setLeyendaProf] = useState(false);
   const [entradas, setEntradas] = useState<Map<string, HorarioEntry[]>>(new Map());
   const [cargando, setCargando] = useState(false);
   const [generando, setGenerando] = useState(false);
@@ -258,6 +262,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     setSelProf(new Set());
     setSelAula(new Set());
     setOcupReal(false);
+    setLeyendaProf(false);
 
     setCargando(true);
     Promise.all(
@@ -509,6 +514,39 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
         });
       }
     }
+    // Leyenda opcional (solo profesores): materias asignadas en carga docente
+    // de este lapso, agrupadas por trayecto — "MATERIA — SECCIÓN".
+    let leyenda: HojaRep['leyenda'];
+    if (recurso === 'profesor' && leyendaProf) {
+      const porTrayecto = new Map<
+        string,
+        { nombre: string; sagaId: number; items: Set<string> }
+      >();
+      for (const r of rows) {
+        if (
+          r.tipo_proyeccion === g.tipo &&
+          r.trimestre === g.n &&
+          r.profesor_id === id
+        ) {
+          const key = r.trayecto_nombre || 'Sin trayecto';
+          if (!porTrayecto.has(key))
+            porTrayecto.set(key, {
+              nombre: key,
+              sagaId: r.trayecto_saga_id ?? 0,
+              items: new Set(),
+            });
+          porTrayecto
+            .get(key)!
+            .items.add(`${r.materia_nombre} — Sección ${r.seccion_nombre}`);
+        }
+      }
+      const gruposL = [...porTrayecto.values()].sort(
+        (a, b) => ordenTrayecto(a.nombre, a.sagaId) - ordenTrayecto(b.nombre, b.sagaId)
+      );
+      if (gruposL.length > 0)
+        leyenda = gruposL.map((x) => ({ trayecto: x.nombre, items: [...x.items].sort() }));
+    }
+
     return {
       nombre: nombreHoja,
       lineas: lineasEncabezado(recurso, {
@@ -520,6 +558,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
       dias,
       filas,
       ...fusionesDe(filas, dias.length),
+      leyenda,
     };
   };
 
@@ -551,7 +590,7 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lapsos, grupos, selSec, selAula, selProf, ocupReal, turnos, periodo, periodoNombre, encabezados, formato12]);
+  }, [lapsos, grupos, selSec, selAula, selProf, ocupReal, leyendaProf, rows, turnos, periodo, periodoNombre, encabezados, formato12]);
 
   const toggle = (set: Set<string>, setSet: (s: Set<string>) => void, clave: string) => {
     const n = new Set(set);
@@ -660,6 +699,27 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           fila++;
         });
 
+        // Leyenda discreta: trayecto + materias asignadas (sin bordes, gris)
+        if (h.leyenda && h.leyenda.length > 0) {
+          fila++;
+          for (const gL of h.leyenda) {
+            const rT = ws.getRow(fila);
+            ws.mergeCells(fila, 1, fila, cols);
+            const cT = rT.getCell(1);
+            cT.value = gL.trayecto.toUpperCase();
+            cT.font = { bold: true, size: 8, color: { argb: 'FF666666' } };
+            fila++;
+            for (const it of gL.items) {
+              const rI = ws.getRow(fila);
+              ws.mergeCells(fila, 1, fila, cols);
+              const cI = rI.getCell(1);
+              cI.value = `   ${it}`;
+              cI.font = { size: 8, color: { argb: 'FF555555' } };
+              fila++;
+            }
+          }
+        }
+
         ws.pageSetup = {
           paperSize: 5,
           orientation: 'landscape',
@@ -720,8 +780,21 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
           })
           .join('');
         const thDias = h.dias.map((d) => `<th>${escapeHtml(DIAS_NOMBRES[d])}</th>`).join('');
+        const leyendaHtml =
+          h.leyenda && h.leyenda.length > 0
+            ? `<div class="leyenda">${h.leyenda
+                .map(
+                  (gL) =>
+                    `<div class="lgrupo"><div class="ltray">${escapeHtml(gL.trayecto.toUpperCase())}</div>` +
+                    gL.items
+                      .map((it) => `<div class="litem">${escapeHtml(it)}</div>`)
+                      .join('') +
+                    `</div>`
+                )
+                .join('')}</div>`
+            : '';
         return `<section class="hoja"><img class="logo" src="${logo}" alt="">${encabezado}
-<table><thead><tr><th>Hora</th>${thDias}</tr></thead><tbody>${filas}</tbody></table></section>`;
+<table><thead><tr><th>Hora</th>${thDias}</tr></thead><tbody>${filas}</tbody></table>${leyendaHtml}</section>`;
       })
       .join('\n');
 
@@ -744,6 +817,10 @@ td.clase { vertical-align: middle; }
 .mat { font-weight: bold; }
 .sub { font-size: 7.5pt; color: #333; }
 .cardsep { border-top: 1px dashed #999; margin: 3px 0; }
+.leyenda { margin-top: 8px; font-size: 6.5pt; color: #555; columns: 3; column-gap: 18px; }
+.lgrupo { break-inside: avoid; margin-bottom: 3px; }
+.ltray { font-weight: bold; color: #444; }
+.litem { padding-left: 6px; line-height: 1.25; }
 </style></head><body>${seccionesHtml}</body></html>`;
 
     imprimirHtml(html);
@@ -1109,6 +1186,18 @@ td.clase { vertical-align: middle; }
                     </label>
                   );
                 })}
+                <label className="flex items-center gap-2 px-2.5 pt-2.5 mt-1.5 border-t border-slate-800/70 cursor-pointer w-fit">
+                  <input
+                    type="checkbox"
+                    checked={leyendaProf}
+                    onChange={() => setLeyendaProf((v) => !v)}
+                    className="accent-blue-500 shrink-0"
+                  />
+                  <span className="text-xs text-slate-300">
+                    Incluir leyenda de mis materias asignadas al pie
+                    <span className="text-slate-500"> (trayecto · materia · sección)</span>
+                  </span>
+                </label>
               </div>
             </div>
           ) : (
@@ -1237,6 +1326,18 @@ td.clase { vertical-align: middle; }
                   {grupoTitulo('Profesores', <Users className="w-3.5 h-3.5" />)}
                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-3">
                     {profGrupo(lkActivo, g)}
+                    <label className="flex items-center gap-2 px-1 pt-2.5 mt-2 border-t border-slate-800/70 cursor-pointer w-fit">
+                      <input
+                        type="checkbox"
+                        checked={leyendaProf}
+                        onChange={() => setLeyendaProf((v) => !v)}
+                        className="accent-blue-500"
+                      />
+                      <span className="text-xs text-slate-300">
+                        Incluir leyenda de materias asignadas al pie de cada hoja
+                        <span className="text-slate-500"> (trayecto · materia · sección)</span>
+                      </span>
+                    </label>
                   </div>
                 </div>
               </>
