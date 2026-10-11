@@ -6,7 +6,7 @@ import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUptll from '../images/UPTLL_logo_transparent_outlined.png';
 
 export const LoginPage: React.FC = () => {
-  const { login, loginProfesor } = useAuth();
+  const { login, loginProfesor, sesionExpirada } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -109,6 +109,14 @@ export const LoginPage: React.FC = () => {
                 Ingrese sus credenciales universitarias para acceder
               </p>
             </div>
+
+            {/* Aviso de sesión expirada (token viejo o revocado) */}
+            {sesionExpirada && !errorMessage && (
+              <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-300 text-sm">
+                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <span>Tu sesión expiró o fue cerrada. Inicia sesión nuevamente.</span>
+              </div>
+            )}
 
             {/* Alert Message */}
             {errorMessage && (

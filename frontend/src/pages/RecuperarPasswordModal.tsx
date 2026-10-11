@@ -63,8 +63,8 @@ export const RecuperarPasswordModal: React.FC<{ onClose: () => void }> = ({ onCl
       setMsg({ ok: false, texto: 'Responda todas las preguntas.' });
       return;
     }
-    if (passNueva.length < 6) {
-      setMsg({ ok: false, texto: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (passNueva.length < 8) {
+      setMsg({ ok: false, texto: 'La contraseña debe tener al menos 8 caracteres.' });
       return;
     }
     if (passNueva !== passConfirma) {

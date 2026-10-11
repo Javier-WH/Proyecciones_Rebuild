@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
+import { ConfirmModal } from './ConfirmModal.js';
 import {
   X,
   Users,
@@ -100,6 +101,10 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Usuario | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [formInicial, setFormInicial] = useState<FormState>(emptyForm);
+  const [busqueda, setBusqueda] = useState('');
+  const [confirmCerrar, setConfirmCerrar] = useState<'form' | 'modal' | null>(null);
+  const [visibles, setVisibles] = useState(30);
   const fetchUsuarios = async () => {
     setLoading(true);
     const res = await apiFetch<Usuario[]>('/usuarios');
@@ -113,6 +118,9 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
     setErrorMsg(null);
     setFormOpen(false);
     setEditing(null);
+    setBusqueda('');
+    setVisibles(30);
+    setConfirmCerrar(null);
     fetchUsuarios();
     (async () => {
       const [resPnf, resProf] = await Promise.all([
@@ -124,16 +132,26 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
     })();
   }, [isOpen]);
 
+  // Confirm-close: si el formulario tiene cambios sin guardar, pedir
+  // confirmación antes de cerrarlo (o de cerrar el modal completo).
+  const formDirty = useMemo(
+    () => JSON.stringify(form) !== JSON.stringify(formInicial),
+    [form, formInicial]
+  );
+  const cerrarForm = () => (formDirty ? setConfirmCerrar('form') : setFormOpen(false));
+  const cerrarModal = () =>
+    formOpen && formDirty ? setConfirmCerrar('modal') : onClose();
+
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setFormInicial(emptyForm);
     setErrorMsg(null);
     setFormOpen(true);
   };
 
   const openEdit = (u: Usuario) => {
-    setEditing(u);
-    setForm({
+    const f: FormState = {
       username: u.username,
       password: '',
       nombre: u.nombre,
@@ -142,10 +160,25 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
       role: u.role,
       pnf_saga_id: u.pnf_saga_id ?? '',
       profesor_cedula: u.profesor_cedula || '',
-    });
+    };
+    setEditing(u);
+    setForm(f);
+    setFormInicial(f);
     setErrorMsg(null);
     setFormOpen(true);
   };
+
+  // Filtrado de la lista por usuario, nombre, correo, PNF o cédula vinculada
+  const usuariosFiltrados = useMemo(() => {
+    const t = normTxt(busqueda.trim());
+    if (!t) return usuarios;
+    const digits = busqueda.replace(/\D/g, '');
+    return usuarios.filter(
+      (u) =>
+        normTxt(`${u.username} ${u.nombre} ${u.apellido} ${u.email ?? ''} ${u.pnf_nombre ?? ''}`).includes(t) ||
+        (digits.length >= 3 && (u.profesor_cedula ?? '').includes(digits))
+    );
+  }, [usuarios, busqueda]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,6 +197,10 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
     }
     if (form.role === 'ADMINISTRADOR' && !form.pnf_saga_id) {
       setErrorMsg('El Coordinador debe tener un PNF asociado.');
+      return;
+    }
+    if ((!editing || form.password) && form.password.length < 8) {
+      setErrorMsg('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
     setSaving(true);
@@ -219,7 +256,7 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={cerrarModal}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -258,7 +295,7 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className={inputCls}
-                    placeholder={editing ? 'Dejar vacío para conservar' : 'Mínimo 6 caracteres'}
+                    placeholder={editing ? 'Dejar vacío para conservar' : 'Mínimo 8 caracteres'}
                   />
                 </div>
                 <div>
@@ -335,7 +372,7 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setFormOpen(false)}
+                  onClick={cerrarForm}
                   className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition-colors"
                 >
                   Cancelar
@@ -353,10 +390,20 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
           ) : (
             /* ============ LISTA ============ */
             <>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-56 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+                  <input
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar por usuario, nombre, correo, PNF o cédula…"
+                    className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-600"
+                  />
+                </div>
                 <span className="text-xs text-slate-400">
-                  {usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''} registrado
-                  {usuarios.length !== 1 ? 's' : ''}
+                  {busqueda.trim()
+                    ? `${usuariosFiltrados.length} de ${usuarios.length}`
+                    : usuarios.length} usuario{usuariosFiltrados.length !== 1 ? 's' : ''}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -381,9 +428,9 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
                   <Loader2 className="w-6 h-6 animate-spin mr-2" />
                   <span className="text-sm">Cargando usuarios...</span>
                 </div>
-              ) : usuarios.length === 0 ? (
+              ) : usuariosFiltrados.length === 0 ? (
                 <div className="p-8 rounded-xl bg-slate-950 border border-slate-800 text-center text-slate-400 text-sm">
-                  No hay usuarios registrados.
+                  {busqueda.trim() ? 'Sin usuarios que coincidan con la búsqueda.' : 'No hay usuarios registrados.'}
                 </div>
               ) : (
                 <div className="border border-slate-800 rounded-2xl overflow-hidden overflow-x-auto">
@@ -399,7 +446,7 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
-                      {usuarios.map((u) => (
+                      {usuariosFiltrados.slice(0, visibles).map((u) => (
                         <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
                           <td className="py-3 px-4">
                             <div className="font-mono font-semibold text-white">{u.username}</div>
@@ -469,6 +516,16 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
                       ))}
                     </tbody>
                   </table>
+                  {usuariosFiltrados.length > visibles && (
+                    <div className="border-t border-slate-800 bg-slate-950 px-4 py-2.5 text-center">
+                      <button
+                        onClick={() => setVisibles((v) => v + 30)}
+                        className="text-xs font-semibold text-purple-300 hover:text-purple-200 cursor-pointer"
+                      >
+                        Mostrar más ({usuariosFiltrados.length - visibles} restantes)
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -476,6 +533,21 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
         </div>
       </div>
 
+      {confirmCerrar && (
+        <ConfirmModal
+          titulo="Cambios sin guardar"
+          mensaje="Hay cambios en el formulario que se perderán si cierras ahora."
+          confirmLabel="Descartar cambios"
+          cancelLabel="Seguir editando"
+          danger
+          onConfirm={() => {
+            setConfirmCerrar(null);
+            setFormOpen(false);
+            if (confirmCerrar === 'modal') onClose();
+          }}
+          onCancel={() => setConfirmCerrar(null)}
+        />
+      )}
     </div>
   );
 };

@@ -1,3 +1,5 @@
+import { normTxt } from '../../utils/texto.js';
+
 // Catálogo fijo de preguntas de seguridad para la recuperación de contraseña.
 // El usuario elige PREGUNTAS_REQUERIDAS de esta lista y guarda sus respuestas;
 // en la recuperación se le muestran RECUPERAR_CANTIDAD al azar y debe
@@ -30,10 +32,4 @@ export const RECUPERAR_CANTIDAD = 2; // cuántas se le preguntan al recuperar
 
 // Normaliza la respuesta antes de compararla: sin tildes, minúsculas, sin
 // espacios duplicados ni extremos — "José María " ≡ "jose maria".
-export const normalizarRespuesta = (s: string): string =>
-  String(s ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ');
+export const normalizarRespuesta = (s: string): string => normTxt(s);

@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 import { sagaService } from '../saga/saga.service.js';
 import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
@@ -168,6 +169,13 @@ export async function createAulaHandler(request: FastifyRequest, reply: FastifyR
       ]
     );
     await syncAulaMaterias(Number(r.insertId), body.materias);
+    audit(request, {
+      accion: 'aula.crear',
+      entidad: 'aula',
+      entidadId: r.insertId,
+      detalle: { codigo: body.codigo, nombre: body.nombre },
+      pnfSagaId: body.pnf_saga_id ? Number(body.pnf_saga_id) : null,
+    });
     return reply.send({ success: true, message: 'Aula creada.', data: { id: r.insertId } });
   } catch (e: any) {
     if (e.code === 'ER_DUP_ENTRY') {
@@ -201,6 +209,13 @@ export async function updateAulaHandler(request: FastifyRequest, reply: FastifyR
       ]
     );
     await syncAulaMaterias(Number(id), body.materias);
+    audit(request, {
+      accion: 'aula.editar',
+      entidad: 'aula',
+      entidadId: Number((request.params as { id: string }).id),
+      detalle: { codigo: body.codigo, nombre: body.nombre, activa: body.activa },
+      pnfSagaId: body.pnf_saga_id ? Number(body.pnf_saga_id) : null,
+    });
     return reply.send({ success: true, message: 'Aula actualizada.' });
   } catch (e: any) {
     if (e.code === 'ER_DUP_ENTRY') {
@@ -226,6 +241,11 @@ export async function deleteAulaHandler(request: FastifyRequest, reply: FastifyR
       });
     }
     await query('DELETE FROM aulas WHERE id = ?', [Number(id)]);
+    audit(request, {
+      accion: 'aula.eliminar',
+      entidad: 'aula',
+      entidadId: Number((request.params as { id: string }).id),
+    });
     return reply.send({ success: true, message: 'Aula eliminada.' });
   } catch (e: any) {
     return reply.status(500).send({ success: false, message: 'Error eliminando el aula.' });
@@ -373,6 +393,12 @@ export async function createTurnoHandler(request: FastifyRequest, reply: Fastify
       'INSERT INTO turnos (saga_id, nombre, dias_semana) VALUES (NULL, ?, ?)',
       [body.nombre.trim(), dias]
     );
+    audit(request, {
+      accion: 'turno.crear',
+      entidad: 'turno',
+      entidadId: r.insertId,
+      detalle: { nombre: body.nombre },
+    });
     return reply.send({ success: true, message: 'Turno creado.', data: { id: r.insertId } });
   } catch (e: any) {
     return reply.status(500).send({ success: false, message: 'Error creando el turno.' });
@@ -405,6 +431,11 @@ export async function updateTurnoHandler(request: FastifyRequest, reply: Fastify
       'UPDATE turnos SET nombre = COALESCE(?, nombre), dias_semana = ?, activo = COALESCE(?, activo) WHERE id = ?',
       [body.nombre?.trim() ?? null, dias, body.activo === undefined ? null : body.activo ? 1 : 0, Number(id)]
     );
+    audit(request, {
+      accion: 'turno.editar',
+      entidad: 'turno',
+      entidadId: Number((request.params as { id: string }).id),
+    });
     return reply.send({ success: true, message: 'Turno actualizado.' });
   } catch (e: any) {
     return reply.status(500).send({ success: false, message: 'Error actualizando el turno.' });
@@ -424,6 +455,11 @@ export async function deleteTurnoHandler(request: FastifyRequest, reply: Fastify
       });
     }
     await query('DELETE FROM turnos WHERE id = ?', [Number(id)]);
+    audit(request, {
+      accion: 'turno.eliminar',
+      entidad: 'turno',
+      entidadId: Number((request.params as { id: string }).id),
+    });
     return reply.send({ success: true, message: 'Turno eliminado.' });
   } catch (e: any) {
     return reply.status(500).send({ success: false, message: 'Error eliminando el turno.' });
@@ -496,6 +532,12 @@ export async function replaceBloquesHandler(request: FastifyRequest, reply: Fast
         [Number(id), i + 1, b.hora_inicio, b.hora_fin, b.es_receso ? 1 : 0]
       );
     }
+    audit(request, {
+      accion: 'turno.bloques',
+      entidad: 'turno',
+      entidadId: Number((request.params as { id: string }).id),
+      detalle: { bloques: (request.body as any[])?.length ?? 0 },
+    });
     return reply.send({ success: true, message: 'Bloques actualizados.' });
   } catch (e: any) {
     request.log.error(e);
@@ -586,6 +628,11 @@ export async function updateConfigHandler(request: FastifyRequest, reply: Fastif
         Number(j.turno_id),
       ]);
     }
+    audit(request, {
+      accion: 'horario.config',
+      entidad: 'config',
+      detalle: request.body as Record<string, unknown>,
+    });
     return reply.send({ success: true, message: 'Configuración de horarios actualizada.' });
   } catch (e: any) {
     request.log.error(e);

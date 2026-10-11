@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 import { sagaService } from '../saga/saga.service.js';
 import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 import fs from 'fs';
@@ -243,6 +244,16 @@ export async function createProfesorHandler(request: FastifyRequest, reply: Fast
       ]
     );
 
+    audit(request, {
+      accion: 'profesor.crear',
+      entidad: 'profesor',
+      entidadId: insert.insertId,
+      detalle: {
+        cedula,
+        profesor: `${body.apellidos.trim()}, ${body.nombres.trim()}`,
+      },
+      pnfSagaId: pnfSagaId ? Number(pnfSagaId) : null,
+    });
     return reply.status(201).send({
       success: true,
       message: 'Profesor registrado exitosamente.',
@@ -313,6 +324,17 @@ export async function updateProfesorHandler(request: FastifyRequest, reply: Fast
       ]
     );
 
+    audit(request, {
+      accion: 'profesor.editar',
+      entidad: 'profesor',
+      entidadId: Number(id),
+      detalle: {
+        cedula,
+        pnf_cambiado:
+          Number(pnfSagaId ?? 0) !== Number(current.pnf_saga_id ?? 0) || undefined,
+      },
+      pnfSagaId: pnfSagaId ? Number(pnfSagaId) : current.pnf_saga_id,
+    });
     return reply.send({ success: true, message: 'Profesor actualizado exitosamente.' });
   } catch (error: any) {
     request.log.error(error);
@@ -335,7 +357,12 @@ export async function toggleActivoProfesorHandler(request: FastifyRequest, reply
 
     const nuevoEstado = rows[0].activo ? 0 : 1;
     await query('UPDATE profesores SET activo = ? WHERE id = ?', [nuevoEstado, id]);
-
+    audit(request, {
+      accion: nuevoEstado ? 'profesor.activar' : 'profesor.desactivar',
+      entidad: 'profesor',
+      entidadId: Number(id),
+      pnfSagaId: rows[0].pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message: nuevoEstado ? 'Profesor reactivado exitosamente.' : 'Profesor desactivado exitosamente.',
@@ -530,6 +557,11 @@ export async function syncProfesoresHandler(request: FastifyRequest, reply: Fast
       }
     }
 
+    audit(request, {
+      accion: 'profesor.sincronizar',
+      entidad: 'profesor',
+      detalle: { total_saga: teachers.length, nuevos, actualizados, omitidos },
+    });
     return reply.send({
       success: true,
       message: `Sincronización completada: ${nuevos} nuevos, ${actualizados} actualizados.`,
@@ -856,6 +888,71 @@ export async function setDisponibilidadSlotHandler(request: FastifyRequest, repl
         'DELETE FROM profesor_disponibilidad WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?',
         [id, dia, normHora(ini), normHora(fin)]
       );
+    }
+    return reply.send({ success: true, message: 'Disponibilidad actualizada.' });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error actualizando la disponibilidad.' });
+  }
+}
+
+// PUT /api/profesores/:id/disponibilidad-bulk — marca o libera varios slots de
+// una vez (toggles de día/hora completos en la grilla).
+// body: { slots: [{dia_semana, hora_inicio, hora_fin}], disponible }
+const MAX_SLOTS_BULK = 500;
+export async function setDisponibilidadBulkHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const body = request.body as {
+    slots?: { dia_semana?: number; hora_inicio?: string; hora_fin?: string }[];
+    disponible?: boolean;
+  };
+  if (!Array.isArray(body.slots) || body.slots.length === 0) {
+    return reply.status(400).send({ success: false, message: 'Debe indicar al menos un slot.' });
+  }
+  if (body.slots.length > MAX_SLOTS_BULK) {
+    return reply.status(400).send({ success: false, message: `Máximo ${MAX_SLOTS_BULK} slots por operación.` });
+  }
+  for (const s of body.slots) {
+    const dia = Number(s?.dia_semana);
+    const ini = String(s?.hora_inicio ?? '').trim();
+    const fin = String(s?.hora_fin ?? '').trim();
+    if (!Number.isInteger(dia) || dia < 1 || dia > 7 || !HORA_RE.test(ini) || !HORA_RE.test(fin) || normHora(ini) >= normHora(fin)) {
+      return reply.status(400).send({ success: false, message: 'Hay slots con datos inválidos.' });
+    }
+  }
+
+  // Un docente solo puede editar su propia disponibilidad
+  if (request.userPayload?.role === 'PROFESOR') {
+    const propio = await profesorIdDelToken(request);
+    if (propio == null || propio !== Number(id)) {
+      return reply.status(403).send({ success: false, message: 'Solo puedes editar tu propia disponibilidad.' });
+    }
+  }
+
+  try {
+    const prof = await query<any[]>('SELECT id, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1', [id]);
+    if (prof.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (profesorFueraDelAlcance(request.userPayload!, prof[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
+    const marcar = body.disponible === false;
+    for (const s of body.slots) {
+      const dia = Number(s.dia_semana);
+      const ini = normHora(String(s.hora_inicio));
+      const fin = normHora(String(s.hora_fin));
+      if (marcar) {
+        await query(
+          'INSERT IGNORE INTO profesor_disponibilidad (profesor_id, dia_semana, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)',
+          [id, dia, ini, fin]
+        );
+      } else {
+        await query(
+          'DELETE FROM profesor_disponibilidad WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?',
+          [id, dia, ini, fin]
+        );
+      }
     }
     return reply.send({ success: true, message: 'Disponibilidad actualizada.' });
   } catch (error: any) {

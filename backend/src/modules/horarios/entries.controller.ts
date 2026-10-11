@@ -1,5 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
+import { periodoActivo } from '../../utils/periodo.js';
 import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 import {
   cargarEntries,
@@ -16,13 +18,6 @@ import {
   TipoProyeccion,
   EntryRow,
 } from './scheduler.service.js';
-
-async function periodoActivo(): Promise<string | null> {
-  const rows = await query<any[]>(
-    "SELECT codigo FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
-  );
-  return rows[0]?.codigo ?? null;
-}
 
 const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const hhmm = (h: any) => String(h ?? '').slice(0, 5);
@@ -444,6 +439,20 @@ export async function upsertEntryHandler(request: FastifyRequest, reply: Fastify
       );
     }
 
+    audit(request, {
+      accion: entryId ? 'horario.mover' : 'horario.agendar',
+      entidad: 'horario_entry',
+      entidadId: entryId ?? undefined,
+      detalle: {
+        materia: materiaNombre,
+        seccion: seccionNombre,
+        dia,
+        bloque_id: Number(body.bloque_id),
+        aula_id: aulaId,
+        forzado: forzar || undefined,
+      },
+      pnfSagaId,
+    });
     return reply.send({ success: true, message: 'Clase agendada.', data: { aula_id: aulaId } });
   } catch (error: any) {
     request.log.error(error);
@@ -650,6 +659,18 @@ export async function swapEntriesHandler(request: FastifyRequest, reply: Fastify
     await heredarAulaVecina(b, a.dia_semana, a.bloque_id);
 
     await conn.commit();
+    audit(request, {
+      accion: 'horario.intercambiar',
+      entidad: 'horario_entry',
+      detalle: {
+        entry_a: idA,
+        entry_b: idB,
+        materia_a: a.materia_nombre,
+        materia_b: b.materia_nombre,
+        forzado: forzar || undefined,
+      },
+      pnfSagaId: a.pnf_saga_id,
+    });
     return reply.send({ success: true, message: 'Clases intercambiadas.' });
   } catch (error: any) {
     try {
@@ -792,6 +813,19 @@ export async function cambiarAulaGrupoHandler(request: FastifyRequest, reply: Fa
       `UPDATE horario_entries SET aula_id = ? WHERE id IN (${[...runIds].map(() => '?').join(',')})`,
       [aulaId, ...runIds]
     );
+    audit(request, {
+      accion: 'horario.cambiar_aula',
+      entidad: 'horario_entry',
+      entidadId: entryId,
+      detalle: {
+        materia: base.materia_nombre,
+        seccion: base.seccion_nombre,
+        aula_id: aulaId,
+        bloques: runIds.size,
+        forzado: forzar || undefined,
+      },
+      pnfSagaId: base.pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message: `Aula actualizada en ${runIds.size} bloque(s).`,
@@ -1190,6 +1224,18 @@ export async function moveGroupHandler(request: FastifyRequest, reply: FastifyRe
     }
 
     await conn.commit();
+    audit(request, {
+      accion: 'horario.mover_grupo',
+      entidad: 'horario_entry',
+      detalle: {
+        entries: [...runIds],
+        dia_destino: dia,
+        materia: run[0].materia_nombre,
+        reubicadas: foraneos.length,
+        forzado: forzar || undefined,
+      },
+      pnfSagaId: run[0].pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message:
@@ -1428,6 +1474,18 @@ export async function scheduleGroupHandler(request: FastifyRequest, reply: Fasti
       conn.release();
     }
 
+    audit(request, {
+      accion: 'horario.agendar_grupo',
+      entidad: 'horario_entry',
+      detalle: {
+        materia: ctx.materiaNombre,
+        seccion: ctx.seccionNombre,
+        dia,
+        bloques: faltan,
+        aula_id: aulaId,
+      },
+      pnfSagaId,
+    });
     return reply.send({
       success: true,
       message: `Bloque de ${faltan}h agendado.`,
@@ -1479,6 +1537,11 @@ export async function unscheduleEntriesHandler(request: FastifyRequest, reply: F
       ids
     );
     const n = r?.affectedRows ?? 0;
+    audit(request, {
+      accion: 'horario.desagendar',
+      entidad: 'horario_entry',
+      detalle: { entry_ids: ids, eliminadas: n },
+    });
     return reply.send({
       success: true,
       message: `${n} clase${n === 1 ? '' : 's'} desagendada${n === 1 ? '' : 's'}.`,
@@ -1508,6 +1571,12 @@ export async function deleteEntryHandler(request: FastifyRequest, reply: Fastify
       return reply.status(403).send({ success: false, message: 'Solo puede modificar clases de su PNF.' });
     }
     await query('DELETE FROM horario_entries WHERE id = ?', [Number(id)]);
+    audit(request, {
+      accion: 'horario.desagendar',
+      entidad: 'horario_entry',
+      entidadId: Number(id),
+      pnfSagaId: e[0].pnf_saga_id,
+    });
     return reply.send({ success: true, message: 'Clase desagendada.' });
   } catch (error: any) {
     request.log.error(error);
@@ -1913,6 +1982,19 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
       );
     }
 
+    audit(request, {
+      accion: 'horario.generar',
+      entidad: 'horario_entry',
+      detalle: {
+        periodo,
+        tipo,
+        trimestre,
+        modo,
+        agendadas,
+        pendientes: pendientes.length,
+      },
+      pnfSagaId: pnfFiltro ?? null,
+    });
     return reply.send({
       success: true,
       message: `Horario generado: ${agendadas} clases agendadas${pendientes.length > 0 ? `, ${pendientes.length} unidades con horas pendientes` : ''}.`,
@@ -2185,6 +2267,13 @@ export async function resolverAulasHandler(request: FastifyRequest, reply: Fasti
       }
     }
 
+    if (movidas > 0) {
+      audit(request, {
+        accion: 'horario.resolver_aulas',
+        entidad: 'horario_entry',
+        detalle: { periodo, movidas, runs: runsMovidos, sin_solucion: detalles.length },
+      });
+    }
     return reply.send({
       success: true,
       message:

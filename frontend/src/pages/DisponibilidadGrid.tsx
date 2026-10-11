@@ -27,6 +27,7 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
   const [bloqueados, setBloqueados] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [guardando, setGuardando] = useState<string | null>(null);
+  const [guardandoBulk, setGuardandoBulk] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,8 +79,49 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
     return arr.length > 0 ? arr : [1, 2, 3, 4, 5];
   }, [turnos]);
 
+  // Marca o libera un conjunto de slots de una vez (día u hora completa).
+  // Si todos están bloqueados → los libera; si falta alguno → bloquea todos.
+  const toggleBulk = async (slots: { dia: number; f: Fila }[]) => {
+    if (guardando || guardandoBulk) return;
+    const keys = slots.map((s) => slotKey(s.dia, s.f.inicio, s.f.fin));
+    const todosBloqueados = keys.every((k) => bloqueados.has(k));
+    // Optimista: todos bloqueados -> liberar; si no -> bloquear
+    setBloqueados((prev) => {
+      const n = new Set(prev);
+      for (const k of keys) {
+        if (todosBloqueados) n.delete(k);
+        else n.add(k);
+      }
+      return n;
+    });
+    setGuardandoBulk(true);
+    const res = await apiFetch(`/profesores/${profesorId}/disponibilidad-bulk`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        slots: slots.map((s) => ({
+          dia_semana: s.dia,
+          hora_inicio: s.f.inicio.slice(0, 5),
+          hora_fin: s.f.fin.slice(0, 5),
+        })),
+        disponible: todosBloqueados,
+      }),
+    });
+    setGuardandoBulk(false);
+    if (!res.success) {
+      setBloqueados((prev) => {
+        const n = new Set(prev);
+        for (const k of keys) {
+          if (todosBloqueados) n.add(k);
+          else n.delete(k);
+        }
+        return n;
+      });
+      setErrorMsg(res.message || 'No se pudo actualizar la disponibilidad.');
+    }
+  };
+
   const toggleSlot = async (f: Fila, dia: number) => {
-    if (guardando) return; // una escritura a la vez
+    if (guardando || guardandoBulk) return; // una escritura a la vez
     const key = slotKey(dia, f.inicio, f.fin);
     const estabaBloqueado = bloqueados.has(key);
     // Toggle optimista; se revierte si el PUT falla
@@ -142,9 +184,14 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
                   </th>
                   {dias.map((d) => (
                     <th key={d} className="pb-1">
-                      <span className="inline-block w-full px-2 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-[11px] uppercase tracking-wider text-slate-200 font-bold text-center">
-                        {DIAS_NOMBRES[d]}
-                      </span>
+                      <button
+                        onClick={() => toggleBulk(filas.map((f) => ({ dia: d, f })))}
+                        disabled={guardandoBulk}
+                        title="Clic: marcar/liberar todo el día"
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 hover:border-emerald-500/50 text-[11px] uppercase tracking-wider text-slate-200 font-bold text-center transition-colors cursor-pointer disabled:cursor-wait"
+                      >
+                        {guardandoBulk ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : DIAS_NOMBRES[d]}
+                      </button>
                     </th>
                   ))}
                 </tr>
@@ -152,13 +199,20 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
               <tbody>
                 {filas.map((f) => (
                   <tr key={`${f.inicio}-${f.fin}`} style={{ height: '2.25rem' }}>
-                    <td className="text-[9px] text-slate-400 text-right pr-2 whitespace-nowrap align-middle">
-                      {fmtHora(f.inicio)}–{fmtHora(f.fin)}
-                      {f.esReceso && (
-                        <span className="block text-[8px] text-slate-600 uppercase tracking-wider">
-                          receso
-                        </span>
-                      )}
+                    <td className="align-middle pr-1">
+                      <button
+                        onClick={() => toggleBulk(dias.map((d) => ({ dia: d, f })))}
+                        disabled={guardandoBulk}
+                        title="Clic: marcar/liberar toda la fila"
+                        className="w-full text-[9px] text-slate-400 hover:text-emerald-300 text-right pr-1 whitespace-nowrap transition-colors cursor-pointer disabled:cursor-wait"
+                      >
+                        {fmtHora(f.inicio)}–{fmtHora(f.fin)}
+                        {f.esReceso && (
+                          <span className="block text-[8px] text-slate-600 uppercase tracking-wider">
+                            receso
+                          </span>
+                        )}
+                      </button>
                     </td>
                     {dias.map((d) => {
                       const key = slotKey(d, f.inicio, f.fin);
@@ -202,7 +256,7 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
               <span className="w-3 h-3 rounded bg-red-500/25 border border-red-500/50" />
               No disponible
             </span>
-            <span className="ml-auto">{bloqueados.size} slot{bloqueados.size === 1 ? '' : 's'} bloqueado{bloqueados.size === 1 ? '' : 's'}</span>
+            <span className="ml-auto text-slate-600">Clic en día u hora: alternar toda la columna/fila · {bloqueados.size} slot{bloqueados.size === 1 ? '' : 's'} bloqueado{bloqueados.size === 1 ? '' : 's'}</span>
           </div>
         </>
       )}

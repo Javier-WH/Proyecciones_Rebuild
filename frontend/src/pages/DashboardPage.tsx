@@ -17,6 +17,8 @@ import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorPanelModal } from './ProfesorPanelModal.js';
 import { PermisosRolModal } from './PermisosRolModal.js';
 import { MiCuentaModal } from './MiCuentaModal.js';
+import { HistorialModal } from './HistorialModal.js';
+import { BusquedaGlobal } from './BusquedaGlobal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
 import fotoCreador from '../images/Creator.png';
@@ -45,7 +47,8 @@ import {
   RefreshCw,
   Info,
   HelpCircle,
-  UserRound
+  UserRound,
+  History
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -67,6 +70,19 @@ export const DashboardPage: React.FC = () => {
   const [acercaOpen, setAcercaOpen] = useState(false);
   const [permisosOpen, setPermisosOpen] = useState(false);
   const [miCuentaOpen, setMiCuentaOpen] = useState(false);
+  const [historialOpen, setHistorialOpen] = useState(false);
+  const [buscarOpen, setBuscarOpen] = useState(false);
+  const [resumen, setResumen] = useState<{
+    periodo: string | null;
+    periodo_nombre?: string;
+    proyecciones_activas?: number;
+    secciones?: number;
+    profesores_activos?: number;
+    aulas_activas?: number;
+    clases_agendadas?: number;
+    materias_sin_profesor?: number;
+    conflictos?: number;
+  } | null>(null);
   const [panelProfesor, setPanelProfesor] = useState<{
     id: number;
     nombre: string;
@@ -81,6 +97,26 @@ export const DashboardPage: React.FC = () => {
       setLoadingSaga(false);
     };
     checkSagaStatus();
+  }, []);
+
+  // Métricas del periodo activo (solo en la pestaña Inicio; el docente no
+  // ve dashboard). Se recarga cada vez que se vuelve a Inicio.
+  useEffect(() => {
+    if (activeTab !== 'dashboard' || user?.role === 'PROFESOR') return;
+    apiFetch<any>('/reportes/resumen').then((res) => {
+      if (res.success && res.data) setResumen(res.data);
+    });
+  }, [activeTab, user?.role]);
+
+  // Ctrl+K abre el buscador global
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.key.toLowerCase() !== 'k') return;
+      ev.preventDefault();
+      setBuscarOpen((v) => !v);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // Click en el indicador SAGA: reintenta la conexión y, si responde,
@@ -451,6 +487,23 @@ export const DashboardPage: React.FC = () => {
                                 <div className="text-[10px] text-slate-500">Mallas SAGA y color por PNF</div>
                               </div>
                             </button>
+                            <button
+                              onClick={() => {
+                                setConfigMenuOpen(false);
+                                setHistorialOpen(true);
+                              }}
+                              className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <History className="w-4 h-4 text-sky-400" />
+                              <div className="text-left">
+                                <div className="font-semibold text-xs">Historial de Cambios</div>
+                                <div className="text-[10px] text-slate-500">
+                                  {user?.role === 'SUPER_USUARIO'
+                                    ? 'Bitácora de quién hizo qué y cuándo'
+                                    : 'Bitácora de cambios de su PNF'}
+                                </div>
+                              </div>
+                            </button>
                           </>
                         )}
                         {/* Mi cuenta: toda cuenta real edita sus propios datos;
@@ -631,6 +684,78 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Métricas del periodo activo */}
+            {resumen?.periodo && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <button
+                  onClick={() => setActiveTab('proyecciones')}
+                  className="bg-slate-900/80 border border-slate-800 hover:border-blue-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Proyecciones</p>
+                  <p className="text-xl font-bold text-white mt-0.5">{resumen.proyecciones_activas ?? 0}</p>
+                  <p className="text-[10px] text-slate-500">activas · {resumen.periodo}</p>
+                </button>
+                <button
+                  onClick={() => setActiveTab('proyecciones')}
+                  className="bg-slate-900/80 border border-slate-800 hover:border-sky-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Secciones</p>
+                  <p className="text-xl font-bold text-white mt-0.5">{resumen.secciones ?? 0}</p>
+                  <p className="text-[10px] text-slate-500">del periodo</p>
+                </button>
+                <button
+                  onClick={() => setActiveTab('profesores')}
+                  className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Docentes</p>
+                  <p className="text-xl font-bold text-white mt-0.5">{resumen.profesores_activos ?? 0}</p>
+                  <p className="text-[10px] text-slate-500">activos</p>
+                </button>
+                <button
+                  onClick={() => setActiveTab('carga')}
+                  className={`rounded-xl px-4 py-3 text-left transition-colors cursor-pointer border ${
+                    (resumen.materias_sin_profesor ?? 0) > 0
+                      ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-400'
+                      : 'bg-slate-900/80 border-slate-800 hover:border-sky-500/40'
+                  }`}
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Sin profesor</p>
+                  <p className={`text-xl font-bold mt-0.5 ${(resumen.materias_sin_profesor ?? 0) > 0 ? 'text-amber-300' : 'text-white'}`}>
+                    {resumen.materias_sin_profesor ?? 0}
+                  </p>
+                  <p className="text-[10px] text-slate-500">materias por asignar</p>
+                </button>
+                <button
+                  onClick={() => setActiveTab('horarios')}
+                  className={`rounded-xl px-4 py-3 text-left transition-colors cursor-pointer border ${
+                    (resumen.conflictos ?? 0) > 0
+                      ? 'bg-red-500/10 border-red-500/40 hover:border-red-400'
+                      : 'bg-slate-900/80 border-slate-800 hover:border-orange-500/40'
+                  }`}
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Conflictos</p>
+                  <p className={`text-xl font-bold mt-0.5 ${(resumen.conflictos ?? 0) > 0 ? 'text-red-300' : 'text-white'}`}>
+                    {resumen.conflictos ?? 0}
+                  </p>
+                  <p className="text-[10px] text-slate-500">en el horario</p>
+                </button>
+                <button
+                  onClick={() => {
+                    setHorariosSubTab('aulas');
+                    setActiveTab('horarios');
+                  }}
+                  className="bg-slate-900/80 border border-slate-800 hover:border-emerald-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Clases / Aulas</p>
+                  <p className="text-xl font-bold text-white mt-0.5">
+                    {resumen.clases_agendadas ?? 0}
+                    <span className="text-xs font-semibold text-slate-500"> / {resumen.aulas_activas ?? 0}</span>
+                  </p>
+                  <p className="text-[10px] text-slate-500">agendadas / activas</p>
+                </button>
+              </div>
+            )}
+
             {/* System Module Shortcut Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {modulos.filter((m) => !m.oculto).map((m) => {
@@ -687,6 +812,16 @@ export const DashboardPage: React.FC = () => {
 
       {/* Mi Cuenta — datos personales, contraseña y preguntas de seguridad */}
       {miCuentaOpen && <MiCuentaModal onClose={() => setMiCuentaOpen(false)} />}
+
+      {/* Historial — bitácora de cambios (Master: todo, Coordinador: su PNF) */}
+      {historialOpen && <HistorialModal onClose={() => setHistorialOpen(false)} />}
+
+      {/* Buscador global (Ctrl+K) */}
+      <BusquedaGlobal
+        open={buscarOpen}
+        onClose={() => setBuscarOpen(false)}
+        irATab={(t) => setActiveTab(t)}
+      />
 
       {/* Acerca de — información del sistema */}
       {acercaOpen && (

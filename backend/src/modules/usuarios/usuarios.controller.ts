@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 import { hashPassword, verifyPassword } from '../../utils/security.js';
 import {
   PREGUNTAS_SEGURIDAD,
@@ -58,8 +59,8 @@ export async function createUsuarioHandler(request: FastifyRequest, reply: Fasti
   if (!ROLES_VALIDOS.includes(role)) {
     return reply.status(400).send({ success: false, message: 'Nivel de permisos inválido.' });
   }
-  if (password.length < 6) {
-    return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });
+  if (password.length < 8) {
+    return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 8 caracteres.' });
   }
   // 'admin' es reservado: es el Master de rescate que el seed garantiza al arrancar
   if (username.toLowerCase() === 'admin') {
@@ -89,6 +90,13 @@ export async function createUsuarioHandler(request: FastifyRequest, reply: Fasti
         body.profesor_cedula?.trim() || null,
       ]
     );
+    audit(request, {
+      accion: 'usuario.crear',
+      entidad: 'usuario',
+      entidadId: result.insertId,
+      detalle: { username, nombre: `${nombre} ${apellido}`, role },
+      pnfSagaId,
+    });
     return reply.send({ success: true, message: 'Usuario creado exitosamente.', data: { id: result.insertId } });
   } catch (error: any) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -127,8 +135,8 @@ export async function updateUsuarioHandler(request: FastifyRequest, reply: Fasti
   if (role === 'ADMINISTRADOR' && !pnfSagaId) {
     return reply.status(400).send({ success: false, message: 'El Coordinador debe tener un PNF asociado.' });
   }
-  if (body.password && body.password.length < 6) {
-    return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });
+  if (body.password && body.password.length < 8) {
+    return reply.status(400).send({ success: false, message: 'La contraseña debe tener al menos 8 caracteres.' });
   }
   // Seguridad: no puede quitarse a sí mismo el nivel Master
   if (id === current.id && role !== current.role) {
@@ -155,8 +163,9 @@ export async function updateUsuarioHandler(request: FastifyRequest, reply: Fasti
 
     if (body.password) {
       const hashed = await hashPassword(body.password);
+      // token_version + 1: cierra todas las sesiones previas de ese usuario
       await query(
-        `UPDATE users SET username = ?, password = ?, nombre = ?, apellido = ?, email = ?, role = ?, pnf_saga_id = ?, profesor_cedula = ? WHERE id = ?`,
+        `UPDATE users SET username = ?, password = ?, nombre = ?, apellido = ?, email = ?, role = ?, pnf_saga_id = ?, profesor_cedula = ?, token_version = token_version + 1 WHERE id = ?`,
         [username, hashed, nombre, apellido, body.email?.trim() || null, role, pnfSagaId, body.profesor_cedula?.trim() || null, id]
       );
     } else {
@@ -166,6 +175,17 @@ export async function updateUsuarioHandler(request: FastifyRequest, reply: Fasti
       );
     }
 
+    audit(request, {
+      accion: 'usuario.editar',
+      entidad: 'usuario',
+      entidadId: id,
+      detalle: {
+        username,
+        role,
+        clave_cambiada: !!body.password || undefined,
+      },
+      pnfSagaId,
+    });
     return reply.send({ success: true, message: 'Usuario actualizado exitosamente.' });
   } catch (error: any) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -196,7 +216,11 @@ export async function toggleActivoUsuarioHandler(request: FastifyRequest, reply:
 
     const nuevoEstado = existing[0].activo ? 0 : 1;
     await query('UPDATE users SET activo = ? WHERE id = ?', [nuevoEstado, id]);
-
+    audit(request, {
+      accion: nuevoEstado ? 'usuario.activar' : 'usuario.desactivar',
+      entidad: 'usuario',
+      entidadId: id,
+    });
     return reply.send({
       success: true,
       message: nuevoEstado ? 'Usuario activado.' : 'Usuario desactivado.',
@@ -247,10 +271,10 @@ export async function updateSelfHandler(request: FastifyRequest, reply: FastifyR
   }
   const quierePassword = !!body.password_nueva;
   if (quierePassword) {
-    if ((body.password_nueva ?? '').length < 6) {
+    if ((body.password_nueva ?? '').length < 8) {
       return reply.status(400).send({
         success: false,
-        message: 'La nueva contraseña debe tener al menos 6 caracteres.',
+        message: 'La nueva contraseña debe tener al menos 8 caracteres.',
       });
     }
     if (!body.password_actual) {
@@ -288,7 +312,7 @@ export async function updateSelfHandler(request: FastifyRequest, reply: FastifyR
     if (quierePassword) {
       const hashed = await hashPassword(body.password_nueva!);
       await query(
-        'UPDATE users SET username = ?, password = ?, nombre = ?, apellido = ?, email = ? WHERE id = ?',
+        'UPDATE users SET username = ?, password = ?, nombre = ?, apellido = ?, email = ?, token_version = token_version + 1 WHERE id = ?',
         [username, hashed, nombre, apellido, body.email?.trim() || null, id]
       );
     } else {

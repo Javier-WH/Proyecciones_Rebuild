@@ -37,6 +37,7 @@ export async function initializeDatabase() {
       role ENUM('SUPER_USUARIO', 'ADMINISTRADOR', 'REGULAR', 'PROFESOR') NOT NULL DEFAULT 'REGULAR',
       pnf_saga_id INT NULL,
       profesor_cedula VARCHAR(50) NULL,
+      token_version INT NOT NULL DEFAULT 0,
       activo TINYINT(1) DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -249,6 +250,7 @@ export async function initializeDatabase() {
     { tabla: 'turnos', nombre: 'activo', definicion: 'TINYINT(1) DEFAULT 1 AFTER dias_semana' },
     { tabla: 'aulas', nombre: 'pnf_saga_id', definicion: 'INT NULL AFTER tipo' },
     { tabla: 'aulas', nombre: 'pnf_nombre', definicion: 'VARCHAR(255) NULL AFTER pnf_saga_id' },
+    { tabla: 'users', nombre: 'token_version', definicion: 'INT NOT NULL DEFAULT 0 AFTER profesor_cedula' },
   ];
   for (const col of columnasExtra) {
     const [existe] = await db.query<any[]>(
@@ -528,6 +530,39 @@ export async function initializeDatabase() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, pregunta_idx),
       CONSTRAINT fk_security_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 9c. Tokens JWT revocados (logout / invalidación). Cada token lleva un
+  // jti único; al cerrar sesión se guarda aquí y authenticate lo rechaza.
+  // Las filas se purgan cuando su expiración natural ya pasó.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS revoked_tokens (
+      jti VARCHAR(64) PRIMARY KEY,
+      expires_at DATETIME NOT NULL,
+      revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_exp (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 9d. Bitácora de cambios: quién hizo qué y cuándo, sobre las entidades
+  // clave del sistema. pnf_saga_id permite que el Coordinador solo vea
+  // los movimientos de su PNF.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NULL,
+      username VARCHAR(100) NULL,
+      role VARCHAR(30) NULL,
+      accion VARCHAR(60) NOT NULL,
+      entidad VARCHAR(40) NULL,
+      entidad_id INT NULL,
+      detalle JSON NULL,
+      pnf_saga_id INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_fecha (created_at),
+      INDEX idx_entidad (entidad, entidad_id),
+      INDEX idx_pnf (pnf_saga_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 

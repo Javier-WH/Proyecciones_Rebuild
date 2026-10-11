@@ -1,5 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { randomUUID } from 'crypto';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 import { verifyPassword, hashPassword } from '../../utils/security.js';
 import { UserTokenPayload } from '../../plugins/authGuard.js';
 import {
@@ -18,6 +20,7 @@ interface UserRow {
   role: 'SUPER_USUARIO' | 'ADMINISTRADOR' | 'REGULAR' | 'PROFESOR';
   pnf_saga_id: number | null;
   profesor_cedula: string | null;
+  token_version: number;
   pnf_nombre?: string | null;
   profesor_nombre?: string | null;
   profesor_id?: number | null;
@@ -84,10 +87,19 @@ export async function loginHandler(request: FastifyRequest, reply: FastifyReply)
       apellido: user.apellido,
       pnf_saga_id: user.pnf_saga_id,
       profesor_cedula: user.profesor_cedula,
+      jti: randomUUID(),
+      tv: user.token_version ?? 0,
     };
 
     const token = request.server.jwt.sign(tokenPayload, { expiresIn: '24h' });
 
+    audit(request, {
+      accion: 'auth.login',
+      entidad: 'usuario',
+      entidadId: user.id,
+      detalle: { username: user.username, role: user.role },
+      pnfSagaId: user.pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message: 'Inicio de sesión exitoso.',
@@ -150,10 +162,18 @@ export async function profesorLoginHandler(request: FastifyRequest, reply: Fasti
       pnf_saga_id: p.pnf_saga_id,
       profesor_cedula: p.cedula,
       invitado: true,
+      jti: randomUUID(),
     };
 
     const token = request.server.jwt.sign(tokenPayload, { expiresIn: '12h' });
     const profesorNombre = `${p.nombres} ${p.apellidos}`.trim();
+    audit(request, {
+      accion: 'auth.profesor_login',
+      entidad: 'profesor',
+      entidadId: p.id,
+      detalle: { profesor: profesorNombre },
+      pnfSagaId: p.pnf_saga_id,
+    });
 
     return reply.send({
       success: true,
@@ -277,11 +297,13 @@ export async function recoveryQuestionsHandler(request: FastifyRequest, reply: F
       'SELECT id, activo FROM users WHERE username = ? LIMIT 1',
       [username.trim()]
     );
+    // Mismo mensaje para "usuario inexistente" y "sin preguntas": evita
+    // usar este endpoint para averiguar qué usernames existen.
+    const msgNoRecuperable =
+      'No es posible recuperar la contraseña de esta cuenta. ' +
+      'Verifique el nombre de usuario o contacte al administrador.';
     if (users.length === 0 || !users[0].activo) {
-      return reply.status(404).send({
-        success: false,
-        message: 'No se encontró una cuenta activa con ese usuario.',
-      });
+      return reply.status(404).send({ success: false, message: msgNoRecuperable });
     }
 
     const rows = await query<any[]>(
@@ -289,12 +311,7 @@ export async function recoveryQuestionsHandler(request: FastifyRequest, reply: F
       [users[0].id]
     );
     if (rows.length < RECUPERAR_CANTIDAD) {
-      return reply.status(400).send({
-        success: false,
-        message:
-          'Esta cuenta no tiene preguntas de seguridad configuradas. ' +
-          'Contacte al administrador para restablecer su contraseña.',
-      });
+      return reply.status(400).send({ success: false, message: msgNoRecuperable });
     }
 
     // RECUPERAR_CANTIDAD preguntas al azar del set configurado por el usuario
@@ -329,12 +346,12 @@ export async function recoverPasswordHandler(request: FastifyRequest, reply: Fas
   const nuevas = body.password ?? '';
   const respuestas = Array.isArray(body.respuestas) ? body.respuestas : [];
 
-  if (!username || nuevas.length < 6 || respuestas.length < RECUPERAR_CANTIDAD) {
+  if (!username || nuevas.length < 8 || respuestas.length < RECUPERAR_CANTIDAD) {
     return reply.status(400).send({
       success: false,
       message:
         `Debe responder las ${RECUPERAR_CANTIDAD} preguntas y elegir una contraseña ` +
-        'de al menos 6 caracteres.',
+        'de al menos 8 caracteres.',
     });
   }
 
@@ -373,7 +390,18 @@ export async function recoverPasswordHandler(request: FastifyRequest, reply: Fas
     }
 
     const hashed = await hashPassword(nuevas);
-    await query('UPDATE users SET password = ? WHERE id = ?', [hashed, userId]);
+    // token_version + 1: todas las sesiones abiertas de ese usuario quedan
+    // invalidadas (el authenticate compara tv del token vs el actual).
+    await query(
+      'UPDATE users SET password = ?, token_version = token_version + 1 WHERE id = ?',
+      [hashed, userId]
+    );
+    audit(request, {
+      accion: 'auth.recuperar_password',
+      entidad: 'usuario',
+      entidadId: userId,
+      detalle: { username },
+    });
     return reply.send({
       success: true,
       message: 'Contraseña actualizada exitosamente. Ya puede iniciar sesión.',
@@ -382,4 +410,26 @@ export async function recoverPasswordHandler(request: FastifyRequest, reply: Fas
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error recuperando la contraseña.' });
   }
+}
+
+// POST /api/auth/logout — revoca el token actual (su jti queda en la
+// lista negra hasta su expiración natural). Requiere autenticación.
+export async function logoutHandler(request: FastifyRequest, reply: FastifyReply) {
+  const payload = request.userPayload;
+  if (payload?.jti) {
+    // exp del JWT → fecha de expiración; si falta, 24h desde ahora.
+    const expMs = (payload as any).exp ? (payload as any).exp * 1000 : Date.now() + 24 * 3600_000;
+    const exp = new Date(expMs).toISOString().slice(0, 19).replace('T', ' ');
+    try {
+      await query('INSERT IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)', [
+        payload.jti,
+        exp,
+      ]);
+    } catch (error) {
+      request.log.error(error);
+      // No bloquea el cierre de sesión del cliente.
+    }
+    audit(request, { accion: 'auth.logout', entidad: 'usuario', entidadId: payload!.id });
+  }
+  return reply.send({ success: true, message: 'Sesión cerrada exitosamente.' });
 }

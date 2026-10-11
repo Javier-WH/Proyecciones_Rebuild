@@ -1,5 +1,12 @@
 const API_BASE = '/api';
 
+// Endpoints cuyo 401 es una respuesta esperada del negocio (credenciales
+// inválidas), no una sesión expirada.
+const ENDPOINTS_SESION_OPCIONAL = /^\/auth\/(login|profesor-login|recover-password|recovery-questions)/;
+
+// La app escucha este evento para cerrar sesión globalmente.
+export const EVENTO_SESION_EXPIRADA = 'proyecciones:sesion-expirada';
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -34,9 +41,16 @@ export async function apiFetch<T = any>(
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Token expirado o inválido
+        // Token expirado, revocado o inválido. Si había sesión activa y la
+        // ruta no es de autenticación (un 401 en login solo significa
+        // credenciales incorrectas), notificamos a la app para que cierre
+        // sesión y muestre el aviso correspondiente.
+        const habiaSesion = !!token;
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        if (habiaSesion && !ENDPOINTS_SESION_OPCIONAL.test(endpoint)) {
+          window.dispatchEvent(new CustomEvent(EVENTO_SESION_EXPIRADA));
+        }
       }
       return {
         success: false,

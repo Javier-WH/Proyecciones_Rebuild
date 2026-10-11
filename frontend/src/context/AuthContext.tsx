@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, EVENTO_SESION_EXPIRADA } from '../api/client.js';
 
 export interface User {
   id: number;
@@ -20,6 +20,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
+  // true cuando la sesión anterior expiró/fue revocada (para avisar en el login)
+  sesionExpirada: boolean;
   login: (username: string, password: string) => Promise<{ success: boolean; message?: string }>;
   loginProfesor: (cedula: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
@@ -32,6 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState<boolean>(true);
+  const [sesionExpirada, setSesionExpirada] = useState(false);
 
   const checkAuth = async () => {
     const storedToken = localStorage.getItem('token');
@@ -59,6 +62,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []);
 
+  // Cierre de sesión global: apiFetch dispara este evento cuando el backend
+  // responde 401 teniendo sesión (token expirado o revocado).
+  useEffect(() => {
+    const alExpirar = () => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
+      setToken(null);
+      setSesionExpirada(true);
+    };
+    window.addEventListener(EVENTO_SESION_EXPIRADA, alExpirar);
+    return () => window.removeEventListener(EVENTO_SESION_EXPIRADA, alExpirar);
+  }, []);
+
   const login = async (username: string, password: string) => {
     const res = await apiFetch<{ token: string; user: User }>('/auth/login', {
       method: 'POST',
@@ -71,6 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('user', JSON.stringify(newUser));
       setToken(newToken);
       setUser(newUser);
+      setSesionExpirada(false);
       return { success: true, message: res.message };
     }
 
@@ -105,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, loginProfesor, logout, checkAuth }}>
+    <AuthContext.Provider value={{ user, token, loading, sesionExpirada, login, loginProfesor, logout, checkAuth }}>
       {children}
     </AuthContext.Provider>
   );

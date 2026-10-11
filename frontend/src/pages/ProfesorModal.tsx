@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { Perfil } from './PerfilesModal.js';
 import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
+import { ConfirmModal } from './ConfirmModal.js';
 import {
   X,
   Loader2,
@@ -80,6 +81,8 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
   const [tiposContrato, setTiposContrato] = useState<TipoContrato[]>([]);
   const [perfilesList, setPerfilesList] = useState<Perfil[]>([]);
   const [perfilIdsSel, setPerfilIdsSel] = useState<Set<number>>(new Set());
+  const [perfilIdsInicial, setPerfilIdsInicial] = useState<Set<number>>(new Set());
+  const [confirmCerrar, setConfirmCerrar] = useState(false);
   const [buscarPerfil, setBuscarPerfil] = useState('');
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
@@ -127,11 +130,41 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
       // Perfiles ya asignados (solo en edición)
       if (profesor?.id) {
         const resAsig = await apiFetch<number[]>(`/profesores/${profesor.id}/perfiles`);
-        if (resAsig.success && resAsig.data) setPerfilIdsSel(new Set(resAsig.data));
+        if (resAsig.success && resAsig.data) {
+          const s = new Set(resAsig.data);
+          setPerfilIdsSel(s);
+          setPerfilIdsInicial(s);
+        }
       }
     };
     fetchCatalogs();
   }, [isOpen, profesor]);
+
+  // ¿Hay cambios sin guardar? Compara cada campo contra su valor inicial
+  const dirty = useMemo(() => {
+    if (
+      nombres !== (profesor?.nombres || '') ||
+      apellidos !== (profesor?.apellidos || '') ||
+      nacionalidad !== (profesor?.nacionalidad || 'V') ||
+      cedula !== (profesor?.cedula || '') ||
+      sexo !== (profesor?.sexo || '') ||
+      email !== (profesor?.email || '') ||
+      telefono !== (profesor?.telefono || '') ||
+      pnfSagaId !== (profesor?.pnf_saga_id ?? pnfPropio ?? '') ||
+      tipoContratoId !== (profesor?.tipo_contrato_id || '')
+    ) {
+      return true;
+    }
+    if (fotoDataUrl || eliminarFoto) return true;
+    if (perfilIdsSel.size !== perfilIdsInicial.size) return true;
+    for (const id of perfilIdsSel) if (!perfilIdsInicial.has(id)) return true;
+    return false;
+  }, [
+    profesor, pnfPropio, nombres, apellidos, nacionalidad, cedula, sexo, email, telefono,
+    pnfSagaId, tipoContratoId, fotoDataUrl, eliminarFoto, perfilIdsSel, perfilIdsInicial,
+  ]);
+
+  const pedirCerrar = () => (dirty ? setConfirmCerrar(true) : onClose());
 
   if (!isOpen) return null;
 
@@ -230,7 +263,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
           <h3 className="text-base font-bold text-white">
             {editingId ? 'Editar Profesor' : 'Registrar Profesor en la App'}
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={pedirCerrar} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -500,7 +533,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={pedirCerrar}
               className="px-4 py-2.5 border border-slate-700 text-slate-300 rounded-xl hover:bg-slate-800 font-semibold"
             >
               Cancelar
@@ -522,6 +555,21 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
         profesor={profesor}
         onClose={() => setDispOpen(false)}
       />
+
+      {confirmCerrar && (
+        <ConfirmModal
+          titulo="Cambios sin guardar"
+          mensaje="Hay cambios en el formulario que se perderán si cierras ahora."
+          confirmLabel="Descartar cambios"
+          cancelLabel="Seguir editando"
+          danger
+          onConfirm={() => {
+            setConfirmCerrar(false);
+            onClose();
+          }}
+          onCancel={() => setConfirmCerrar(false)}
+        />
+      )}
     </div>
   );
 };

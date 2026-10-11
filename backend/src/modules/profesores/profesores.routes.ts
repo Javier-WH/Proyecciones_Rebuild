@@ -18,6 +18,7 @@ import {
   getPerfilMateriasProfesorHandler,
   getDisponibilidadHandler,
   setDisponibilidadSlotHandler,
+  setDisponibilidadBulkHandler,
 } from './profesores.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
@@ -52,6 +53,7 @@ export async function profesoresRoutes(fastify: FastifyInstance) {
   fastify.get('/:id/disponibilidad', { preHandler: [authenticate] }, getDisponibilidadHandler);
   // PROFESOR también puede entrar: el handler verifica que solo edite la suya
   fastify.put('/:id/disponibilidad', { preHandler: [authenticate, authorizeRoles(...GESTORES, 'PROFESOR')] }, setDisponibilidadSlotHandler);
+  fastify.put('/:id/disponibilidad-bulk', { preHandler: [authenticate, authorizeRoles(...GESTORES, 'PROFESOR')] }, setDisponibilidadBulkHandler);
 
   // Foto del profesor (base64, máx ~4.5 MB de payload ≈ 3 MB de imagen)
   fastify.put(

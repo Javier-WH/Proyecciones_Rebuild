@@ -1,13 +1,11 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
+import { periodoActivo } from '../../utils/periodo.js';
+import { normTxt } from '../../utils/texto.js';
 import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
-const normTurno = (s: any): string =>
-  String(s ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim();
+const normTurno = (s: any): string => normTxt(s);
 
 // 'Noche' en la UI equivale al turno SAGA 'Nocturno'
 const TURNO_EQUIV: Record<string, string> = { noche: 'nocturno' };
@@ -205,6 +203,18 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
       }
     }
 
+    audit(request, {
+      accion: 'proyeccion.crear',
+      entidad: 'proyeccion',
+      entidadId: proyeccionId,
+      detalle: {
+        codigo,
+        nombre: body.nombre,
+        periodo: body.periodo_academico,
+        secciones: body.secciones?.length ?? 0,
+      },
+      pnfSagaId: Number(body.pnf_saga_id),
+    });
     return reply.status(201).send({
       success: true,
       message: 'Proyección académica creada exitosamente.',
@@ -224,21 +234,19 @@ export async function listProyeccionesHandler(request: FastifyRequest, reply: Fa
 
   try {
     // Solo mostrar proyecciones del periodo académico actualmente ACTIVO
-    const periodoActivo = await query<any[]>(
-      "SELECT codigo FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
-    );
+    const periodo = await periodoActivo();
 
     let sql = `
-      SELECT p.*, u.nombre as creador_nombre, u.apellido as creador_apellido 
+      SELECT p.*, u.nombre as creador_nombre, u.apellido as creador_apellido
       FROM proyecciones p
       LEFT JOIN users u ON p.creado_por = u.id
     `;
     const params: any[] = [];
     const conditions: string[] = [];
 
-    if (periodoActivo.length > 0) {
+    if (periodo) {
       conditions.push('p.periodo_academico = ?');
-      params.push(periodoActivo[0].codigo);
+      params.push(periodo);
     }
 
     if (conditions.length > 0) {
@@ -488,6 +496,13 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
 
     await conn.commit();
 
+    audit(request, {
+      accion: 'proyeccion.editar',
+      entidad: 'proyeccion',
+      entidadId: Number(id),
+      detalle: { nombre, periodo: periodoAcademico, tipo: tipoProyeccion },
+      pnfSagaId: proyeccion.pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message: 'Proyección actualizada correctamente.',
@@ -529,7 +544,13 @@ export async function toggleActiveProyeccionHandler(request: FastifyRequest, rep
     }
 
     await query('UPDATE proyecciones SET activa = ? WHERE id = ?', [newActiveState, id]);
-
+    audit(request, {
+      accion: newActiveState ? 'proyeccion.activar' : 'proyeccion.desactivar',
+      entidad: 'proyeccion',
+      entidadId: Number(id),
+      detalle: { nombre: proyeccion.nombre },
+      pnfSagaId: proyeccion.pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message: `Proyección ${newActiveState === 1 ? 'activada' : 'desactivada'} correctamente.`,
@@ -554,9 +575,197 @@ export async function deleteProyeccionHandler(request: FastifyRequest, reply: Fa
     }
 
     await query('DELETE FROM proyecciones WHERE id = ?', [id]);
+    audit(request, {
+      accion: 'proyeccion.eliminar',
+      entidad: 'proyeccion',
+      entidadId: Number(id),
+      pnfSagaId: proyList[0].pnf_saga_id,
+    });
     return reply.send({ success: true, message: 'Proyección eliminada exitosamente.' });
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error eliminando proyección.' });
+  }
+}
+
+// POST /api/proyecciones/copiar-periodo — rollover de periodo.
+// Clona proyecciones + secciones + materias (y opcionalmente asignaciones)
+// del periodo `periodo_origen` al periodo ACTIVO. Nunca copia clases
+// agendadas (horario_entries) ni el estado activo/inactivo: las copias
+// nacen activas. Es idempotente: proyecciones que ya existen en destino
+// (mismo pnf+trayecto+maya+tipo) se omiten.
+// El Coordinador solo puede copiar las proyecciones de su PNF.
+export async function copiarPeriodoHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as { periodo_origen?: string; incluir_asignaciones?: boolean };
+  const origen = String(body.periodo_origen ?? '').trim();
+  const conAsignaciones = body.incluir_asignaciones === true;
+  const user = request.userPayload!;
+
+  if (!origen) {
+    return reply.status(400).send({ success: false, message: 'Debe indicar el periodo de origen.' });
+  }
+
+  try {
+    const destino = await periodoActivo();
+    if (!destino) {
+      return reply.status(400).send({ success: false, message: 'No hay periodo activo como destino.' });
+    }
+    if (origen === destino) {
+      return reply.status(400).send({ success: false, message: 'El periodo de origen no puede ser el activo.' });
+    }
+    const origenExiste = await query<any[]>(
+      'SELECT id FROM periodos_academicos WHERE codigo = ? LIMIT 1',
+      [origen]
+    );
+    if (origenExiste.length === 0) {
+      return reply.status(404).send({ success: false, message: 'El periodo de origen no existe.' });
+    }
+
+    // Proyecciones fuente (activas del periodo origen; Coord: solo las suyas)
+    const esCoord = user.role === 'ADMINISTRADOR';
+    const proysOrigen = await query<any[]>(
+      `SELECT * FROM proyecciones
+       WHERE periodo_academico = ? AND activa = 1
+         ${esCoord ? 'AND pnf_saga_id = ?' : ''}
+       ORDER BY id`,
+      [origen, ...(esCoord ? [user.pnf_saga_id ?? -1] : [])]
+    );
+    if (proysOrigen.length === 0) {
+      return reply.send({
+        success: true,
+        data: { copiadas: 0, omitidas: 0, secciones: 0, materias: 0, asignaciones: 0 },
+        message: 'No hay proyecciones activas en el periodo de origen.',
+      });
+    }
+
+    // Ya existentes en destino (idempotencia): mismo pnf+trayecto+maya+tipo
+    const existentes = await query<any[]>(
+      `SELECT pnf_saga_id, trayecto_saga_id, maya_id, tipo_proyeccion
+       FROM proyecciones WHERE periodo_academico = ?`,
+      [destino]
+    );
+    const yaEstan = new Set(
+      existentes.map((e) => `${e.pnf_saga_id}|${e.trayecto_saga_id}|${e.maya_id}|${e.tipo_proyeccion}`)
+    );
+
+    const conn = await getDbPool().getConnection();
+    const conteo = { copiadas: 0, omitidas: 0, secciones: 0, materias: 0, asignaciones: 0 };
+    try {
+      await conn.beginTransaction();
+      let n = 0;
+      for (const p of proysOrigen) {
+        const clave = `${p.pnf_saga_id}|${p.trayecto_saga_id}|${p.maya_id}|${p.tipo_proyeccion}`;
+        if (yaEstan.has(clave)) {
+          conteo.omitidas++;
+          continue;
+        }
+        yaEstan.add(clave);
+        n++;
+        const codigo = `PROY-${p.pnf_saga_id}-${p.trayecto_saga_id}-${destino}-${n}`.slice(0, 100);
+        const [rProy] = await conn.query<any>(
+          `INSERT INTO proyecciones
+           (codigo, nombre, periodo_id, pnf_saga_id, pnf_nombre, trayecto_saga_id, trayecto_nombre,
+            maya_id, maya_descripcion, periodo_academico, tipo_proyeccion, activa, creado_por)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+          [
+            codigo, p.nombre, p.periodo_id ?? null, p.pnf_saga_id, p.pnf_nombre ?? '',
+            p.trayecto_saga_id, p.trayecto_nombre ?? '', p.maya_id, p.maya_descripcion ?? '',
+            destino, p.tipo_proyeccion, user.id,
+          ]
+        );
+        const proyNuevaId = rProy.insertId;
+        conteo.copiadas++;
+
+        // Secciones: mapa viejo id → nuevo id
+        const seccs = await query<any[]>(
+          'SELECT * FROM proyeccion_secciones WHERE proyeccion_id = ? ORDER BY id',
+          [p.id]
+        );
+        const mapSec = new Map<number, number>();
+        for (const s of seccs) {
+          const [rSec] = await conn.query<any>(
+            `INSERT INTO proyeccion_secciones
+             (proyeccion_id, nombre, turno_saga_id, turno_nombre, estudiantes_estimados, maya_id, maya_descripcion, congelada)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              proyNuevaId, s.nombre, s.turno_saga_id, s.turno_nombre,
+              s.estudiantes_estimados ?? 0, s.maya_id ?? null, s.maya_descripcion ?? null,
+              s.congelada ?? 0,
+            ]
+          );
+          mapSec.set(s.id, rSec.insertId);
+          conteo.secciones++;
+        }
+
+        // Materias: mapa viejo id → nuevo id (seccion_id remapeado)
+        const mats = await query<any[]>(
+          'SELECT * FROM proyeccion_materias WHERE proyeccion_id = ? ORDER BY id',
+          [p.id]
+        );
+        const mapMat = new Map<number, number>();
+        for (const m of mats) {
+          const secNueva = m.seccion_id != null ? mapSec.get(m.seccion_id) ?? null : null;
+          const [rMat] = await conn.query<any>(
+            `INSERT INTO proyeccion_materias
+             (proyeccion_id, seccion_id, subject_saga_id, nombre, horas_totales, horas_semanales,
+              q1, q2, q3, semestre1, semestre2, eliminada)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              proyNuevaId, secNueva, m.subject_saga_id, m.nombre,
+              m.horas_totales ?? 0, m.horas_semanales ?? 0,
+              m.q1 ?? 0, m.q2 ?? 0, m.q3 ?? 0, m.semestre1 ?? 0, m.semestre2 ?? 0,
+              m.eliminada ?? 0,
+            ]
+          );
+          mapMat.set(m.id, rMat.insertId);
+          conteo.materias++;
+        }
+
+        // Asignaciones (opcional): remapea proyeccion/materia/seccion,
+        // conserva profesor y lapso
+        if (conAsignaciones) {
+          const asigs = await query<any[]>(
+            'SELECT * FROM proyeccion_asignaciones WHERE proyeccion_id = ? ORDER BY id',
+            [p.id]
+          );
+          for (const a of asigs) {
+            const matNueva = mapMat.get(a.materia_id);
+            const secNueva = mapSec.get(a.seccion_id);
+            if (!matNueva || !secNueva) continue;
+            await conn.query(
+              `INSERT INTO proyeccion_asignaciones (proyeccion_id, materia_id, seccion_id, trimestre, profesor_id)
+               VALUES (?, ?, ?, ?, ?)`,
+              [proyNuevaId, matNueva, secNueva, a.trimestre, a.profesor_id]
+            );
+            conteo.asignaciones++;
+          }
+        }
+      }
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    audit(request, {
+      accion: 'proyeccion.copiar_periodo',
+      entidad: 'proyeccion',
+      detalle: { origen, destino, con_asignaciones: conAsignaciones, ...conteo },
+      pnfSagaId: esCoord ? user.pnf_saga_id : null,
+    });
+
+    return reply.send({
+      success: true,
+      data: conteo,
+      message:
+        `Se copiaron ${conteo.copiadas} proyección(es) al periodo ${destino}` +
+        (conteo.omitidas > 0 ? ` (${conteo.omitidas} ya existían)` : '') +
+        `. Las clases agendadas no se copiaron.`,
+    });
+  } catch (error: any) {
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error copiando el periodo.' });
   }
 }

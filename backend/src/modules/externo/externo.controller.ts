@@ -1,15 +1,9 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { periodoActivo } from '../../utils/periodo.js';
 
 const DIAS = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const hhmm = (h: any) => String(h ?? '').slice(0, 5);
-
-async function periodoActivo(): Promise<string | null> {
-  const rows = await query<any[]>(
-    "SELECT codigo FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
-  );
-  return rows[0]?.codigo ?? null;
-}
 
 interface ClaseItem {
   dia_semana: number;

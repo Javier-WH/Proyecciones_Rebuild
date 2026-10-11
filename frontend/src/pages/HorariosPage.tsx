@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
@@ -7,6 +7,8 @@ import { AulasPanel } from './horarios/AulasPanel.js';
 import { TurnosPanel } from './horarios/TurnosPanel.js';
 import { VistaRecurso } from './horarios/VistaRecurso.js';
 import { ReporteHorarioModal } from './ReporteHorarioModal.js';
+import { AulasLibresModal } from './AulasLibresModal.js';
+import { NAV_EVENT, NavHorarios, tomarNavPendiente } from './navBus.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import {
@@ -49,6 +51,8 @@ import {
   CheckSquare,
   ShieldAlert,
   Wand2,
+  DoorOpen,
+  Undo2,
 } from 'lucide-react';
 
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
@@ -104,6 +108,10 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [entries, setEntries] = useState<HorarioEntry[]>([]);
+  const [undoStack, setUndoStack] = useState<HorarioEntry[][]>([]);
+  const [deshaciendo, setDeshaciendo] = useState(false);
+  const entriesRef = useRef<HorarioEntry[]>([]);
+  entriesRef.current = entries;
   const [profesores, setProfesores] = useState<ProfesorLite[]>([]);
   const [pnfOptions, setPnfOptions] = useState<Array<[number, string]>>([]);
   const [config, setConfig] = useState<HorarioConfig>({ min_horas_bloque: 2, max_horas_dia: 3 });
@@ -124,6 +132,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const [regenerarOpen, setRegenerarOpen] = useState(false); // modal de confirmación de regenerar
   const [resolviendo, setResolviendo] = useState(false);
   const [reporteOpen, setReporteOpen] = useState(false);
+  const [aulasLibresOpen, setAulasLibresOpen] = useState(false);
   const [erroresOpen, setErroresOpen] = useState(false);
   const [forzar, setForzar] = useState(false); // mover clases ignorando solapes de aula/profesor/sección
   const [dispProfs, setDispProfs] = useState<Map<number, DispSlot[]>>(new Map()); // bloqueos por profesor
@@ -870,9 +879,107 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lapso.tipo, lapso.n, rows]);
 
+  // ── Deshacer (Ctrl+Z) ──────────────────────────────────────────────────
+  // Snapshot del estado de entries antes de cada mutación; al deshacer se
+  // difiere y se repite la operación inversa vía API (forzar, porque se
+  // restaura un estado que ya era válido o aceptado por el usuario).
+  const pushUndo = () => {
+    setUndoStack((s) => [...s.slice(-19), entriesRef.current]);
+  };
+
+  const deshacer = async () => {
+    const prev = undoStack[undoStack.length - 1];
+    if (!prev || deshaciendo) return;
+    setDeshaciendo(true);
+    setUndoStack((s) => s.slice(0, -1));
+    const curById = new Map(entriesRef.current.map((e) => [e.id, e]));
+    const prevIds = new Set(prev.map((e) => e.id));
+    // 1) Borrar las clases que no existían antes
+    for (const e of entriesRef.current) {
+      if (!prevIds.has(e.id)) {
+        await apiFetch(`/horarios/entries/${e.id}`, { method: 'DELETE' });
+      }
+    }
+    // 2) Mover de vuelta las cambiadas y recrear las borradas
+    for (const e of prev) {
+      const cur = curById.get(e.id);
+      const igual =
+        cur && cur.dia_semana === e.dia_semana && cur.bloque_id === e.bloque_id && cur.aula_id === e.aula_id;
+      if (!cur || !igual) {
+        await apiFetch('/horarios/entries', {
+          method: 'PUT',
+          body: JSON.stringify({
+            entry_id: cur ? e.id : undefined,
+            materia_id: e.materia_id,
+            seccion_id: e.seccion_id,
+            trimestre: e.trimestre,
+            dia_semana: e.dia_semana,
+            bloque_id: e.bloque_id,
+            aula_id: e.aula_id,
+            forzar: true,
+          }),
+        });
+      }
+    }
+    await fetchEntries();
+    setDeshaciendo(false);
+    mostrarAviso('Cambio deshecho.');
+  };
+
+  // Ctrl+Z deshace el último cambio del lapso (fuera de inputs de texto)
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.key.toLowerCase() !== 'z') return;
+      const t = ev.target as HTMLElement;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+      ev.preventDefault();
+      deshacer();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoStack, deshaciendo]);
+
+  // Al cambiar de lapso los snapshots dejan de corresponder a los entries
+  useEffect(() => {
+    setUndoStack([]);
+  }, [lapso.tipo, lapso.n]);
+
+  // Navegación profunda desde el buscador global (Ctrl+K): se aplica cuando
+  // `rows` ya está cargado para resolver los selectores de la sección.
+  const [navDestino, setNavDestino] = useState<NavHorarios | null>(null);
+  useEffect(() => {
+    const onEv = (ev: Event) => setNavDestino((ev as CustomEvent<NavHorarios>).detail);
+    window.addEventListener(NAV_EVENT, onEv);
+    const pend = tomarNavPendiente();
+    if (pend) setNavDestino(pend);
+    return () => window.removeEventListener(NAV_EVENT, onEv);
+  }, []);
+  useEffect(() => {
+    if (!navDestino || rows.length === 0) return;
+    const nav = navDestino;
+    setNavDestino(null);
+    setVista(nav.vista);
+    if (nav.lapso) setLapsoSel(nav.lapso);
+    if (nav.vista === 'seccion') {
+      const r = rows.find((x) => x.seccion_id === nav.id);
+      if (r) {
+        setPnfSel(r.pnf_nombre);
+        setTrayectoSel(r.trayecto_nombre);
+        setTurnoSel(r.turno_nombre);
+      }
+      setSeccionId(nav.id);
+    } else if (nav.vista === 'aula') {
+      setAulaId(nav.id);
+    } else {
+      setProfesorId(nav.id);
+    }
+  }, [navDestino, rows]);
+
   // Reubica los bloques de materia que chocan por aula en aulas libres
   // (preferidas de la materia → del PNF → libres), respetando el run contiguo.
   const resolverAulas = async () => {
+    pushUndo();
     setResolviendo(true);
     const res = await apiFetch<{ runs: number; movidas: number; sin_solucion: number }>(
       '/horarios/entries/resolver-aulas',
@@ -888,6 +995,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   };
 
   const generar = async (modo: 'completar' | 'regenerar') => {
+    pushUndo();
     setGenerando(true);
     const res = await apiFetch<{ agendadas: number; pendientes: any[] }>('/horarios/generar', {
       method: 'POST',
@@ -933,6 +1041,18 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+          {puedeEditarSeccion && tab === 'horario' && undoStack.length > 0 && (
+            <button
+              onClick={deshacer}
+              disabled={deshaciendo}
+              title="Deshacer último cambio del horario (Ctrl+Z)"
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700 disabled:opacity-50"
+            >
+              {deshaciendo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+              Deshacer
+              <span className="text-[9px] text-slate-500 font-bold">({undoStack.length})</span>
+            </button>
+          )}
           {puedeEditarSeccion && tab === 'horario' && (
             <>
               <button
@@ -1075,6 +1195,15 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 </>
               )}
             </div>
+          )}
+          {tab === 'horario' && (
+            <button
+              onClick={() => setAulasLibresOpen(true)}
+              title="Ver qué aulas están libres por día y hora"
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-slate-700"
+            >
+              <DoorOpen className="w-3.5 h-3.5" /> Aulas libres
+            </button>
           )}
           {tab === 'horario' && (
             <button
@@ -1364,6 +1493,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 enError={erroresPorEntry}
                 advertencias={advertenciasPorEntry}
                 avisosParciales={avisosParciales}
+                onBeforeMutate={pushUndo}
                 onChanged={fetchEntries}
               />
             ) : (
@@ -1437,6 +1567,16 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
         turnos={turnos}
         formato12={usa12}
       />
+
+      {aulasLibresOpen && (
+        <AulasLibresModal
+          onClose={() => setAulasLibresOpen(false)}
+          entries={entries}
+          aulas={aulas}
+          turnos={turnos}
+          usa12={usa12}
+        />
+      )}
 
       <ProfesorModal
         isOpen={profEdit !== null}

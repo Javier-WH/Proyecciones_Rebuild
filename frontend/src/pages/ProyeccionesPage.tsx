@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { CrearProyeccionModal } from './CrearProyeccionModal.js';
 import { EditarProyeccionModal } from './EditarProyeccionModal.js';
+import { CopiarPeriodoModal } from './CopiarPeriodoModal.js';
 import { ordenTrayecto } from './horarios/types.js';
 import {
   Calendar,
@@ -20,7 +21,8 @@ import {
   Users,
   Search,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Copy,
 } from 'lucide-react';
 
 interface ProyeccionItem {
@@ -67,6 +69,7 @@ export const ProyeccionesPage: React.FC = () => {
   const [deletingLoading, setDeletingLoading] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copiarOpen, setCopiarOpen] = useState(false);
 
   const fetchProyecciones = async () => {
     setLoading(true);
@@ -189,13 +192,23 @@ export const ProyeccionesPage: React.FC = () => {
         </div>
 
         {puedeCrear && (
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center gap-2 transition-all cursor-pointer self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nueva Proyección</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => setCopiarOpen(true)}
+              title="Clona proyecciones, secciones y materias de otro periodo al activo"
+              className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <Copy className="w-4 h-4" />
+              <span>Copiar periodo</span>
+            </button>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/25 flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nueva Proyección</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -535,6 +548,11 @@ export const ProyeccionesPage: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchProyecciones}
       />
+
+      {/* Modal de Copiar desde otro periodo */}
+      {copiarOpen && (
+        <CopiarPeriodoModal onClose={() => setCopiarOpen(false)} onSuccess={fetchProyecciones} />
+      )}
 
       {/* Modal de Confirmación de Eliminación (deslizar para habilitar) */}
       {deletingProyeccion && (

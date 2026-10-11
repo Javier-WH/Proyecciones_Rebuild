@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
 interface AsignacionBody {
@@ -245,6 +246,12 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
          WHERE materia_id = ? AND seccion_id = ? AND trimestre IN (${ph})`,
         [materiaId, seccionId, ...lapsos]
       );
+      audit(request, {
+        accion: 'asignacion.quitar',
+        entidad: 'asignacion',
+        detalle: { materia_id: materiaId, seccion_id: seccionId, lapsos },
+        pnfSagaId: val[0].pnf_saga_id,
+      });
       return reply.send({
         success: true,
         message:
@@ -291,6 +298,18 @@ export async function upsertAsignacionHandler(request: FastifyRequest, reply: Fa
       [val[0].periodo_academico, profesorId]
     );
 
+    audit(request, {
+      accion: 'asignacion.asignar',
+      entidad: 'asignacion',
+      detalle: {
+        materia_id: materiaId,
+        seccion_id: seccionId,
+        lapsos,
+        profesor: `${prof[0].apellidos}, ${prof[0].nombres}`,
+        profesor_id: profesorId,
+      },
+      pnfSagaId: val[0].pnf_saga_id,
+    });
     return reply.send({
       success: true,
       message:

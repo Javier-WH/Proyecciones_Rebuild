@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { lapsosTotales, seTraslapan, TipoProyeccion } from '../horarios/scheduler.service.js';
 
 // Clave del reporte: identifica qué plantilla se pide ('horarios',
 // 'carga_docente', futuros reportes). Se restringe el formato para evitar
@@ -56,5 +57,137 @@ export async function putPlantillaHandler(request: FastifyRequest, reply: Fastif
   } catch (e: any) {
     request.log.error(e);
     return reply.status(500).send({ success: false, message: 'Error guardando la plantilla.' });
+  }
+}
+
+// Lapsos en los que una materia se dicta según su régimen (misma regla que
+// usa la carga docente y el generador).
+function lapsosDeMateria(m: any, tipo: string): number[] {
+  const lapsos =
+    tipo === 'SEMESTRAL'
+      ? [m.semestre1 ? 1 : 0, m.semestre2 ? 2 : 0].filter(Boolean)
+      : [m.q1 ? 1 : 0, m.q2 ? 2 : 0, m.q3 ? 3 : 0].filter(Boolean);
+  return lapsos.length > 0 ? lapsos : [1];
+}
+
+// GET /api/reportes/resumen — métricas del periodo activo para las tarjetas
+// del dashboard. El conteo de conflictos es una aproximación por pares de
+// clases (aula/profesor con traslape total); el detalle exacto se ve en
+// Horarios → panel Errores. El Coordinador ve las métricas acotadas a su PNF.
+export async function resumenHandler(request: FastifyRequest, reply: FastifyReply) {
+  const user = request.userPayload!;
+  const pnfFiltro = user.role === 'ADMINISTRADOR' ? user.pnf_saga_id : null;
+
+  try {
+    const periodoRows = await query<any[]>(
+      "SELECT codigo, nombre FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
+    );
+    if (periodoRows.length === 0) {
+      return reply.send({ success: true, data: { periodo: null } });
+    }
+    const periodo: string = periodoRows[0].codigo;
+
+    const pnfCond = pnfFiltro ? 'AND pnf_saga_id = ?' : '';
+    const pnfParams = pnfFiltro ? [pnfFiltro] : [];
+
+    const [proy] = await query<any[]>(
+      `SELECT COUNT(*) AS n FROM proyecciones WHERE periodo_academico = ? AND activa = 1 ${pnfCond}`,
+      [periodo, ...pnfParams]
+    );
+    const [secc] = await query<any[]>(
+      `SELECT COUNT(*) AS n FROM proyeccion_secciones s
+       JOIN proyecciones p ON p.id = s.proyeccion_id
+       WHERE p.periodo_academico = ? AND p.activa = 1 ${pnfCond}`,
+      [periodo, ...pnfParams]
+    );
+    const [prof] = await query<any[]>(
+      `SELECT COUNT(*) AS n FROM profesores WHERE activo = 1 ${pnfCond}`,
+      pnfParams
+    );
+    const [aula] = await query<any[]>(
+      'SELECT COUNT(*) AS n FROM aulas WHERE activa = 1'
+    );
+    const [agendadas] = await query<any[]>(
+      `SELECT COUNT(*) AS n FROM horario_entries e
+       JOIN proyeccion_materias m ON m.id = e.materia_id
+       JOIN proyecciones p ON p.id = m.proyeccion_id
+       WHERE e.periodo_academico = ? ${pnfCond}`,
+      [periodo, ...pnfParams]
+    );
+
+    // Unidades asignables (materia × sección × lapso) sin profesor asignado
+    const filas = await query<any[]>(
+      `SELECT m.id AS materia_id, m.q1, m.q2, m.q3, m.semestre1, m.semestre2,
+              m.seccion_id AS materia_seccion_id, s.id AS seccion_id, p.tipo_proyeccion
+       FROM proyecciones p
+       JOIN proyeccion_materias m ON m.proyeccion_id = p.id AND m.eliminada = 0
+       JOIN proyeccion_secciones s
+         ON s.proyeccion_id = p.id
+         AND (m.seccion_id = s.id OR (m.seccion_id IS NULL AND NOT EXISTS (
+              SELECT 1 FROM proyeccion_materias pm
+              WHERE pm.proyeccion_id = p.id AND pm.seccion_id = s.id AND pm.eliminada = 0)))
+       WHERE p.activa = 1 AND p.periodo_academico = ? ${pnfCond}`,
+      [periodo, ...pnfParams]
+    );
+    const asig = await query<any[]>(
+      `SELECT a.materia_id, a.seccion_id, a.trimestre FROM proyeccion_asignaciones a
+       JOIN proyecciones p ON p.id = a.proyeccion_id
+       WHERE p.periodo_academico = ? ${pnfCond}`,
+      [periodo, ...pnfParams]
+    );
+    const asigSet = new Set(asig.map((a) => `${a.materia_id}:${a.seccion_id}:${a.trimestre}`));
+    let sinProfesor = 0;
+    for (const f of filas) {
+      for (const lapso of lapsosDeMateria(f, f.tipo_proyeccion)) {
+        if (!asigSet.has(`${f.materia_id}:${f.seccion_id}:${lapso}`)) sinProfesor++;
+      }
+    }
+
+    // Conflictos: pares de clases del periodo que comparten aula o profesor
+    // con traslape de hora y relación de traslape TOTAL entre sus lapsos.
+    const entries = await query<any[]>(
+      `SELECT e.id, e.tipo_proyeccion, e.trimestre, e.profesor_id, e.aula_id,
+              e.dia_semana, b.hora_inicio, b.hora_fin
+       FROM horario_entries e
+       JOIN turno_bloques b ON b.id = e.bloque_id
+       JOIN proyeccion_materias m ON m.id = e.materia_id
+       JOIN proyecciones p ON p.id = m.proyeccion_id
+       WHERE e.periodo_academico = ? ${pnfCond}`,
+      [periodo, ...pnfParams]
+    );
+    const total = (x: any, y: any) =>
+      lapsosTotales(x.tipo_proyeccion as TipoProyeccion, Number(x.trimestre)).some(
+        (l) => l.tipo === y.tipo_proyeccion && l.n === Number(y.trimestre)
+      );
+    let conflictos = 0;
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        const a = entries[i];
+        const b = entries[j];
+        if (a.dia_semana !== b.dia_semana) continue;
+        if (a.aula_id !== b.aula_id && (a.profesor_id === null || a.profesor_id !== b.profesor_id)) continue;
+        if (!seTraslapan(a.hora_inicio, a.hora_fin, b.hora_inicio, b.hora_fin)) continue;
+        if (!total(a, b)) continue;
+        conflictos++;
+      }
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        periodo,
+        periodo_nombre: periodoRows[0].nombre,
+        proyecciones_activas: proy[0].n,
+        secciones: secc[0].n,
+        profesores_activos: prof[0].n,
+        aulas_activas: aula[0].n,
+        clases_agendadas: agendadas[0].n,
+        materias_sin_profesor: sinProfesor,
+        conflictos,
+      },
+    });
+  } catch (e: any) {
+    request.log.error(e);
+    return reply.status(500).send({ success: false, message: 'Error calculando el resumen.' });
   }
 }

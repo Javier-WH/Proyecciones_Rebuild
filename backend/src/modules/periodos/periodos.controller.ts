@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 
 interface CreatePeriodoBody {
   codigo: string;
@@ -71,6 +72,12 @@ export async function createPeriodoHandler(request: FastifyRequest, reply: Fasti
       ]
     );
 
+    audit(request, {
+      accion: 'periodo.crear',
+      entidad: 'periodo',
+      entidadId: insertResult.insertId,
+      detalle: { codigo: codigoClean, nombre: body.nombre, estado },
+    });
     return reply.status(201).send({
       success: true,
       message: 'Periodo académico registrado exitosamente.',
@@ -116,6 +123,12 @@ export async function updatePeriodoHandler(request: FastifyRequest, reply: Fasti
       ]
     );
 
+    audit(request, {
+      accion: 'periodo.editar',
+      entidad: 'periodo',
+      entidadId: Number(id),
+      detalle: { codigo: codigoClean, estado: estadoClean },
+    });
     return reply.send({ success: true, message: 'Periodo académico actualizado exitosamente.' });
   } catch (error: any) {
     request.log.error(error);
@@ -128,6 +141,11 @@ export async function deletePeriodoHandler(request: FastifyRequest, reply: Fasti
 
   try {
     await query('DELETE FROM periodos_academicos WHERE id = ?', [id]);
+    audit(request, {
+      accion: 'periodo.eliminar',
+      entidad: 'periodo',
+      entidadId: Number(id),
+    });
     return reply.send({ success: true, message: 'Periodo académico eliminado exitosamente.' });
   } catch (error: any) {
     request.log.error(error);

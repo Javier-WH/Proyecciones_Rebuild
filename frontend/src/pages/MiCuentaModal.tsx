@@ -25,7 +25,7 @@ interface SlotPregunta {
 // email, contraseña) y configura sus 6 preguntas de seguridad para la
 // recuperación de contraseña. No permite tocar rol, PNF ni cédula asociada.
 export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { user, checkAuth } = useAuth();
+  const { user, checkAuth, logout } = useAuth();
 
   // ── Datos personales ──────────────────────────────────────────────────────
   const [username, setUsername] = useState(user?.username ?? '');
@@ -77,8 +77,8 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       return;
     }
     if (passNueva || passConfirma || passActual) {
-      if (passNueva.length < 6) {
-        setMsgDatos({ ok: false, texto: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+      if (passNueva.length < 8) {
+        setMsgDatos({ ok: false, texto: 'La nueva contraseña debe tener al menos 8 caracteres.' });
         return;
       }
       if (passNueva !== passConfirma) {
@@ -104,6 +104,16 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     const res = await apiFetch('/usuarios/me', { method: 'PUT', body: JSON.stringify(body) });
     setSavingDatos(false);
     if (res.success) {
+      if (passNueva) {
+        // El cambio de contraseña invalida todas las sesiones del usuario,
+        // incluida esta: avisamos y cerramos sesión tras el mensaje.
+        setMsgDatos({
+          ok: true,
+          texto: 'Contraseña actualizada. Por seguridad se cerrará tu sesión…',
+        });
+        window.setTimeout(() => logout(), 1800);
+        return;
+      }
       setPassActual('');
       setPassNueva('');
       setPassConfirma('');

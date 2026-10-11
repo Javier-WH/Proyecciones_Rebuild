@@ -6,6 +6,7 @@ import {
   updateProyeccionHandler,
   toggleActiveProyeccionHandler,
   deleteProyeccionHandler,
+  copiarPeriodoHandler,
 } from './proyecciones.controller.js';
 import { cargaDocenteHandler, upsertAsignacionHandler } from './asignaciones.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
@@ -22,6 +23,11 @@ export async function proyeccionesRoutes(fastify: FastifyInstance) {
     upsertAsignacionHandler
   );
 
+  fastify.post(
+    '/copiar-periodo',
+    { preHandler: [authenticate, authorizeRoles(...ESCRITORES)] },
+    copiarPeriodoHandler
+  );
   fastify.post('/', { preHandler: [authenticate, authorizeRoles(...ESCRITORES)] }, createProyeccionHandler);
   fastify.get('/', { preHandler: [authenticate] }, listProyeccionesHandler);
   fastify.get('/:id', { preHandler: [authenticate] }, getProyeccionDetailHandler);
