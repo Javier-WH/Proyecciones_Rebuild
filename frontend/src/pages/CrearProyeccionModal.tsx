@@ -417,6 +417,9 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   const [loadingInscripciones, setLoadingInscripciones] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // SAGA no respondió en alguna consulta: banner ámbar + botón Reintentar
+  const [sagaCaido, setSagaCaido] = useState(false);
+  const [sagaRetry, setSagaRetry] = useState(0);
 
   // 1. Cargar catálogos base (PNF, Trayectos, Turnos y Periodos Académicos) al abrir el modal
   useEffect(() => {
@@ -425,6 +428,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     const fetchBaseCatalogs = async () => {
       setLoadingCatalogos(true);
       setErrorMsg(null);
+      setSagaCaido(false);
 
       const [resPnf, resTrayectos, resPeriodos, resTurnos, resTurnosLocales] = await Promise.all([
         apiFetch<PNF[]>('/saga/programas'),
@@ -433,6 +437,11 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
         apiFetch<Array<{ id: number; turno: string }>>('/saga/turnos'),
         apiFetch<TurnoJornada[]>('/horarios/turnos'),
       ]);
+
+      // connected === false ⇒ la API SAGA no respondió (no confundir con lista vacía)
+      if (resPnf.connected === false || resTrayectos.connected === false || resTurnos.connected === false) {
+        setSagaCaido(true);
+      }
 
       if (resPnf.success && resPnf.data) {
         setPnfList(resPnf.data);
@@ -459,7 +468,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     };
 
     fetchBaseCatalogs();
-  }, [isOpen]);
+  }, [isOpen, sagaRetry]);
 
   // 2. Al seleccionar PNF, cargar sus Mallas de SAGA
   useEffect(() => {
@@ -475,6 +484,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       setMaterias([]);
 
       const res = await apiFetch<Maya[]>(`/saga/mayas/${selectedPnf}`);
+      if (res.connected === false) setSagaCaido(true);
       if (res.success && res.data) {
         setMayasList(res.data);
         if (res.data.length > 0) {
@@ -485,7 +495,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     };
 
     fetchMayas();
-  }, [selectedPnf]);
+  }, [selectedPnf, sagaRetry]);
 
   // 3. Al tener PNF + Trayecto + Maya, cargar materias e inscripciones de SAGA
   useEffect(() => {
@@ -505,6 +515,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       const resMaterias = await apiFetch<SubjectUC[]>(
         `/saga/ucslist/${selectedPnf}/${selectedTrayecto}/${selectedMaya}`
       );
+      if (resMaterias.connected === false) setSagaCaido(true);
       if (resMaterias.success && resMaterias.data) {
         setMaterias(resMaterias.data);
       } else {
@@ -516,6 +527,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       const resInscripciones = await apiFetch<TurnoEstimacion[]>(
         `/saga/inscriptions-summary/${selectedPnf}/${selectedTrayecto}`
       );
+      if (resInscripciones.connected === false) setSagaCaido(true);
       if (resInscripciones.success && resInscripciones.data) {
         setEstimacionesSaga(resInscripciones.data);
 
@@ -553,7 +565,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     };
 
     fetchMateriasEInscripciones();
-  }, [selectedPnf, selectedTrayecto, selectedMaya]);
+  }, [selectedPnf, selectedTrayecto, selectedMaya, sagaRetry]);
 
   // Autogenerar nombre de la proyección
   useEffect(() => {
@@ -816,6 +828,24 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
               <Layers className="w-4 h-4" />
               <span>1. Configuración de PNF y Pensum</span>
             </h4>
+
+            {sagaCaido && !loadingCatalogos && (
+              <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl px-3.5 py-3 text-xs text-amber-300 flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  No se pudieron obtener los catálogos porque el sistema <strong>SAGA no responde</strong>.
+                  Los selectores aparecerán vacíos — verifique la conexión e intente de nuevo.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSagaRetry((r) => r + 1)}
+                  className="ml-auto shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reintentar
+                </button>
+              </div>
+            )}
 
             {loadingCatalogos ? (
               <div className="py-6 flex justify-center text-slate-400 text-sm gap-2 items-center">

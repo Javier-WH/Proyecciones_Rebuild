@@ -125,9 +125,11 @@ export const sagaService = {
     return data ?? (await fetchFromSaga<any[]>('/dedicacions'));
   },
   
+  // Devuelve null cuando SAGA no responde (las rutas lo exponen como
+  // connected:false); una lista vacía sí significa "sin mallas".
   getMayas: async (pnfSagaId: number | string) => {
     const list = await fetchFromSaga<Array<{ id: number; descripcion: string; tipopensum_id: number }>>(`/maya/${pnfSagaId}`);
-    if (!list) return [];
+    if (!list) return null;
     // Ordenar por ID descendente para obtener la malla más reciente primero
     return list.sort((a, b) => b.id - a.id);
   },
@@ -135,20 +137,22 @@ export const sagaService = {
   // Materias de una malla agrupadas por trayecto: ucslist en SAGA es por
   // (pnf, trayecto, maya), así que se consulta cada trayecto y se fusiona.
   getMateriasPorMaya: async (pnfSagaId: number | string, mayaId: number | string) => {
-    const trayectos = (await sagaService.getTrayectos()) ?? [];
+    const trayectos = await sagaService.getTrayectos();
+    if (!trayectos) return null; // SAGA no responde
     const grupos = await Promise.all(
       trayectos.map(async (t) => ({
         trayecto_saga_id: Number(t.id),
         trayecto: t.trayecto,
-        materias: await sagaService.getUcsList(pnfSagaId, t.id, mayaId),
+        materias: (await sagaService.getUcsList(pnfSagaId, t.id, mayaId)) ?? [],
       }))
     );
     return grupos.filter((g) => g.materias.length > 0);
   },
 
-  getUcsList: async (pnfSagaId: number | string, trayectoSagaId: number | string, mayaId: number | string): Promise<SubjectUC[]> => {
+  // null = SAGA no responde; [] = la combinación pnf/trayecto/maya no tiene materias
+  getUcsList: async (pnfSagaId: number | string, trayectoSagaId: number | string, mayaId: number | string): Promise<SubjectUC[] | null> => {
     const rawList = await fetchFromSaga<any[]>(`/ucslist/${pnfSagaId}/${trayectoSagaId}/${mayaId}`);
-    if (!rawList) return [];
+    if (!rawList) return null;
 
     const weeksInTerm = Number(mayaId) === 24 ? 18 : 12;
 
@@ -190,9 +194,10 @@ export const sagaService = {
     });
   },
 
-  getInscriptionsSummary: async (pnfSagaId: number | string, trayectoSagaId: number | string): Promise<TurnoEstimacion[]> => {
+  // null = SAGA no responde; [] = sin inscripciones para ese pnf/trayecto
+  getInscriptionsSummary: async (pnfSagaId: number | string, trayectoSagaId: number | string): Promise<TurnoEstimacion[] | null> => {
     const rawInscriptions = await fetchFromSaga<any[]>('/student/inscription');
-    if (!rawInscriptions || !Array.isArray(rawInscriptions)) return [];
+    if (!rawInscriptions || !Array.isArray(rawInscriptions)) return null;
 
     const targetPnf = Number(pnfSagaId);
     const targetTrayecto = Number(trayectoSagaId);

@@ -89,10 +89,10 @@ export async function listMateriasHandler(_request: FastifyRequest, reply: Fasti
     const programas = (await sagaService.getProgramas()) ?? [];
     await Promise.all(
       programas.map(async (p) => {
-        const mayas = await sagaService.getMayas(p.id);
+        const mayas = (await sagaService.getMayas(p.id)) ?? [];
         await Promise.all(
           mayas.map(async (m) => {
-            const grupos = await sagaService.getMateriasPorMaya(p.id, m.id);
+            const grupos = (await sagaService.getMateriasPorMaya(p.id, m.id)) ?? [];
             for (const g of grupos) {
               for (const uc of g.materias) {
                 const k = `${String(uc.description).trim().toUpperCase()}|${p.id}|${m.id}`;

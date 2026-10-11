@@ -57,6 +57,7 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
   const [descripcion, setDescripcion] = useState('');
   const [seleccion, setSeleccion] = useState<Map<number, string>>(new Map());
   const [buscarMateria, setBuscarMateria] = useState('');
+  const [buscarPerfil, setBuscarPerfil] = useState('');
   const [borrandoPerfil, setBorrandoPerfil] = useState<Perfil | null>(null);
 
   const fetchData = async () => {
@@ -76,6 +77,7 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
     if (isOpen) {
       setEditando(null);
       setNoticeMsg(null);
+      setBuscarPerfil('');
       fetchData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,6 +113,18 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
     if (!texto) return catalogo;
     return catalogo.filter((m) => m.nombre.toLowerCase().includes(texto));
   }, [catalogo, buscarMateria]);
+
+  // Lista filtrada: por nombre, descripción o alguna materia del perfil
+  const perfilesFiltrados = useMemo(() => {
+    const texto = buscarPerfil.toLowerCase().trim();
+    if (!texto) return perfiles;
+    return perfiles.filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(texto) ||
+        (p.descripcion ?? '').toLowerCase().includes(texto) ||
+        p.materias.some((m) => m.nombre.toLowerCase().includes(texto))
+    );
+  }, [perfiles, buscarPerfil]);
 
   const handleGuardar = async () => {
     if (!nombre.trim()) {
@@ -333,6 +347,18 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
           ) : (
             /* ------------------------------- LISTA ------------------------------- */
             <div className="space-y-2">
+              {perfiles.length > 0 && (
+                <div className="relative mb-3">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
+                  <input
+                    type="text"
+                    value={buscarPerfil}
+                    onChange={(e) => setBuscarPerfil(e.target.value)}
+                    placeholder="Buscar perfil por nombre, descripción o materia..."
+                    className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
               {perfiles.length === 0 ? (
                 <div className="py-10 text-center text-slate-500">
                   <GraduationCap className="w-10 h-10 mx-auto mb-3 text-slate-700" />
@@ -341,8 +367,12 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
                     Los perfiles agrupan materias afines y se asignan a los profesores para sugerir asignaciones.
                   </p>
                 </div>
+              ) : perfilesFiltrados.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-[11px]">
+                  Sin perfiles que coincidan con la búsqueda.
+                </div>
               ) : (
-                perfiles.map((p) => (
+                perfilesFiltrados.map((p) => (
                   <div
                     key={p.id}
                     className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-indigo-500/40 transition-colors"
