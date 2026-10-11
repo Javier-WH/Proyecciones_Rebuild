@@ -7,6 +7,44 @@ const ENDPOINTS_SESION_OPCIONAL = /^\/auth\/(login|profesor-login|recover-passwo
 // La app escucha este evento para cerrar sesión globalmente.
 export const EVENTO_SESION_EXPIRADA = 'proyecciones:sesion-expirada';
 
+// ── Indicador global de red ─────────────────────────────────────────────
+// Contador de peticiones en curso + etiqueta de la última iniciada; el
+// componente <IndicadorRed/> lo consume para mostrar la barra/velo de
+// "esperando respuesta del servidor" sin tocar cada llamada.
+export interface ApiOpciones extends RequestInit {
+  etiqueta?: string;   // texto contextual p. ej. "Cambiando aula…"
+  silencioso?: boolean; // fetchs de fondo: no disparan el indicador
+}
+
+let pendientes = 0;
+let etiquetaActual: string | null = null;
+const suscriptores = new Set<() => void>();
+
+export function estadoRed() {
+  return { pendientes, etiqueta: etiquetaActual };
+}
+
+export function suscribirRed(fn: () => void): () => void {
+  suscriptores.add(fn);
+  return () => suscriptores.delete(fn);
+}
+
+function notificarRed() {
+  suscriptores.forEach((fn) => fn());
+}
+
+function iniciarPeticion(etiqueta?: string) {
+  pendientes++;
+  if (etiqueta) etiquetaActual = etiqueta;
+  notificarRed();
+}
+
+function terminarPeticion() {
+  pendientes = Math.max(0, pendientes - 1);
+  if (pendientes === 0) etiquetaActual = null;
+  notificarRed();
+}
+
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -16,8 +54,10 @@ export interface ApiResponse<T = any> {
 
 export async function apiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: ApiOpciones = {}
 ): Promise<ApiResponse<T>> {
+  const { etiqueta, silencioso, ...fetchOptions } = options;
+  if (!silencioso) iniciarPeticion(etiqueta);
   const token = localStorage.getItem('token');
 
   const headers: Record<string, string> = {
@@ -33,7 +73,7 @@ export async function apiFetch<T = any>(
 
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
 
@@ -66,5 +106,7 @@ export async function apiFetch<T = any>(
       success: false,
       message: 'Fallo de conexión con el servidor backend.',
     };
+  } finally {
+    if (!silencioso) terminarPeticion();
   }
 }

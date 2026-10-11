@@ -897,7 +897,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // 1) Borrar las clases que no existían antes
     for (const e of entriesRef.current) {
       if (!prevIds.has(e.id)) {
-        await apiFetch(`/horarios/entries/${e.id}`, { method: 'DELETE' });
+        await apiFetch(`/horarios/entries/${e.id}`, { method: 'DELETE', etiqueta: 'Deshaciendo el cambio…' });
       }
     }
     // 2) Mover de vuelta las cambiadas y recrear las borradas
@@ -908,6 +908,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       if (!cur || !igual) {
         await apiFetch('/horarios/entries', {
           method: 'PUT',
+          etiqueta: 'Deshaciendo el cambio…',
           body: JSON.stringify({
             entry_id: cur ? e.id : undefined,
             materia_id: e.materia_id,
@@ -999,6 +1000,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     setGenerando(true);
     const res = await apiFetch<{ agendadas: number; pendientes: any[] }>('/horarios/generar', {
       method: 'POST',
+      etiqueta: modo === 'regenerar' ? 'Regenerando el horario…' : 'Generando el horario…',
       body: JSON.stringify({ tipo: lapso.tipo, trimestre: lapso.n, modo }),
     });
     setGenerando(false);

@@ -22,7 +22,10 @@ let catalogoPromise: Promise<MateriaOpcion[]> | null = null;
 
 export const precargarCatalogoMaterias = (): Promise<MateriaOpcion[]> => {
   if (catalogoCache) return Promise.resolve(catalogoCache);
-  catalogoPromise ??= apiFetch<MateriaOpcion[]>('/horarios/materias')
+  // silencioso: es un prefetch de fondo al iniciar sesión (las vistas que
+  // esperan el catálogo ya muestran su propio loading) — no debe disparar
+  // el indicador global de red.
+  catalogoPromise ??= apiFetch<MateriaOpcion[]>('/horarios/materias', { silencioso: true })
     .then((r) => (catalogoCache = r.success && r.data ? r.data : []))
     .catch(() => {
       catalogoPromise = null; // permite reintentar la próxima vez

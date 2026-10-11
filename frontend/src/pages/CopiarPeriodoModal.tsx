@@ -55,6 +55,7 @@ export const CopiarPeriodoModal: React.FC<{
     setResultado(null);
     const res = await apiFetch<Resultado>('/proyecciones/copiar-periodo', {
       method: 'POST',
+      etiqueta: 'Copiando el periodo…',
       body: JSON.stringify({ periodo_origen: origen, incluir_asignaciones: conAsignaciones }),
     });
     setCopiando(false);

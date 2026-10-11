@@ -346,6 +346,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onBeforeMutate?.();
       const res = await apiFetch('/horarios/entries/schedule-group', {
         method: 'POST',
+        etiqueta: 'Agendando el bloque…',
         body: JSON.stringify({
           materia_id: drag.materia_id,
           seccion_id: drag.seccion_id,
@@ -367,6 +368,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onBeforeMutate?.();
       const res = await apiFetch('/horarios/entries/move-group', {
         method: 'POST',
+        etiqueta: 'Moviendo el bloque…',
         body: JSON.stringify({
           entry_ids: drag.entry_ids,
           dia_semana: dia,
@@ -390,6 +392,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onBeforeMutate?.();
       const res = await apiFetch('/horarios/entries/swap', {
         method: 'POST',
+        etiqueta: 'Intercambiando clases…',
         body: JSON.stringify({
           entry_id_a: drag.entry_id,
           entry_id_b: destino.id,
@@ -407,6 +410,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     onBeforeMutate?.();
     const res = await apiFetch('/horarios/entries', {
       method: 'PUT',
+      etiqueta: 'Agendando la clase…',
       body: JSON.stringify({
         entry_id: drag.entry_id,
         materia_id: drag.materia_id,
@@ -428,7 +432,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
 
   const handleDesagendar = async (entryId: number) => {
     onBeforeMutate?.();
-    const res = await apiFetch(`/horarios/entries/${entryId}`, { method: 'DELETE' });
+    const res = await apiFetch(`/horarios/entries/${entryId}`, { method: 'DELETE', etiqueta: 'Quitando la clase…' });
     if (res.success) {
       mostrarAviso('Clase desagendada.');
       setMenuEntry(null);
@@ -443,6 +447,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     onBeforeMutate?.();
     const res = await apiFetch('/horarios/entries/unschedule', {
       method: 'POST',
+      etiqueta: 'Desagendando el bloque…',
       body: JSON.stringify({ entry_ids: ids }),
     });
     if (res.success) {
@@ -459,6 +464,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     onBeforeMutate?.();
     const res = await apiFetch('/horarios/entries/aula-grupo', {
       method: 'POST',
+      etiqueta: 'Cambiando el aula…',
       body: JSON.stringify({
         entry_id: entry.id,
         aula_id: aulaId,

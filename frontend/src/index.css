@@ -34,6 +34,19 @@
   animation: luz-error 1.1s ease-in-out infinite;
 }
 
+/* Barra indeterminada del indicador global de red */
+@keyframes carga-indeterminada {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.animar-carga-indeterminada {
+  animation: carga-indeterminada 1s ease-in-out infinite;
+}
+
 /* Slider de confirmación (deslizar hasta el final para habilitar acción destructiva) */
 input[type='range'].slide-confirm {
   -webkit-appearance: none;

@@ -4,6 +4,7 @@ import { PnfColorProvider } from './context/PnfColorContext.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { precargarCatalogoMaterias } from './pages/horarios/catalogoMaterias.js';
+import { IndicadorRed } from './pages/IndicadorRed.js';
 import { Loader2 } from 'lucide-react';
 
 const AppRoutes: React.FC = () => {
@@ -39,6 +40,8 @@ export const App: React.FC = () => {
     <AuthProvider>
       <PnfColorProvider>
         <AppRoutes />
+        {/* Indicador global de "esperando respuesta del servidor" */}
+        <IndicadorRed />
       </PnfColorProvider>
     </AuthProvider>
   );

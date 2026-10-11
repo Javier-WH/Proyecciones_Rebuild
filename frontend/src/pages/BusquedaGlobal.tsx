@@ -57,7 +57,9 @@ export const BusquedaGlobal: React.FC<{
     }
     setCargando(true);
     const timer = window.setTimeout(async () => {
-      const res = await apiFetch<Resultados>(`/buscar?q=${encodeURIComponent(t)}`);
+      // silencioso: un fetch por tecla con debounce — ya tiene spinner
+      // propio y dispararía el velo global en cada letra con red lenta.
+      const res = await apiFetch<Resultados>(`/buscar?q=${encodeURIComponent(t)}`, { silencioso: true });
       setCargando(false);
       if (res.success && res.data) setData(res.data);
     }, 250);
