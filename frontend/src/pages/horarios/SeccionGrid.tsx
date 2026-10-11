@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -30,6 +30,7 @@ import {
   formatearHorasEnTexto,
   traslapan,
   esRivalParcial,
+  relacionLapsos,
   colorMateria,
   normMateria,
   ErrorClase,
@@ -91,8 +92,29 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   const [dropPrev, setDropPrev] = useState<{ celdas: Set<string>; valida: boolean } | null>(null);
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error' | 'warn'; msg: string } | null>(null);
   const [menuEntry, setMenuEntry] = useState<HorarioEntry | null>(null);
+  // ⇧+hover sobre una materia: ilumina los bloques donde ese profesor ya
+  // tiene clases (en cualquier sección de la proyección), para ubicarla
+  // sin cambiar de vista. También funciona mientras se arrastra.
+  const [shiftOn, setShiftOn] = useState(false);
+  const [profeHover, setProfeHover] = useState<number | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const usa12 = !!config.formato_12h; // vista 12h; la BD siempre guarda 24h
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftOn(true); };
+    const up = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftOn(false); };
+    const off = () => { setShiftOn(false); setProfeHover(null); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', off);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', off);
+    };
+  }, []);
+
+  const profePeek = shiftOn ? (activo?.profesor_id ?? profeHover) : null;
 
   const bloques = useMemo(() => turno?.bloques ?? [], [turno]);
   const dias = useMemo(
@@ -209,6 +231,39 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     () => [...progreso.values()].filter((p) => p.total - p.puestas !== 0),
     [progreso]
   );
+
+  // Bloques ocupados por el profesor en "peek" (⇧+hover): celda
+  // `bloque_id:dia` → clases suyas que traslapan en hora. Se compara por
+  // rango horario (no por bloque_id) porque el docente puede tener clases
+  // en turnos con bloques distintos. Los lapsos sin relación temporal
+  // (p. ej. T1 vs T3) no cuentan: el profesor no coincide con ellos.
+  const ocupadoProfe = useMemo(() => {
+    if (!profePeek) return null;
+    const map = new Map<string, HorarioEntry[]>();
+    const lapsoVisto = { tipo_proyeccion: tipoProyeccion, trimestre };
+    for (const e of entries) {
+      if (e.profesor_id !== profePeek) continue;
+      if (!dias.includes(e.dia_semana)) continue;
+      if (relacionLapsos(lapsoVisto, e) === 'ninguna') continue;
+      for (const b of bloques) {
+        if (b.es_receso) continue;
+        if (!traslapan(b.hora_inicio, b.hora_fin, e.hora_inicio, e.hora_fin)) continue;
+        const k = `${b.id}:${e.dia_semana}`;
+        const arr = map.get(k);
+        if (arr) arr.push(e);
+        else map.set(k, [e]);
+      }
+    }
+    return map;
+  }, [profePeek, entries, bloques, dias, tipoProyeccion, trimestre]);
+
+  const profePeekNombre = useMemo(() => {
+    if (!profePeek) return '';
+    const src =
+      materias.find((x) => x.profesor_id === profePeek) ??
+      entries.find((x) => x.profesor_id === profePeek);
+    return src ? `${src.prof_apellidos ?? ''} ${src.prof_nombres ?? ''}`.trim() : '';
+  }, [profePeek, materias, entries]);
 
   // Advertencias (triángulo amarillo) de una celda: union de las de todo el run
   const advertenciasDe = (run: HorarioEntry[], entry?: HorarioEntry) => {
@@ -630,9 +685,18 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         </div>
       )}
 
+      {profePeek && (
+        <div className="fixed bottom-6 left-6 z-50 max-w-xs px-4 py-2.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-semibold shadow-2xl shadow-black/50 backdrop-blur-sm">
+          ⇧{' '}
+          {profePeekNombre
+            ? `Bloques ocupados por ${profePeekNombre}`
+            : 'Bloques ocupados por este profesor'}
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Panel de materias pendientes (droppable para desagendar) */}
-        <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} />
+        <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} onHoverProfe={setProfeHover} />
 
         {/* Grilla días × bloques */}
         <div className="flex-1 min-w-0 overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-3">
@@ -710,6 +774,14 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                           dropRango={dropRango}
                           finHasta={sp?.fin}
                           valida={valida}
+                          ocupadaProfe={
+                            ocupadoProfe
+                              ? celdaBloqueIds.flatMap(
+                                  (bid) => ocupadoProfe.get(`${bid}:${d}`) ?? []
+                                )
+                              : []
+                          }
+                          onHoverProfe={setProfeHover}
                           esSwap={
                             !!activo &&
                             !!entry &&
@@ -733,6 +805,10 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
               )}
             </tbody>
           </table>
+          <p className="mt-1.5 text-[10px] text-slate-500">
+            Mantén <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Shift</kbd> presionado
+            y pasa el mouse sobre una materia para iluminar los bloques que ya tiene ocupados su profesor.
+          </p>
         </div>
       </div>
 
@@ -892,7 +968,8 @@ const Chip: React.FC<{
 const PendientesPanel: React.FC<{
   pendientes: { total: number; puestas: number; row: MateriaAsignableRow }[];
   puedeEditar: boolean;
-}> = ({ pendientes, puedeEditar }) => {
+  onHoverProfe?: (id: number | null) => void;
+}> = ({ pendientes, puedeEditar, onHoverProfe }) => {
   const { setNodeRef, isOver } = useDroppable({ id: 'pendientes' });
   return (
     <div
@@ -911,7 +988,7 @@ const PendientesPanel: React.FC<{
           </div>
         )}
         {pendientes.map((p) => (
-          <PendienteChip key={p.row.materia_id} p={p} puedeEditar={puedeEditar} />
+          <PendienteChip key={p.row.materia_id} p={p} puedeEditar={puedeEditar} onHoverProfe={onHoverProfe} />
         ))}
       </div>
     </div>
@@ -921,7 +998,8 @@ const PendientesPanel: React.FC<{
 const PendienteChip: React.FC<{
   p: { total: number; puestas: number; row: MateriaAsignableRow };
   puedeEditar: boolean;
-}> = ({ p, puedeEditar }) => {
+  onHoverProfe?: (id: number | null) => void;
+}> = ({ p, puedeEditar, onHoverProfe }) => {
   const restantes = p.total - p.puestas;
   const sinProfesor = !p.row.profesor_id;
   const usable = puedeEditar && restantes > 0;
@@ -963,7 +1041,11 @@ const PendienteChip: React.FC<{
       ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-400/70'
       : 'bg-red-500/10 border-red-500/40';
   return (
-    <div className={`rounded-lg border px-2 py-1.5 ${color} transition-all`}>
+    <div
+      className={`rounded-lg border px-2 py-1.5 ${color} transition-all`}
+      onMouseEnter={() => onHoverProfe?.(p.row.profesor_id ?? null)}
+      onMouseLeave={() => onHoverProfe?.(null)}
+    >
       <div className="flex items-center gap-1.5">
         {puedeEditar && restantes > 0 && (
           <div
@@ -1040,13 +1122,25 @@ const Celda: React.FC<{
   errores: ErrorClase[];
   advertencias?: string[];
   avisosParciales?: string[];
+  ocupadaProfe?: HorarioEntry[]; // ⇧+peek: clases del profesor que caen aquí
+  onHoverProfe?: (id: number | null) => void;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, onHoverProfe, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
+
+  const ocupada = !!ocupadaProfe?.length;
+  const ocupadaTxt = ocupada
+    ? `Profesor ocupado aquí: ${[
+        ...new Set(ocupadaProfe.map((e) => `${e.materia_nombre} · ${e.seccion_nombre}`)),
+      ]
+        .slice(0, 3)
+        .join(' | ')}`
+    : undefined;
 
   let cls =
     'relative rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
   if (resaltada) cls += 'ring-2 ring-red-400 animate-pulse ';
+  if (ocupada) cls += 'ring-2 ring-inset ring-amber-400/80 ';
   if (activo) {
     cls += valida
       ? esSwap
@@ -1054,17 +1148,21 @@ const Celda: React.FC<{
         : 'border-emerald-400/60 bg-emerald-500/10 '
       : 'border-slate-800/60 bg-slate-900/40 opacity-40 ';
   } else {
-    cls += entry ? 'border-transparent bg-transparent p-0 ' : 'border-slate-800 bg-slate-950/40 ';
+    cls += entry
+      ? 'border-transparent bg-transparent p-0 '
+      : ocupada
+        ? 'border-amber-500/40 bg-amber-500/10 '
+        : 'border-slate-800 bg-slate-950/40 ';
   }
   if (isOver && valida) {
     cls += esSwap ? 'ring-2 ring-indigo-400 scale-[1.03] ' : 'ring-2 ring-emerald-400 scale-[1.03] ';
   }
 
   return (
-    <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }}>
+    <td ref={setNodeRef} rowSpan={span} className={cls} style={{ height: '3.5rem' }} title={ocupadaTxt}>
       {entry && (
         <div className="absolute inset-0 p-0.5">
-          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} avisosParciales={avisosParciales} onAbrirMenu={onAbrirMenu} />
+          <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} avisosParciales={avisosParciales} onAbrirMenu={onAbrirMenu} onHoverProfe={onHoverProfe} />
         </div>
       )}
       {dropRango && (
@@ -1095,7 +1193,8 @@ const EntryChip: React.FC<{
   advertencias?: string[];
   avisosParciales?: string[];
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, advertencias, avisosParciales, onAbrirMenu }) => {
+  onHoverProfe?: (id: number | null) => void;
+}> = ({ entry, run, span, finHasta, puedeEditar, usa12h, errores, advertencias, avisosParciales, onAbrirMenu, onHoverProfe }) => {
   const esGrupo = run.length > 1;
   const singleData: DragData = {
     tipo: 'entry',
@@ -1133,6 +1232,8 @@ const EntryChip: React.FC<{
         {...single.listeners}
         {...single.attributes}
         onClick={() => onAbrirMenu(entry)}
+        onMouseEnter={() => onHoverProfe?.(entry.profesor_id)}
+        onMouseLeave={() => onHoverProfe?.(null)}
         className={`h-full w-full ${puedeEditar ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} ${
           single.isDragging ? 'opacity-30' : ''
         }`}
@@ -1154,7 +1255,11 @@ const EntryChip: React.FC<{
   // bloque completo; al pasar el mouse aparece un handler por hora a la
   // izquierda para arrastrar cada hora por separado.
   return (
-    <div className="relative h-full w-full group/card">
+    <div
+      className="relative h-full w-full group/card"
+      onMouseEnter={() => onHoverProfe?.(entry.profesor_id)}
+      onMouseLeave={() => onHoverProfe?.(null)}
+    >
       <div
         ref={group.setNodeRef}
         {...group.listeners}
