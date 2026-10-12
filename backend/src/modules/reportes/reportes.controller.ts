@@ -1,5 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import fs from 'fs';
+import path from 'path';
 import { query } from '../../db/mysql.js';
+import { audit } from '../../utils/audit.js';
 import { lapsosTotales, seTraslapan, TipoProyeccion } from '../horarios/scheduler.service.js';
 
 // Clave del reporte: identifica qué plantilla se pide ('horarios',
@@ -57,6 +60,70 @@ export async function putPlantillaHandler(request: FastifyRequest, reply: Fastif
   } catch (e: any) {
     request.log.error(e);
     return reply.status(500).send({ success: false, message: 'Error guardando la plantilla.' });
+  }
+}
+
+// ── Logo institucional de los reportes ─────────────────────────────────
+// Mismo patrón que las fotos de profesores: el archivo vive en public/ y lo
+// sirve fastify-static en /public/logo-reportes.png. Si el archivo existe,
+// el frontend lo usa en impresión y Excel; si no existe (404) cae al logo
+// empaquetado en el bundle — "restaurar" es simplemente borrar el archivo.
+const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-reportes.png');
+const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB ya decodificado
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // ‰PNG
+
+// PUT /api/reportes/logo — body { logo: 'data:image/png;base64,...' }
+// El frontend normaliza cualquier imagen a PNG por canvas antes de subirla,
+// así exceljs siempre recibe extension 'png' y el nombre de archivo es fijo.
+export async function putLogoHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { logo } = request.body as { logo?: string };
+  const match = typeof logo === 'string' ? logo.match(/^data:image\/png;base64,(.+)$/s) : null;
+  if (!match) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Formato de imagen no válido. Debe ser PNG.',
+    });
+  }
+  const buffer = Buffer.from(match[1], 'base64');
+  if (buffer.length === 0 || buffer.length > MAX_LOGO_BYTES) {
+    return reply.status(400).send({
+      success: false,
+      message: 'La imagen excede el tamaño máximo permitido de 2 MB.',
+    });
+  }
+  if (buffer.length < 8 || !buffer.subarray(0, 4).equals(PNG_MAGIC)) {
+    return reply.status(400).send({ success: false, message: 'El contenido no es un PNG válido.' });
+  }
+  try {
+    fs.mkdirSync(path.dirname(LOGO_PATH), { recursive: true });
+    fs.writeFileSync(LOGO_PATH, buffer);
+    audit(request, {
+      accion: 'reportes.logo',
+      entidad: 'config',
+      detalle: { op: 'actualizar', bytes: buffer.length },
+      pnfSagaId: null,
+    });
+    return reply.send({ success: true, message: 'Logo actualizado. Se usará en los próximos reportes.' });
+  } catch (e: any) {
+    request.log.error(e);
+    return reply.status(500).send({ success: false, message: 'Error guardando el logo.' });
+  }
+}
+
+// DELETE /api/reportes/logo — borra el archivo → vuelve el logo empaquetado.
+export async function deleteLogoHandler(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    if (fs.existsSync(LOGO_PATH)) fs.unlinkSync(LOGO_PATH);
+    audit(request, {
+      accion: 'reportes.logo',
+      entidad: 'config',
+      detalle: { op: 'restaurar' },
+      pnfSagaId: null,
+    });
+    return reply.send({ success: true, message: 'Logo restaurado al predeterminado.' });
+  } catch (e: any) {
+    request.log.error(e);
+    return reply.status(500).send({ success: false, message: 'Error restaurando el logo.' });
   }
 }
 

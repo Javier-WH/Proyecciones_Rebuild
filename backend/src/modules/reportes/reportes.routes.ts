@@ -1,5 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import { getPlantillaHandler, putPlantillaHandler, resumenHandler } from './reportes.controller.js';
+import {
+  getPlantillaHandler,
+  putPlantillaHandler,
+  resumenHandler,
+  putLogoHandler,
+  deleteLogoHandler,
+} from './reportes.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
 const GESTORES = ['SUPER_USUARIO', 'ADMINISTRADOR'] as const;
@@ -14,5 +20,17 @@ export async function reportesRoutes(fastify: FastifyInstance) {
     '/plantilla/:reporte',
     { preHandler: [authenticate, authorizeRoles(...GESTORES)] },
     putPlantillaHandler
+  );
+  // Logo institucional de los reportes (archivo en public/, global). Solo
+  // gestores lo cambian; cualquier cliente lo lee sin auth vía /public/.
+  fastify.put(
+    '/logo',
+    { preHandler: [authenticate, authorizeRoles(...GESTORES)], bodyLimit: 3 * 1024 * 1024 },
+    putLogoHandler
+  );
+  fastify.delete(
+    '/logo',
+    { preHandler: [authenticate, authorizeRoles(...GESTORES)] },
+    deleteLogoHandler
   );
 }

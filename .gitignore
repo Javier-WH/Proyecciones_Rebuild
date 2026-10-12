@@ -27,6 +27,10 @@ frontend/.env
 logs/
 npm-debug.log*
 
+# Archivos subidos en runtime (fotos de profesores, logo de reportes)
+backend/public/profesores/
+backend/public/logo-reportes.png
+
 # Sistema operativo
 Thumbs.db
 .DS_Store

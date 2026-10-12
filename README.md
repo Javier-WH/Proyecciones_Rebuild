@@ -271,6 +271,7 @@ Guards (`backend/src/plugins/authGuard.ts`): `authenticate` verifica el JWT (fir
 - **Respuesta uniforme**: `{ success: boolean, message?: string, data?: any }`.
 - **Migraciones auto-ejecutables**: `init.ts` en el arranque — sin herramienta externa de migraciones.
 - **Auditoría**: helper `audit()` registra acción/entidad/usuario/PNF en `audit_log` desde los handlers de mutación.
+- **Logo de reportes configurable**: menú ⚙ → "Logo de Reportes" permite a un gestor subir el membrete institucional (se normaliza a PNG por canvas, máx 800px/2 MB) → `PUT /api/reportes/logo` guarda `backend/public/logo-reportes.png`. `utils/logo.ts` prefiere ese archivo y cae al logo empaquetado si no existe; "Restaurar" borra el archivo. Aplica a impresión y Excel de horarios y carga docente sin tocar código — útil si la institución actualiza su identidad visual.
 - **Logger de errores persistente** (`utils/errorLog.ts`): el stream de pino duplica a stdout (PM2 lo captura igual) y los logs de nivel error/fatal se agregan a `backend/logs/YYYY-MM-DD.log` — un archivo de texto por día, ordenable por nombre, con método/ruta/reqId/mensaje/stack. Captura todos los `request.log.error` de los controllers sin tocarlos, más `unhandledRejection`/`uncaughtException`. Al arrancar se borran los `.log` de más de 30 días; un fallo de escritura nunca tumba la app.
 - **Estado de red global (frontend)**: `client.ts` mantiene contador de peticiones + etiqueta + `enLinea`; `apiFetch` acepta `etiqueta` (texto contextual) y `silencioso` (fetchs de fondo que no disparan indicador). `IndicadorRed` se suscribe y renderiza el feedback (ver §12).
 - **Frontend**: Context API (`AuthContext`, `PnfColorContext`), componentes de página + modales, guardado con debounce (plantillas de reporte ~800 ms), exportación cliente con exceljs + impresión HTML en iframe oculto.
@@ -456,6 +457,8 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 | GET | `/resumen` | JWT | Métricas del periodo para las tarjetas del dashboard |
 | GET | `/plantilla/:reporte` | JWT | Plantilla guardada (`horarios_seccion`, `horarios_aulas`, `horarios_profesores`, `carga_docente`) |
 | PUT | `/plantilla/:reporte` | ESCRITORES | Guardar plantilla (PROFESOR/REGULAR → 403) |
+| PUT | `/logo` | ESCRITORES | Subir logo institucional (PNG base64 ≤ 2 MB) → `backend/public/logo-reportes.png` |
+| DELETE | `/logo` | ESCRITORES | Borrar el logo personalizado → vuelve el empaquetado |
 
 ### `/api/auditoria` — bitácora de cambios
 

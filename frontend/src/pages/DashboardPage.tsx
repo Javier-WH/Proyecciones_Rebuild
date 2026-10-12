@@ -18,6 +18,7 @@ import { ProfesorPanelModal } from './ProfesorPanelModal.js';
 import { PermisosRolModal } from './PermisosRolModal.js';
 import { MiCuentaModal } from './MiCuentaModal.js';
 import { HistorialModal } from './HistorialModal.js';
+import { LogoReportesModal } from './LogoReportesModal.js';
 import { BusquedaGlobal } from './BusquedaGlobal.js';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUniversidad from '../images/UPTLL_logo_transparent_outlined.png';
@@ -48,7 +49,8 @@ import {
   Info,
   HelpCircle,
   UserRound,
-  History
+  History,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -71,6 +73,7 @@ export const DashboardPage: React.FC = () => {
   const [permisosOpen, setPermisosOpen] = useState(false);
   const [miCuentaOpen, setMiCuentaOpen] = useState(false);
   const [historialOpen, setHistorialOpen] = useState(false);
+  const [logoReportesOpen, setLogoReportesOpen] = useState(false);
   const [buscarOpen, setBuscarOpen] = useState(false);
   const [resumen, setResumen] = useState<{
     periodo: string | null;
@@ -490,6 +493,19 @@ export const DashboardPage: React.FC = () => {
                             <button
                               onClick={() => {
                                 setConfigMenuOpen(false);
+                                setLogoReportesOpen(true);
+                              }}
+                              className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <ImageIcon className="w-4 h-4 text-cyan-400" />
+                              <div className="text-left">
+                                <div className="font-semibold text-xs">Logo de Reportes</div>
+                                <div className="text-[10px] text-slate-500">Imagen institucional de impresiones</div>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setConfigMenuOpen(false);
                                 setHistorialOpen(true);
                               }}
                               className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
@@ -815,6 +831,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Historial — bitácora de cambios (Master: todo, Coordinador: su PNF) */}
       {historialOpen && <HistorialModal onClose={() => setHistorialOpen(false)} />}
+      <LogoReportesModal isOpen={logoReportesOpen} onClose={() => setLogoReportesOpen(false)} />
 
       {/* Buscador global (Ctrl+K) */}
       <BusquedaGlobal

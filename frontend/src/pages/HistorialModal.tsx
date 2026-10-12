@@ -77,6 +77,7 @@ const ACCION_LABEL: Record<string, string> = {
   'periodo.crear': 'Periodo creado',
   'periodo.editar': 'Periodo editado',
   'periodo.eliminar': 'Periodo eliminado',
+  'reportes.logo': 'Logo de reportes modificado',
 };
 
 const accionBadge = (accion: string) => {
