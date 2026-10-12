@@ -2,11 +2,24 @@ import { buildApp } from './app.js';
 import { env } from './config/env.js';
 import { initializeDatabase } from './db/init.js';
 import { query } from './db/mysql.js';
+import { limpiarLogsViejos, registrarExcepcion } from './utils/errorLog.js';
 import fs from 'fs';
 import path from 'path';
 
+// Errores fuera del ciclo request/response también caen al archivo del día;
+// en uncaughtException PM2 reiniciará el proceso tras registrar el fallo.
+process.on('unhandledRejection', (err) =>
+  registrarExcepcion('UNHANDLED_REJECTION', err)
+);
+process.on('uncaughtException', (err) =>
+  registrarExcepcion('UNCAUGHT_EXCEPTION', err)
+);
+
 async function startServer() {
   try {
+    // Rotación de logs de error: conserva 30 días (logs/YYYY-MM-DD.log)
+    limpiarLogsViejos();
+
     // Asegurar directorio public
     const publicDir = path.join(process.cwd(), 'public');
     if (!fs.existsSync(publicDir)) {

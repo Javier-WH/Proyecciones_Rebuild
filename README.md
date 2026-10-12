@@ -159,6 +159,7 @@ ProyeccionesRebuild/
 │       │   └── externo/          # API de solo lectura (API key) para asistencias
 │       └── utils/
 │           ├── security.ts       # hashPassword / verifyPassword (bcryptjs)
+│           ├── errorLog.ts       # stream pino→stdout + errores a logs/YYYY-MM-DD.log
 │           └── texto.ts          # normTxt / normalizarRespuesta
 └── frontend/
     └── src/
@@ -270,6 +271,7 @@ Guards (`backend/src/plugins/authGuard.ts`): `authenticate` verifica el JWT (fir
 - **Respuesta uniforme**: `{ success: boolean, message?: string, data?: any }`.
 - **Migraciones auto-ejecutables**: `init.ts` en el arranque — sin herramienta externa de migraciones.
 - **Auditoría**: helper `audit()` registra acción/entidad/usuario/PNF en `audit_log` desde los handlers de mutación.
+- **Logger de errores persistente** (`utils/errorLog.ts`): el stream de pino duplica a stdout (PM2 lo captura igual) y los logs de nivel error/fatal se agregan a `backend/logs/YYYY-MM-DD.log` — un archivo de texto por día, ordenable por nombre, con método/ruta/reqId/mensaje/stack. Captura todos los `request.log.error` de los controllers sin tocarlos, más `unhandledRejection`/`uncaughtException`. Al arrancar se borran los `.log` de más de 30 días; un fallo de escritura nunca tumba la app.
 - **Estado de red global (frontend)**: `client.ts` mantiene contador de peticiones + etiqueta + `enLinea`; `apiFetch` acepta `etiqueta` (texto contextual) y `silencioso` (fetchs de fondo que no disparan indicador). `IndicadorRed` se suscribe y renderiza el feedback (ver §12).
 - **Frontend**: Context API (`AuthContext`, `PnfColorContext`), componentes de página + modales, guardado con debounce (plantillas de reporte ~800 ms), exportación cliente con exceljs + impresión HTML en iframe oculto.
 - **Snapshot denormalizado**: `horario_entries.profesor_id` se sincroniza al cambiar la asignación (los horarios no se rompen al reasignar).
@@ -713,6 +715,7 @@ La suite cubre la lógica más delicada: semántica de conflictos del generador 
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
+| ¿Dónde quedan los errores? | — | `backend/logs/YYYY-MM-DD.log` (un archivo por día, se conservan 30 días) + `~/.pm2/logs/proyecciones-*.log` |
 | `ECONNREFUSED` al arrancar backend | MariaDB/MySQL apagado o `DB_*` mal | Verificar servicio y `.env` |
 | Backend no arranca en producción con error de `JWT_SECRET` | Falta la variable (obligatoria en prod) | Definirla en `backend/.env` |
 | `503` en `/api/externo/*` | `EXTERNAL_API_KEY` vacía | Definirla en `backend/.env` y reiniciar |

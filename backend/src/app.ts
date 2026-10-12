@@ -20,10 +20,13 @@ import { reportesRoutes } from './modules/reportes/reportes.routes.js';
 import { externoRoutes } from './modules/externo/externo.routes.js';
 import { auditoriaRoutes } from './modules/auditoria/auditoria.routes.js';
 import { buscarRoutes } from './modules/buscar/buscar.routes.js';
+import { streamLogErrores } from './utils/errorLog.js';
 
 export function buildApp() {
   const app = Fastify({
-    logger: true,
+    // Stream custom: stdout intacto (PM2) + los errores se agregan a
+    // backend/logs/YYYY-MM-DD.log (ver utils/errorLog.ts).
+    logger: { stream: streamLogErrores() },
     // El token va en header Authorization — la clave API externa también.
     // Confiar en el primer salto de proxy (X-Forwarded-For) si el deploy lo
     // coloca detrás de un reverse proxy.
