@@ -804,9 +804,15 @@ export const DashboardPage: React.FC = () => {
         )}
       </main>
 
-      {/* Footer */}
+      {/* Footer — el texto abre el modal "Acerca de" */}
       <footer className="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-400">
-        <p>UPTLL Juana Ramírez — Sistema de Proyecciones Académicas © {new Date().getFullYear()}</p>
+        <button
+          onClick={() => setAcercaOpen(true)}
+          className="hover:text-slate-200 transition-colors cursor-pointer"
+          title="Acerca de"
+        >
+          UPTLL Juana Ramírez — Sistema de Proyecciones Académicas © {new Date().getFullYear()}
+        </button>
       </footer>
 
       <UsuariosModal
