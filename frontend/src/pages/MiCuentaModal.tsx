@@ -195,7 +195,7 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/60 flex flex-col max-h-[92vh]"
+        className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/60 flex flex-col max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -343,7 +343,7 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <>
                 <div className="space-y-3">
                   {slots.map((slot, i) => (
-                    <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_150px] gap-2">
+                    <div key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_180px] gap-2">
                       <select
                         className={inputCls}
                         value={slot.idx}
