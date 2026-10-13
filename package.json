@@ -9,7 +9,8 @@
     "dev": "concurrently --kill-others \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build:backend": "npm --prefix backend run build",
     "build:frontend": "npm --prefix frontend run build",
-    "build": "npm run build:backend && npm run build:frontend",
+    "build:compile": "npm run build:backend && npm run build:frontend",
+    "build": "bash deploy.sh",
     "start:backend": "npm --prefix backend run start"
   },
   "devDependencies": {
