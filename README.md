@@ -106,7 +106,8 @@ Scripts disponibles:
 | `npm run dev` | Backend (tsx watch) + frontend (vite) en paralelo |
 | `npm run dev:backend` | Solo backend, recarga en caliente |
 | `npm run dev:frontend` | Solo frontend |
-| `npm run build` | Compila backend (`tsc` → `dist/`) y frontend (`tsc && vite build`) |
+| `npm run build` | **Bundle de despliegue**: `deploy.sh` compila todo y arma `build/` autocontenido (backend `dist` + deps de producción + frontend `dist` + `.env` + script PM2) — es lo que se copia al servidor |
+| `npm run build:compile` | Solo compila backend (`tsc`) y frontend (`vite build`), sin armar el bundle |
 | `npm run start:backend` | Producción: `node dist/server.js` |
 | `npm --prefix backend test` | Suite de tests unitarios (Vitest) |
 | `npm --prefix backend run db:init` | Ejecuta migraciones/seed sin levantar el servidor |
@@ -153,21 +154,25 @@ ProyeccionesRebuild/
 │       │   ├── perfiles/         # perfiles docentes
 │       │   ├── usuarios/         # gestión de usuarios (MASTER) + auto-edición /me
 │       │   ├── horarios/         # aulas, turnos, bloques, entries, generador
-│       │   ├── reportes/         # plantillas de encabezado + resumen para dashboard
+│       │   ├── reportes/         # plantillas de encabezado + resumen/estadísticas del periodo
 │       │   ├── auditoria/        # bitácora de cambios (lectura filtrada por rol/PNF)
 │       │   ├── buscar/           # búsqueda global (Ctrl+K)
+│       │   ├── sync/             # token de cambios para refresco colaborativo
 │       │   └── externo/          # API de solo lectura (API key) para asistencias
 │       └── utils/
 │           ├── security.ts       # hashPassword / verifyPassword (bcryptjs)
+│           ├── periodo.ts        # periodoDeLaPeticion / periodoEsEscribible
 │           ├── errorLog.ts       # stream pino→stdout + errores a logs/YYYY-MM-DD.log
 │           └── texto.ts          # normTxt / normalizarRespuesta
 └── frontend/
     └── src/
         ├── api/client.ts         # apiFetch() + estado global de red (pendientes,
         │                         #  etiqueta, timeout 45s, online/offline)
-        ├── context/              # AuthContext, PnfColorContext
+        ├── context/              # AuthContext, PnfColorContext, PeriodoContext
+        ├── hooks/                # useSyncPoll (token de cambios: foco + cada 60 s)
         ├── pages/
         │   ├── IndicadorRed.tsx  # barra/velo "esperando servidor" + banner sin respuesta
+        │   ├── estadisticas/     # panel de estadísticas del periodo (sub-vista de Inicio)
         │   └── horarios/         # editor: grilla drag&drop, peeks ⇧/Ctrl, undo
         └── utils/                # plantillas.ts, logo.ts, print.ts
 ```
@@ -237,6 +242,7 @@ sequenceDiagram
 Reglas específicas del **Coordinador** (`ADMINISTRADOR`), aplicadas en cada handler:
 
 - **Periodos**: solo lectura — crear/editar/eliminar es exclusivo de Master.
+- **Selector de periodo de trabajo** (menú ⚙): Master y Coordinador pueden operar sobre el periodo ACTIVO o cualquiera en PLANIFICACION. La selección es individual (por usuario, en su navegador) y **no** cambia el contexto de los demás; dos usuarios que seleccionen el mismo periodo ven y editan los mismos datos. `REGULAR`/`PROFESOR` operan siempre sobre el ACTIVO.
 - **Proyecciones**: crear/editar/activar/borrar/copiar-periodo solo con `pnf_saga_id` igual al suyo.
 - **Horarios**: muta entries/genera/resuelve aulas solo de su PNF; la lectura de la grilla no se filtra.
 - **Carga docente**: asigna solo materias de su PNF **a cualquier profesor**; puede *quitar* una materia de otro PNF únicamente cuando el profesor asignado es de su PNF.
@@ -274,7 +280,9 @@ Guards (`backend/src/plugins/authGuard.ts`): `authenticate` verifica el JWT (fir
 - **Logo de reportes configurable**: menú ⚙ → "Logo de Reportes" permite a un gestor subir el membrete institucional (se normaliza a PNG por canvas, máx 800px/2 MB) → `PUT /api/reportes/logo` guarda `backend/public/logo-reportes.png`. `utils/logo.ts` prefiere ese archivo y cae al logo empaquetado si no existe; "Restaurar" borra el archivo. Aplica a impresión y Excel de horarios y carga docente sin tocar código — útil si la institución actualiza su identidad visual.
 - **Logger de errores persistente** (`utils/errorLog.ts`): el stream de pino duplica a stdout (PM2 lo captura igual) y los logs de nivel error/fatal se agregan a `backend/logs/YYYY-MM-DD.log` — un archivo de texto por día, ordenable por nombre, con método/ruta/reqId/mensaje/stack. Captura todos los `request.log.error` de los controllers sin tocarlos, más `unhandledRejection`/`uncaughtException`. Al arrancar se borran los `.log` de más de 30 días; un fallo de escritura nunca tumba la app.
 - **Estado de red global (frontend)**: `client.ts` mantiene contador de peticiones + etiqueta + `enLinea`; `apiFetch` acepta `etiqueta` (texto contextual) y `silencioso` (fetchs de fondo que no disparan indicador). `IndicadorRed` se suscribe y renderiza el feedback (ver §12).
-- **Frontend**: Context API (`AuthContext`, `PnfColorContext`), componentes de página + modales, guardado con debounce (plantillas de reporte ~800 ms), exportación cliente con exceljs + impresión HTML en iframe oculto.
+- **Frontend**: Context API (`AuthContext`, `PnfColorContext`, `PeriodoContext`), componentes de página + modales, guardado con debounce (plantillas de reporte ~800 ms), exportación cliente con exceljs + impresión HTML en iframe oculto.
+- **Periodo de trabajo por usuario**: `PeriodoContext` guarda la selección en `localStorage` por usuario; las páginas la envían como `?periodo=` y el backend la resuelve con `periodoDeLaPeticion()` (`utils/periodo.ts`). Períodos en PLANIFICACION son escribibles solo para Master/Coordinador; un periodo CERRADO es de solo lectura para todos.
+- **Sincronización ligera (sin WebSocket)**: `GET /api/sync` devuelve `MAX(audit_log.id)` de las entidades colaborativas; `useSyncPoll` lo consulta al enfocar la ventana y cada 60 s solo con pestaña visible (single-flight, `setTimeout` encadenado) y dispara un refetch de fondo únicamente si el token cambió — pausado durante drag & drop, menús abiertos y mutaciones en vuelo. Además, cualquier 404/409 en una mutación refetchea la vista afectada.
 - **Snapshot denormalizado**: `horario_entries.profesor_id` se sincroniza al cambiar la asignación (los horarios no se rompen al reasignar).
 
 ---
@@ -343,6 +351,8 @@ erDiagram
 ## 11. API REST — catálogo de endpoints
 
 Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRoles` indicado.
+
+**Convención de periodo**: las lecturas y escrituras operan sobre `?periodo=` (o `body.periodo`), resuelto por `utils/periodo.ts`. Sin el parámetro se usa el periodo ACTIVO; solo Master/Coordinador pueden apuntar a uno en PLANIFICACION (los CERRADOS son solo lectura).
 
 ### `/api/health` y estáticos
 
@@ -454,7 +464,8 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| GET | `/resumen` | JWT | Métricas del periodo para las tarjetas del dashboard |
+| GET | `/resumen` | JWT | Métricas del periodo (`?periodo=`): conteos + `docentes_con_carga` (solo docentes con asignación, no el total global). Ya no la consume el dashboard — queda disponible para reuso |
+| GET | `/estadisticas` | JWT | Panel de estadísticas del periodo: cobertura PNF×trayecto (trayectos esperados desde la malla SAGA, caché 1 h, fallback al historial), uso de aulas, unidades sin profesor / fuera del horario con detalle, turnos, conflictos, docentes con carga, accesos. Coord: acotado a su PNF |
 | GET | `/plantilla/:reporte` | JWT | Plantilla guardada (`horarios_seccion`, `horarios_aulas`, `horarios_profesores`, `carga_docente`) |
 | PUT | `/plantilla/:reporte` | ESCRITORES | Guardar plantilla (PROFESOR/REGULAR → 403) |
 | PUT | `/logo` | ESCRITORES | Subir logo institucional (PNG base64 ≤ 2 MB) → `backend/public/logo-reportes.png` |
@@ -465,6 +476,12 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/` | MASTER + COORDINADOR | Registros de `audit_log`. Master los ve todos; Coordinador **solo los de su PNF** (filtro forzado en servidor). Query: `?entidad=&accion=&pnf_saga_id=&username=&desde=&hasta=&limite=≤500&offset=` |
+
+### `/api/sync` — token de cambios
+
+|| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+|| GET | `/` | JWT | `{ v }` = `MAX(audit_log.id)` de entidades colaborativas (horarios, asignaciones, proyecciones, periodos, aulas, turnos, profesores, config). El frontend lo consulta al enfocar la ventana y cada 60 s con la pestaña visible; refetchea datos solo si `v` cambió |
 
 ### `/api/buscar` — búsqueda global
 
@@ -666,24 +683,21 @@ CORS_ORIGINS=          # vacío: todo es same-origin
 ### Pasos
 
 ```bash
-# 1. Build
-cd frontend && npm ci && npm run build
-cd ../backend && npm ci && npm run build
+# 1. Build → bundle autocontenido en build/ (backend dist + deps de
+#    producción + frontend dist + .env + ecosystem.config.js para PM2).
+#    El servidor NO necesita npm install.
+npm run build        # ejecuta deploy.sh — ver comentarios al inicio del script
 
-# 2. Firewall: solo el 4000 (MySQL se queda en localhost)
+# 2. Copiar la carpeta build/ completa al servidor
+#    (si ya existe un .env configurado allí, respaldarlo antes y restaurarlo
+#    después — instrucciones dentro de build/LEEME.txt)
+
+# 3. Firewall: solo el 4000 (MySQL se queda en localhost)
 sudo ufw allow 4000/tcp
 
-# 3. PM2 con cwd al backend (dotenv busca .env relativo a cwd)
-cat > ecosystem.config.js <<'EOF'
-module.exports = {
-  apps: [{
-    name: 'proyecciones',
-    script: 'dist/server.js',
-    cwd: './backend',
-    env: { NODE_ENV: 'production' },
-  }],
-};
-EOF
+# 4. En el servidor: editar build/backend/.env y arrancar con PM2
+#    (el ecosystem.config.js ya viene generado con cwd correcto)
+cd build/backend
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup systemd   # ejecuta el comando que imprime

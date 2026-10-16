@@ -72,7 +72,7 @@
   <li>Armar el <strong>horario de clases</strong> (a mano en una grilla, o de forma <strong>automática</strong> respetando aulas, turnos y disponibilidad).</li>
   <li><strong>Imprimir o exportar a Excel</strong> los horarios y la carga docente, con el membrete institucional.</li>
 </ul>
-<div class="nota">💡 <strong>Consejo:</strong> trabaje siempre con el <em>periodo activo</em>. El sistema muestra el periodo actual en la parte superior de cada pantalla.</div>
+<div class="nota">💡 <strong>Consejo:</strong> normalmente se trabaja con el <em>periodo activo</em>. El sistema muestra el periodo en uso en la parte superior de cada pantalla; si es Master o Coordinador puede cambiarlo temporalmente a un periodo en <em>planificación</em> desde el menú ⚙ (ver la sección 4).</div>
 
 <h2>2. Cómo entrar al sistema</h2>
 <ol>
@@ -88,16 +88,16 @@
 <p><strong>Los profesores no usan usuario y contraseña</strong>: en la misma línea, a la derecha, está el enlace <strong>"Ingresar como profesor"</strong> (Acceso Docente) donde solo escriben su número de cédula. Vea la sección 10.</p>
 
 <h2>3. Conociendo la pantalla</h2>
-<p>Al entrar verá la página principal. A la izquierda hay una <strong>barra lateral</strong> con las secciones del sistema:</p>
+<p>Al entrar verá la página principal. En la parte superior hay una <strong>barra de navegación</strong> con las secciones del sistema:</p>
 <table>
   <tr><th>Sección</th><th>Para qué sirve</th></tr>
-  <tr><td><strong>Inicio</strong></td><td>Resumen general del sistema</td></tr>
+  <tr><td><strong>Inicio</strong></td><td>Vista de resumen con los módulos y vista de <strong>Estadísticas</strong> del periodo</td></tr>
   <tr><td><strong>Proyecciones</strong></td><td>Crear y administrar las proyecciones de cada PNF</td></tr>
   <tr><td><strong>Profesores</strong></td><td>Lista de docentes, sus datos, perfiles y disponibilidad</td></tr>
   <tr><td><strong>Carga Docente</strong></td><td>Asignar qué profesor dicta cada materia</td></tr>
   <tr><td><strong>Horarios</strong></td><td>La grilla de clases: armar, mover y generar el horario</td></tr>
 </table>
-<figure class="captura"><img src="screenshots/02-inicio.png" alt="Página principal mostrando la barra lateral y el resumen."><figcaption><strong>Captura 2.</strong> Página principal mostrando la barra lateral y el resumen.</figcaption></figure>
+<figure class="captura"><img src="screenshots/02-inicio.png" alt="Página principal mostrando la barra de navegación superior y el resumen."><figcaption><strong>Captura 2.</strong> Página principal mostrando la barra de navegación superior y el resumen.</figcaption></figure>
 <p>Botones que verá en casi todas las pantallas:</p>
 <ul>
   <li><strong>Actualizar</strong> (icono de flechas circulares): vuelve a cargar los datos más recientes.</li>
@@ -113,6 +113,23 @@
   <li><strong>Cerrar Sesión</strong>.</li>
 </ul>
 <p>También en la página principal, la tarjeta <strong>"Nivel de Permiso"</strong> se puede pulsar para ver la lista exacta de lo que su rol puede y no puede hacer.</p>
+<h3>Las dos vistas de Inicio</h3>
+<p>La página principal tiene dos vistas que se alternan con los botones <strong>Resumen | Estadísticas</strong> de la parte superior:</p>
+<ul>
+  <li><strong>Resumen</strong> (la que aparece al entrar): las tarjetas de acceso a cada módulo del sistema.</li>
+  <li><strong>Estadísticas</strong>: un panel con el estado del periodo seleccionado:
+    <ul>
+      <li><strong>Cobertura por trayecto</strong>: cuántos trayectos de cada PNF tienen proyección (por ejemplo <em>Informática 3/5</em>) y cuáles faltan. Los trayectos esperados se leen de la malla vigente en SAGA; si SAGA no responde, se usa el historial de periodos anteriores y la tarjeta se marca como <em>estimado</em>.</li>
+      <li><strong>Uso de aulas</strong>: qué tan ocupado está cada salón.</li>
+      <li><strong>Materias sin profesor asignado</strong>: materias proyectadas sin docente en Carga Docente, agrupadas por PNF.</li>
+      <li><strong>Materias fuera del horario</strong>: materias proyectadas que nadie ha puesto aún en la grilla de Horarios. Cada fila es un enlace: al hacer clic se abre el horario de esa sección y lapso exactos.</li>
+      <li><strong>Conflictos de horario</strong>, <strong>turnos disponibles</strong> y <strong>accesos al sistema</strong> (quiénes han iniciado sesión).</li>
+    </ul>
+  </li>
+</ul>
+<div class="nota">ℹ️ La vista de Estadísticas puede tardar unos segundos la primera vez: consulta a SAGA los trayectos de cada PNF. Los docentes contados son solo los que <strong>tienen carga asignada en el periodo</strong> — no el total de la base de datos, que incluye docentes de otras sedes.</div>
+<h3>El selector de periodo (menú ⚙)</h3>
+<p>Si es Master o Coordinador, el menú de la tuerca incluye un selector <strong>"Periodo de trabajo"</strong> con el periodo activo y los que están en planificación — ver la sección siguiente.</p>
 
 <h2>4. Periodos académicos</h2>
 <p>Un <strong>periodo</strong> es el lapso académico completo (por ejemplo <em>2026-2027</em>). Las proyecciones y horarios pertenecen a un periodo.</p>
@@ -124,12 +141,21 @@
 </ul>
 <figure class="captura"><img src="screenshots/03-periodos.png" alt="Pantalla de Periodos Académicos con el periodo activo visible."><figcaption><strong>Captura 3.</strong> Pantalla de Periodos Académicos con el periodo activo visible.</figcaption></figure>
 <div class="aviso">⚠️ <strong>Importante:</strong> solo debe haber <strong>un</strong> periodo ACTIVO a la vez. El horario y los reportes se generan sobre el periodo activo.</div>
+<h3>Trabajar sobre un periodo en planificación (Master y Coordinador)</h3>
+<p>Desde el menú ⚙ (tuerca) puede elegir un <strong>periodo de trabajo</strong> distinto al activo — por ejemplo el próximo año escolar, mientras aún está en estado <em>PLANIFICACIÓN</em>:</p>
+<ul>
+  <li>Todas las pantallas pasan a operar sobre ese periodo: Proyecciones, Carga Docente, Horarios y Estadísticas.</li>
+  <li>Una <strong>franja amarilla</strong> bajo la barra superior (y un punto amarillo sobre la tuerca) le recuerdan que está editando la planificación.</li>
+  <li>La selección es <strong>personal</strong>: los demás usuarios siguen viendo el periodo activo. Si dos personas seleccionan el mismo periodo en planificación, ambas ven y editan los mismos datos.</li>
+  <li>Para volver al periodo en curso, abra el selector y elija el periodo ACTIVO.</li>
+</ul>
+<div class="nota">ℹ️ Los periodos <strong>cerrados</strong> no se pueden seleccionar como periodo de trabajo, y la selección solo existe en su navegador (no afecta a otros usuarios ni a otras computadoras donde entre con su cuenta).</div>
 
 <h2>5. Crear una proyección</h2>
 <p>La <strong>proyección</strong> es la oferta académica de un trayecto de un PNF para el periodo: qué materias se dictarán y en cuántas secciones.</p>
 <h3>Paso a paso</h3>
 <ol>
-  <li>En la barra lateral, haga clic en <strong>Proyecciones</strong>.</li>
+  <li>En la barra superior, haga clic en <strong>Proyecciones</strong>.</li>
   <li>Presione el botón <strong>Nueva Proyección</strong> (si es la primera vez, verá el botón <strong>"Crear mi primera proyección"</strong> en el centro de la pantalla).</li>
   <li>En la ventana que se abre, seleccione:
     <ul>
@@ -318,7 +344,9 @@ Desde la ventana del reporte, pestaña <strong>Encabezado</strong> — se guarda
 <p><strong>El profesor dice que no puede entrar.</strong><br>
 Verifique que escribe la cédula <strong>sin puntos ni letra inicial</strong> y que su ficha está <strong>activa</strong> en la sección Profesores.</p>
 <p><strong>¿Dónde veo qué aulas están libres?</strong><br>
-En Horarios, cambie a la vista de <strong>agendas por aula</strong>: cada salón muestra sus clases del lapso.</p>
+En Horarios, cambie a la vista de <strong>agendas por aula</strong>: cada salón muestra sus clases del lapso. También en Inicio → <strong>Estadísticas</strong> hay un gráfico de uso de aulas del periodo.</p>
+<p><strong>¿Veo enseguida los cambios que hace otro coordinador?</strong><br>
+Casi: la pantalla se refresca sola cuando vuelve a la ventana y aproximadamente cada minuto mientras la tiene abierta. Si dos personas escriben a la vez y hay un choque (misma aula, sección o profesor ocupados), el sistema muestra el mensaje de conflicto y actualiza la vista automáticamente.</p>
 
 <hr>
 <p style="text-align:center;color:#64748b;font-size:9pt">Manual generado para el Sistema de Proyecciones Académicas UPTLL.<br>Para soporte técnico contacte al administrador del sistema.</p>

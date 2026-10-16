@@ -35,7 +35,7 @@ En resumen, el sistema le permite:
 - Armar el **horario de clases** (a mano en una grilla, o de forma **automática** respetando aulas, turnos y disponibilidad).
 - **Imprimir o exportar a Excel** los horarios y la carga docente, con el membrete institucional.
 
-> 💡 **Consejo:** trabaje siempre con el *periodo activo*. El sistema muestra el periodo actual en la parte superior de cada pantalla.
+> 💡 **Consejo:** normalmente se trabaja con el *periodo activo*. El sistema muestra el periodo en uso en la parte superior de cada pantalla; si es Master o Coordinador puede cambiarlo temporalmente a un periodo en *planificación* desde el menú ⚙ (ver la sección [4. Periodos académicos](#4-periodos-académicos)).
 
 ---
 
@@ -61,17 +61,17 @@ Debajo del botón de acceso hay un enlace **"¿Olvidaste tu contraseña?"**. El 
 
 ## 3. Conociendo la pantalla
 
-Al entrar verá la página principal. A la izquierda hay una **barra lateral** con las secciones del sistema:
+Al entrar verá la página principal. En la parte superior hay una **barra de navegación** con las secciones del sistema:
 
 | Sección | Para qué sirve |
 |---|---|
-| 🏠 **Inicio** | Resumen general del sistema |
+| 🏠 **Inicio** | Vista de resumen con los módulos y vista de **Estadísticas** del periodo |
 | 📋 **Proyecciones** | Crear y administrar las proyecciones de cada PNF |
 | 👤 **Profesores** | Lista de docentes, sus datos, perfiles y disponibilidad |
 | 📊 **Carga Docente** | Asignar qué profesor dicta cada materia |
 | 🗓️ **Horarios** | La grilla de clases: armar, mover y generar el horario |
 
-![Captura 2 — página principal mostrando la barra lateral y el resumen.](screenshots/02-inicio.png)
+![Captura 2 — página principal mostrando la barra de navegación superior y el resumen.](screenshots/02-inicio.png)
 
 Botones que verá en casi todas las pantallas:
 
@@ -90,6 +90,24 @@ En la esquina superior derecha hay un icono de **engranaje** con opciones de con
 
 También en la página principal, la tarjeta **"Nivel de Permiso"** se puede pulsar para ver la lista exacta de lo que su rol puede y no puede hacer.
 
+### Las dos vistas de Inicio
+
+La página principal tiene dos vistas que se alternan con los botones **Resumen | Estadísticas** de la parte superior:
+
+- **Resumen** (la que aparece al entrar): las tarjetas de acceso a cada módulo del sistema.
+- **Estadísticas**: un panel con el estado del periodo seleccionado:
+  - **Cobertura por trayecto**: cuántos trayectos de cada PNF tienen proyección (por ejemplo *Informática 3/5*) y cuáles faltan. Los trayectos esperados se leen de la malla vigente en SAGA; si SAGA no responde, se usa el historial de periodos anteriores y la tarjeta se marca como *estimado*.
+  - **Uso de aulas**: qué tan ocupado está cada salón.
+  - **Materias sin profesor asignado**: materias proyectadas sin docente en Carga Docente, agrupadas por PNF.
+  - **Materias fuera del horario**: materias proyectadas que nadie ha puesto aún en la grilla de Horarios. Cada fila es un enlace: al hacer clic se abre el horario de esa sección y lapso exactos.
+  - **Conflictos de horario**, **turnos disponibles** y **accesos al sistema** (quiénes han iniciado sesión).
+
+> ℹ️ La vista de Estadísticas puede tardar unos segundos la primera vez: consulta a SAGA los trayectos de cada PNF. Los docentes contados son solo los que **tienen carga asignada en el periodo** — no el total de la base de datos, que incluye docentes de otras sedes.
+
+### El selector de periodo (menú ⚙)
+
+Si es Master o Coordinador, el menú de la tuerca incluye un selector **"Periodo de trabajo"** con el periodo activo y los que están en planificación — ver la sección siguiente.
+
 ---
 
 ## 4. Periodos académicos
@@ -106,6 +124,17 @@ Para verlos, vaya a la pantalla de **Periodos Académicos** (desde el menú o la
 
 > ⚠️ **Importante:** solo debe haber **un** periodo ACTIVO a la vez. El horario y los reportes se generan sobre el periodo activo.
 
+### Trabajar sobre un periodo en planificación (Master y Coordinador)
+
+Desde el menú ⚙ (tuerca) puede elegir un **periodo de trabajo** distinto al activo — por ejemplo el próximo año escolar, mientras aún está en estado *PLANIFICACIÓN*:
+
+- Todas las pantallas pasan a operar sobre ese periodo: Proyecciones, Carga Docente, Horarios y Estadísticas.
+- Una **franja amarilla** bajo la barra superior (y un punto amarillo sobre la tuerca) le recuerdan que está editando la planificación.
+- La selección es **personal**: los demás usuarios siguen viendo el periodo activo. Si dos personas seleccionan el mismo periodo en planificación, ambas ven y editan los mismos datos.
+- Para volver al periodo en curso, abra el selector y elija el periodo ACTIVO.
+
+> ℹ️ Los periodos **cerrados** no se pueden seleccionar como periodo de trabajo, y la selección solo existe en su navegador (no afecta a otros usuarios ni a otras computadoras donde entre con su cuenta).
+
 ---
 
 ## 5. Crear una proyección
@@ -114,7 +143,7 @@ La **proyección** es la oferta académica de un trayecto de un PNF para el peri
 
 ### Paso a paso
 
-1. En la barra lateral, haga clic en **Proyecciones**.
+1. En la barra superior, haga clic en **Proyecciones**.
 2. Presione el botón **Nueva Proyección** (si es la primera vez, verá el botón **"Crear mi primera proyección"** en el centro de la pantalla).
 3. En la ventana que se abre, seleccione:
    - **PNF** (el programa, por ejemplo *P.N.F. en Administración*).
@@ -362,7 +391,10 @@ Desde la ventana del reporte, pestaña **Encabezado** — se guarda solo (ver se
 Verifique que escribe la cédula **sin puntos ni letra inicial** y que su ficha está **activa** en la sección Profesores.
 
 **¿Dónde veo qué aulas están libres?**
-En Horarios, cambie a la vista de **agendas por aula**: cada salón muestra sus clases del lapso.
+En Horarios, cambie a la vista de **agendas por aula**: cada salón muestra sus clases del lapso. También en Inicio → **Estadísticas** hay un gráfico de uso de aulas del periodo.
+
+**¿Veo enseguida los cambios que hace otro coordinador?**
+Casi: la pantalla se refresca sola cuando vuelve a la ventana y aproximadamente cada minuto mientras la tiene abierta. Si dos personas escriben a la vez y hay un choque (misma aula, sección o profesor ocupados), el sistema muestra el mensaje de conflicto y actualiza la vista automáticamente.
 
 ---
 

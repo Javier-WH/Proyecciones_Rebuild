@@ -10,7 +10,7 @@ en Paint → Guardar como PNG con el nombre indicado.
 CAPTURAS NECESARIAS
 -------------------
 01-login.png              Pantalla de inicio de sesión
-02-inicio.png             Página principal con la barra lateral
+02-inicio.png             Página principal con la barra de navegación superior
 03-periodos.png           Pantalla de Periodos Académicos
 04-nueva-proyeccion.png   Ventana "Nueva Proyección" con sus campos
 05-lista-proyecciones.png Lista de proyecciones activas

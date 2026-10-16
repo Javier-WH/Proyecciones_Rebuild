@@ -57,7 +57,7 @@ Periodo Académico (Año Escolar)
   - *Optimización*: Fastify por su mínima huella de memoria y baja latencia, Worker Threads para algoritmos pesados de auto-resolución de horarios.
 - **Base de Datos**: MariaDB / MySQL (servidor existente).
   - *Optimización*: Pool de conexiones controlado, índices en `saga_id`, `profesor_id`, `seccion_id` y `proyeccion_id`.
-- **Comunicación en Tiempo Real**: WebSockets nativos (`ws`) para sincronización multiusuario con overhead mínimo.
+- **Sincronización multiusuario ligera**: polling de un token de cambios (`GET /api/sync`, ~1 KB) al enfocar la ventana y cada 60 s solo con la pestaña visible — sin conexiones persistentes. Sustituye al WebSocket del sistema previo, que consumía demasiada RAM para el hardware disponible.
 
 ---
 
@@ -140,7 +140,7 @@ Periodo Académico (Año Escolar)
 
 ### 9. Versionado y Persistencia
 - **RF-51**: Guardar versiones nombradas del horario (snapshots) y posibilidad de restaurarlas.
-- **RF-52**: Sincronización en tiempo real multiusuario mediante WebSockets (estado autoritativo gestionado en backend).
+- **RF-52**: Sincronización multiusuario por token de cambios (sin WebSocket): `GET /api/sync` devuelve el id máximo de `audit_log` de entidades colaborativas; el frontend refetchea solo cuando el token cambia.
 - **RF-53**: Persistencia completa del estado del horario en snapshot JSON por proyección.
 
 ### 10. Reportes e Impresión
@@ -152,6 +152,14 @@ Periodo Académico (Año Escolar)
 - **RF-57**: Autenticación contra API externa (SAGA) mediante tokens Bearer.
 - **RF-58**: Consumo resiliente de endpoints de SAGA: inscripciones, materias/UCs, mallas curriculares, programas, trayectos, turnos y docentes.
 - **RF-59**: Manejo elegante de caídas e indisponibilidad de la API SAGA con mensajes de error descriptivos y fallback.
+
+### 12. Periodo de trabajo, sincronización y estadísticas
+
+- **RF-60**: Selector de periodo de trabajo por usuario (menú ⚙): Master y Coordinador pueden operar sobre el periodo ACTIVO o cualquiera en PLANIFICACION; la selección es por usuario (persistida en `localStorage` por `user.id`) y no afecta el contexto de los demás. El backend resuelve el periodo por petición (`?periodo=` / `body.periodo`) vía `utils/periodo.ts` (`periodoDeLaPeticion`, `periodoEsEscribible`); roles sin privilegio o códigos inválidos/cerrados caen al periodo ACTIVO.
+- **RF-61**: Polling del token de cambios: el cliente lo consulta al enfocar la ventana y cada 60 s con la pestaña visible (`useSyncPoll`, single-flight con `setTimeout` encadenado), refetchea datos solo si el token cambió y se pausa durante drag & drop, menús abiertos y mutaciones en vuelo.
+- **RF-62**: Refetch automático de la vista ante respuestas 404/409 de mutaciones colaborativas (la pantalla converge con el estado real sin perder el mensaje de conflicto).
+- **RF-63**: Panel de estadísticas del periodo seleccionado (`GET /api/reportes/estadisticas`): cobertura de proyecciones PNF×trayecto (trayectos esperados desde la malla vigente en SAGA — unión por mayas, caché en memoria 1 h / 5 min en fallo — con fallback al historial de proyecciones), uso de aulas vs. capacidad teórica, unidades asignables sin profesor y fuera del horario (desglose por PNF + detalle navegable), turnos disponibles, conflictos de horario, docentes con carga y accesos al sistema desde `audit_log`. Acotado al PNF del Coordinador.
+- **RF-64**: Navegación profunda desde el panel de estadísticas hacia la grilla de Horarios de la sección/lapso pendiente (prop `foco` de `HorariosPage`).
 
 ---
 
