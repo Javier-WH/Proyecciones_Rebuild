@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
@@ -97,6 +97,10 @@ export const ProyeccionesPage: React.FC = () => {
     const res = await apiFetch(`/proyecciones/${id}/toggle-active`, { method: 'PUT' });
     if (res.success) {
       fetchProyecciones();
+    } else {
+      setErrorMsg(res.message || 'Error cambiando el estado de la proyección.');
+      // 404/409: otro usuario ya modificó o eliminó la proyección.
+      if (esVistaObsoleta(res)) fetchProyecciones();
     }
   };
 
@@ -119,6 +123,13 @@ export const ProyeccionesPage: React.FC = () => {
       setDeletingProyeccion(null);
     } else {
       setErrorMsg(res.message || 'Error eliminando la proyección.');
+      // 404/409: otro usuario ya la borró o la modificó — refrescar la
+      // lista y soltar el diálogo/detalle que apunta a un registro viejo.
+      if (esVistaObsoleta(res)) {
+        fetchProyecciones();
+        if (selectedProyeccionDetail?.id === id) setSelectedProyeccionDetail(null);
+        if (res.status === 404) setDeletingProyeccion(null);
+      }
     }
   };
 

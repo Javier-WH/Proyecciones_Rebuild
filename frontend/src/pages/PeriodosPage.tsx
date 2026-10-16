@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
 import {
@@ -128,6 +128,12 @@ export const PeriodosPage: React.FC = () => {
       refreshPeriodos();
     } else {
       setFormError(res.message || 'Error guardando el periodo académico.');
+      // 404/409: el periodo fue tocado por otra sesión — refrescar el
+      // listado y el selector global (el modal queda abierto con el error).
+      if (esVistaObsoleta(res)) {
+        fetchPeriodos();
+        refreshPeriodos();
+      }
     }
   };
 
@@ -147,6 +153,13 @@ export const PeriodosPage: React.FC = () => {
       refreshPeriodos();
     } else {
       setDeleteError(res.message || 'No se puede eliminar el periodo.');
+      // 404/409: el periodo ya fue tocado por otra sesión — refrescar
+      // (y si ya no existe, soltar el diálogo de borrado).
+      if (esVistaObsoleta(res)) {
+        fetchPeriodos();
+        refreshPeriodos();
+        if (res.status === 404) setBorrando(null);
+      }
     }
   };
 

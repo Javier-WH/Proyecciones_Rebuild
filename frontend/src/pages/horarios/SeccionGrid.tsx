@@ -12,7 +12,7 @@ import {
   DragEndEvent,
 } from '@dnd-kit/core';
 import { snapCenterToCursor } from '@dnd-kit/modifiers';
-import { apiFetch } from '../../api/client.js';
+import { apiFetch, esVistaObsoleta } from '../../api/client.js';
 import { usePnfColors } from '../../context/PnfColorContext.js';
 import { MateriaAsignableRow } from '../AgregarMateriaModal.js';
 import { ClaseCard } from './ClaseCard.js';
@@ -463,6 +463,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         onChanged();
       } else {
         mostrarAviso(res.message || 'No se pudo agendar el bloque.', 'error');
+        if (esVistaObsoleta(res)) onChanged();
       }
       return;
     }
@@ -484,6 +485,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         onChanged();
       } else {
         mostrarAviso(res.message || 'No se pudo mover el bloque.', 'error');
+        if (esVistaObsoleta(res)) onChanged();
       }
       return;
     }
@@ -507,6 +509,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         onChanged();
       } else {
         mostrarAviso(res.message || 'No se pudo intercambiar las clases.', 'error');
+        if (esVistaObsoleta(res)) onChanged();
       }
       return;
     }
@@ -530,6 +533,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onChanged();
     } else {
       mostrarAviso(res.message || 'No se pudo agendar.', 'error');
+      if (esVistaObsoleta(res)) onChanged();
     }
   };
 
@@ -542,6 +546,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onChanged();
     } else {
       mostrarAviso(res.message || 'No se pudo quitar.', 'error');
+      if (esVistaObsoleta(res)) onChanged();
     }
   };
 
@@ -558,6 +563,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onChanged();
     } else {
       mostrarAviso(res.message || 'No se pudieron desagendar las clases.', 'error');
+      if (esVistaObsoleta(res)) onChanged();
     }
   };
 
@@ -580,6 +586,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       onChanged();
     } else {
       mostrarAviso(res.message || 'No se pudo cambiar el aula.', 'error');
+      if (esVistaObsoleta(res)) onChanged();
     }
   };
 

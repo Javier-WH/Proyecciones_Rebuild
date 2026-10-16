@@ -76,7 +76,14 @@ export interface ApiResponse<T = any> {
   message?: string;
   data?: T;
   connected?: boolean;
+  status?: number; // status HTTP cuando el servidor respondió con error
 }
+
+// Un 404/409 respondiendo a una mutación significa que la vista del
+// usuario está vieja: otro usuario (o proceso) ya borró, movió u ocupó
+// esos datos. La página debe refrescar para converger con el estado real.
+export const esVistaObsoleta = (res: ApiResponse): boolean =>
+  res.status === 404 || res.status === 409;
 
 export async function apiFetch<T = any>(
   endpoint: string,
@@ -139,6 +146,7 @@ export async function apiFetch<T = any>(
         success: false,
         message: data.message || `Error HTTP ${response.status}`,
         data: data.data,
+        status: response.status,
       };
     }
 

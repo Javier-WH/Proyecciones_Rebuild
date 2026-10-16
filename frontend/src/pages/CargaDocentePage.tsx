@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, Fragment } from 'react';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
@@ -175,6 +175,9 @@ export const CargaDocentePage: React.FC = () => {
       fetchCarga();
     } else {
       setErrorMsg(res.message || 'Error asignando profesor.');
+      // 404/409: otro usuario ya tocó la asignación/materia — refrescar
+      // la vista para converger con el estado real del servidor.
+      if (esVistaObsoleta(res)) fetchCarga();
     }
   };
 

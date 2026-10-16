@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
@@ -1006,6 +1006,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       fetchEntries();
     } else {
       mostrarAviso(res.message || 'No se pudieron resolver los conflictos.', true);
+      if (esVistaObsoleta(res)) fetchEntries();
     }
   };
 
@@ -1026,6 +1027,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       fetchEntries();
     } else {
       mostrarAviso(res.message || 'Error generando el horario.', true);
+      if (esVistaObsoleta(res)) fetchEntries();
     }
   };
 

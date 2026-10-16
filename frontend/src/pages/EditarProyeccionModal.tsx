@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiFetch } from '../api/client.js';
+import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning, resolverTurnoSeccion } from './CrearProyeccionModal.js';
 import {
   X,
@@ -232,6 +232,9 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
       onClose();
     } else {
       setErrorMsg(res.message || 'Error actualizando la proyección.');
+      // 404/409: otro usuario borró o tocó la proyección — el modal se
+      // queda abierto con el error, pero la lista de fondo se refresca.
+      if (esVistaObsoleta(res)) onSuccess();
     }
   };
 
