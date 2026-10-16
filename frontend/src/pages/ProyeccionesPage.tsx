@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import { CrearProyeccionModal } from './CrearProyeccionModal.js';
 import { EditarProyeccionModal } from './EditarProyeccionModal.js';
 import { CopiarPeriodoModal } from './CopiarPeriodoModal.js';
@@ -51,6 +52,9 @@ const ordenTrayectoProy = (p: ProyeccionItem): number =>
 export const ProyeccionesPage: React.FC = () => {
   const { user } = useAuth();
   const { colorDePnf } = usePnfColors();
+  // Periodo de trabajo del usuario: el activo por defecto; Master y
+  // Coordinador pueden tener seleccionado uno en planificación.
+  const { periodo, esPlanificacion, loading: cargandoPeriodo } = usePeriodo();
   // Master edita todo; el Coordinador solo las proyecciones de su PNF;
   // Usuario y Docente solo leen.
   const esCoordinador = user?.role === 'ADMINISTRADOR';
@@ -58,7 +62,6 @@ export const ProyeccionesPage: React.FC = () => {
   const puedeEditarProy = (pnfSagaId?: number | null) =>
     puedeCrear && (!esCoordinador || (pnfSagaId != null && Number(pnfSagaId) === Number(user?.pnf_saga_id)));
   const [proyecciones, setProyecciones] = useState<ProyeccionItem[]>([]);
-  const [periodoActivo, setPeriodoActivo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterText, setFilterText] = useState('');
@@ -74,7 +77,8 @@ export const ProyeccionesPage: React.FC = () => {
   const fetchProyecciones = async () => {
     setLoading(true);
     setErrorMsg(null);
-    const res = await apiFetch<ProyeccionItem[]>('/proyecciones');
+    const qs = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
+    const res = await apiFetch<ProyeccionItem[]>(`/proyecciones${qs}`);
     if (res.success && res.data) {
       setProyecciones(res.data);
     } else {
@@ -84,15 +88,10 @@ export const ProyeccionesPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (cargandoPeriodo) return;
     fetchProyecciones();
-    // Obtener el periodo académico activo para mostrarlo en la cabecera
-    apiFetch<Array<{ codigo: string; estado: string }>>('/periodos').then((res) => {
-      if (res.success && res.data) {
-        const activo = res.data.find((p) => p.estado === 'ACTIVO');
-        if (activo) setPeriodoActivo(activo.codigo);
-      }
-    });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodo, cargandoPeriodo]);
 
   const handleToggleActive = async (id: number) => {
     const res = await apiFetch(`/proyecciones/${id}/toggle-active`, { method: 'PUT' });
@@ -183,10 +182,13 @@ export const ProyeccionesPage: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1">
             Gestión de la oferta académica por PNF, trayecto y pensum sincronizado con SAGA.
           </p>
-          {periodoActivo && (
-            <p className="text-[11px] text-emerald-400 mt-1.5 font-semibold flex items-center gap-1.5">
+          {periodo && (
+            <p className={`text-[11px] mt-1.5 font-semibold flex items-center gap-1.5 ${esPlanificacion ? 'text-amber-400' : 'text-emerald-400'}`}>
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Mostrando proyecciones del periodo activo: {periodoActivo}</span>
+              <span>
+                Mostrando proyecciones del periodo: {periodo}
+                {esPlanificacion ? ' (en planificación)' : ' (activo)'}
+              </span>
             </p>
           )}
         </div>
@@ -195,7 +197,7 @@ export const ProyeccionesPage: React.FC = () => {
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               onClick={() => setCopiarOpen(true)}
-              title="Clona proyecciones, secciones y materias de otro periodo al activo"
+              title="Clona proyecciones, secciones y materias de otro periodo al periodo seleccionado"
               className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
             >
               <Copy className="w-4 h-4" />
@@ -551,7 +553,11 @@ export const ProyeccionesPage: React.FC = () => {
 
       {/* Modal de Copiar desde otro periodo */}
       {copiarOpen && (
-        <CopiarPeriodoModal onClose={() => setCopiarOpen(false)} onSuccess={fetchProyecciones} />
+        <CopiarPeriodoModal
+          periodoDestino={periodo}
+          onClose={() => setCopiarOpen(false)}
+          onSuccess={fetchProyecciones}
+        />
       )}
 
       {/* Modal de Confirmación de Eliminación (deslizar para habilitar) */}

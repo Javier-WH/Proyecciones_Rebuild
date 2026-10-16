@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
+import { SelectorPeriodo } from './SelectorPeriodo.js';
 import { apiFetch } from '../api/client.js';
 import { invalidarCatalogoMaterias, precargarCatalogoMaterias } from './horarios/catalogoMaterias.js';
 import { ProyeccionesPage } from './ProyeccionesPage.js';
@@ -50,11 +52,13 @@ import {
   HelpCircle,
   UserRound,
   History,
+  FlaskConical,
   Image as ImageIcon
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
+  const { periodo, esPlanificacion } = usePeriodo();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores' | 'carga' | 'horarios'>('dashboard');
   const [horariosSubTab, setHorariosSubTab] = useState<HorariosSubTab>('horario');
   const [sagaConnected, setSagaConnected] = useState<boolean | null>(null);
@@ -106,10 +110,11 @@ export const DashboardPage: React.FC = () => {
   // ve dashboard). Se recarga cada vez que se vuelve a Inicio.
   useEffect(() => {
     if (activeTab !== 'dashboard' || user?.role === 'PROFESOR') return;
-    apiFetch<any>('/reportes/resumen').then((res) => {
+    const qs = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
+    apiFetch<any>(`/reportes/resumen${qs}`).then((res) => {
       if (res.success && res.data) setResumen(res.data);
     });
-  }, [activeTab, user?.role]);
+  }, [activeTab, user?.role, periodo]);
 
   // Ctrl+K abre el buscador global
   useEffect(() => {
@@ -428,13 +433,18 @@ export const DashboardPage: React.FC = () => {
                   <button
                     onClick={() => setConfigMenuOpen((v) => !v)}
                     title="Configuración"
-                    className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                    className={`relative p-2 rounded-xl border transition-colors cursor-pointer ${
                       configMenuOpen
                         ? 'bg-slate-700 text-white border-slate-600'
                         : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700/60'
                     }`}
                   >
                     <Settings className="w-5 h-5" />
+                    {/* Punto ámbar: el selector de periodo está dentro de este
+                        menú y el usuario está trabajando en planificación */}
+                    {esPlanificacion && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full ring-2 ring-slate-950" />
+                    )}
                   </button>
 
                   {configMenuOpen && (
@@ -444,6 +454,9 @@ export const DashboardPage: React.FC = () => {
                         onClick={() => setConfigMenuOpen(false)}
                       />
                       <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
+                        {/* Periodo de trabajo — solo visible para
+                            Master/Coordinador cuando hay algo que elegir */}
+                        <SelectorPeriodo onSeleccionado={() => setConfigMenuOpen(false)} />
                         {esAdmin && (
                           <>
                             <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -594,6 +607,21 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
       </nav>
+
+      {/* Aviso de contexto: el usuario está trabajando sobre el periodo en
+          planificación. Es una selección propia (localStorage), los demás
+          usuarios siguen viendo el periodo activo. */}
+      {esPlanificacion && periodo && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-2 text-xs text-amber-300">
+            <FlaskConical className="w-3.5 h-3.5 shrink-0" />
+            <span>
+              Estás viendo y editando el periodo <strong>{periodo}</strong> en planificación.
+              Los demás usuarios siguen trabajando sobre el periodo activo.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main className={`flex-1 w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${activeTab === 'carga' || activeTab === 'horarios' ? 'max-w-none' : 'max-w-7xl'}`}>

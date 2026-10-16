@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import {
   X,
   BookOpen,
@@ -384,6 +385,10 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   onSuccess,
 }) => {
   const { user } = useAuth();
+  // El periodo de la proyección es el de trabajo seleccionado en el
+  // selector global (activo, o el de planificación elegido por Master/
+  // Coordinador) — no es editable dentro del modal.
+  const { periodo: periodoCtx, periodoInfo } = usePeriodo();
   // El Coordinador solo puede crear proyecciones de su propio PNF
   const esCoordinador = user?.role === 'ADMINISTRADOR';
   const pnfFijo = esCoordinador ? user?.pnf_saga_id : null;
@@ -392,7 +397,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   const [pnfList, setPnfList] = useState<PNF[]>([]);
   const [trayectosList, setTrayectosList] = useState<Trayecto[]>([]);
   const [mayasList, setMayasList] = useState<Maya[]>([]);
-  const [periodoActivo, setPeriodoActivo] = useState<{ id: number; codigo: string; nombre: string } | null>(null);
+
   const [turnosList, setTurnosList] = useState<Array<{ id: number; turno: string }>>([]);
   const [turnosLocales, setTurnosLocales] = useState<TurnoJornada[]>([]);
 
@@ -430,10 +435,9 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       setErrorMsg(null);
       setSagaCaido(false);
 
-      const [resPnf, resTrayectos, resPeriodos, resTurnos, resTurnosLocales] = await Promise.all([
+      const [resPnf, resTrayectos, resTurnos, resTurnosLocales] = await Promise.all([
         apiFetch<PNF[]>('/saga/programas'),
         apiFetch<Trayecto[]>('/saga/trayectos'),
-        apiFetch<Array<{ id: number; codigo: string; nombre: string; estado: string }>>('/periodos'),
         apiFetch<Array<{ id: number; turno: string }>>('/saga/turnos'),
         apiFetch<TurnoJornada[]>('/horarios/turnos'),
       ]);
@@ -452,23 +456,16 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       if (resTurnos.success && resTurnos.data) setTurnosList(resTurnos.data);
       if (resTurnosLocales.success && resTurnosLocales.data) setTurnosLocales(resTurnosLocales.data);
 
-      // El periodo de la proyección siempre es el periodo ACTIVO (no editable)
-      if (resPeriodos.success && resPeriodos.data) {
-        const activo = resPeriodos.data.find((p) => p.estado === 'ACTIVO');
-        if (activo) {
-          setPeriodoActivo(activo);
-          setPeriodoAcademico(activo.codigo);
-        } else {
-          setPeriodoActivo(null);
-          setPeriodoAcademico('');
-        }
-      }
-
       setLoadingCatalogos(false);
     };
 
     fetchBaseCatalogs();
   }, [isOpen, sagaRetry]);
+
+  // El periodo de la proyección es el seleccionado globalmente
+  useEffect(() => {
+    setPeriodoAcademico(periodoCtx ?? '');
+  }, [periodoCtx, isOpen]);
 
   // 2. Al seleccionar PNF, cargar sus Mallas de SAGA
   useEffect(() => {
@@ -796,9 +793,16 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
             <div>
               <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2.5">
                 <span>Nueva Proyección Académica</span>
-                {periodoActivo && (
-                  <span className="text-[10px] font-semibold font-mono bg-slate-800/80 border border-slate-700 text-slate-400 px-2 py-0.5 rounded-md">
-                    Periodo {periodoActivo.codigo}
+                {periodoInfo && (
+                  <span
+                    className={`text-[10px] font-semibold font-mono border px-2 py-0.5 rounded-md ${
+                      periodoInfo.estado === 'PLANIFICACION'
+                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    Periodo {periodoInfo.codigo}
+                    {periodoInfo.estado === 'PLANIFICACION' ? ' (planificación)' : ''}
                   </span>
                 )}
               </h3>
@@ -926,10 +930,10 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
               </div>
             )}
 
-            {!periodoActivo && (
+            {!periodoCtx && (
               <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2.5 text-xs text-red-300 flex items-center gap-2 mt-4">
                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <span>No hay periodo académico ACTIVO. Active uno en la vista de Periodos.</span>
+                <span>No hay periodo académico disponible. Active uno en la vista de Periodos.</span>
               </div>
             )}
 

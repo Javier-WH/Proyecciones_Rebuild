@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
+import { periodoDeLaPeticion } from '../../utils/periodo.js';
 import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
 interface AsignacionBody {
@@ -31,24 +32,17 @@ export async function cargaDocenteHandler(request: FastifyRequest, reply: Fastif
   const { periodo, pnf_saga_id } = request.query as { periodo?: string; pnf_saga_id?: string };
 
   try {
-    let periodoCodigo = periodo;
-    let periodoNombre: string | null = null;
+    // ?periodo solo lo honran Master/Coordinador (planificación); el resto
+    // de roles siempre opera sobre el periodo activo.
+    const periodoCodigo = await periodoDeLaPeticion(user, periodo);
     if (!periodoCodigo) {
-      const activo = await query<any[]>(
-        "SELECT codigo, nombre FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
-      );
-      if (activo.length === 0) {
-        return reply.send({ success: true, data: { periodo: null, periodo_nombre: null, rows: [] } });
-      }
-      periodoCodigo = activo[0].codigo;
-      periodoNombre = activo[0].nombre;
-    } else {
-      const encontrado = await query<any[]>(
-        'SELECT nombre FROM periodos_academicos WHERE codigo = ? LIMIT 1',
-        [periodoCodigo]
-      );
-      periodoNombre = encontrado[0]?.nombre ?? null;
+      return reply.send({ success: true, data: { periodo: null, periodo_nombre: null, rows: [] } });
     }
+    const encontrado = await query<any[]>(
+      'SELECT nombre FROM periodos_academicos WHERE codigo = ? LIMIT 1',
+      [periodoCodigo]
+    );
+    const periodoNombre: string | null = encontrado[0]?.nombre ?? null;
 
     // 1. Filas asignables: materias x secciones de proyecciones activas del periodo
     let sql = `

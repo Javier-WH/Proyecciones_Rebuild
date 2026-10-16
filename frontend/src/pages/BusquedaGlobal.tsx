@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../api/client.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import { Search, User, DoorOpen, Users, BookOpen, CornerDownLeft, Loader2 } from 'lucide-react';
 import { irAHorarios } from './navBus.js';
 
@@ -32,6 +33,7 @@ export const BusquedaGlobal: React.FC<{
   onClose: () => void;
   irATab: (tab: 'horarios' | 'carga') => void;
 }> = ({ open, onClose, irATab }) => {
+  const { periodo } = usePeriodo();
   const [q, setQ] = useState('');
   const [data, setData] = useState<Resultados>({ profesores: [], aulas: [], secciones: [], materias: [] });
   const [cargando, setCargando] = useState(false);
@@ -59,12 +61,13 @@ export const BusquedaGlobal: React.FC<{
     const timer = window.setTimeout(async () => {
       // silencioso: un fetch por tecla con debounce — ya tiene spinner
       // propio y dispararía el velo global en cada letra con red lenta.
-      const res = await apiFetch<Resultados>(`/buscar?q=${encodeURIComponent(t)}`, { silencioso: true });
+      const qs = periodo ? `&periodo=${encodeURIComponent(periodo)}` : '';
+      const res = await apiFetch<Resultados>(`/buscar?q=${encodeURIComponent(t)}${qs}`, { silencioso: true });
       setCargando(false);
       if (res.success && res.data) setData(res.data);
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [q, open]);
+  }, [q, open, periodo]);
 
   const ir = (vista: 'seccion' | 'aula' | 'profesor', id: number, lapso?: string) => {
     onClose();

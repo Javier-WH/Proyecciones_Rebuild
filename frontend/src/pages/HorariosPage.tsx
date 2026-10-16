@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import { SeccionGrid } from './horarios/SeccionGrid.js';
 import { AulasPanel } from './horarios/AulasPanel.js';
@@ -91,6 +92,9 @@ interface DispSlot {
 
 export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick }) => {
   const { user } = useAuth();
+  // Periodo de trabajo del usuario (activo, o el de planificación que
+  // Master/Coordinador haya elegido en el selector global).
+  const { periodo: periodoSel, loading: cargandoPeriodo } = usePeriodo();
   const puedeEditar = user?.role === 'SUPER_USUARIO' || user?.role === 'ADMINISTRADOR';
 
   const [tab, setTab] = useState<HorariosSubTab>(subTab ?? 'horario');
@@ -819,8 +823,11 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   const fetchBase = async () => {
     setLoading(true);
     setErrorMsg(null);
+    const qsPeriodo = periodoSel ? `?periodo=${encodeURIComponent(periodoSel)}` : '';
     const [rCarga, rTurnos, rAulas, rProf, rPnfs, rConfig] = await Promise.all([
-      apiFetch<{ periodo: string | null; periodo_nombre?: string | null; rows: MateriaAsignableRow[] }>('/proyecciones/carga-docente'),
+      apiFetch<{ periodo: string | null; periodo_nombre?: string | null; rows: MateriaAsignableRow[] }>(
+        `/proyecciones/carga-docente${qsPeriodo}`
+      ),
       apiFetch<Turno[]>('/horarios/turnos'),
       apiFetch<Aula[]>('/horarios/aulas'),
       apiFetch<ProfesorLite[]>('/profesores'),
@@ -849,8 +856,9 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   };
 
   const fetchEntries = async () => {
+    const qsPeriodo = periodoSel ? `&periodo=${encodeURIComponent(periodoSel)}` : '';
     const res = await apiFetch<{ entries: HorarioEntry[] }>(
-      `/horarios/entries?tipo=${lapso.tipo}&trimestre=${lapso.n}`
+      `/horarios/entries?tipo=${lapso.tipo}&trimestre=${lapso.n}${qsPeriodo}`
     );
     const list = res.success && res.data ? res.data.entries || [] : [];
     if (res.success && res.data) setEntries(list);
@@ -867,15 +875,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   };
 
   useEffect(() => {
+    if (cargandoPeriodo) return;
     fetchBase();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodoSel, cargandoPeriodo]);
 
   useEffect(() => {
     if (configTick) fetchConfig();
   }, [configTick]);
 
   useEffect(() => {
+    // Sin filas en el periodo no hay nada que agendar: limpiar la pizarra
+    // (si no, al cambiar a un periodo vacío quedarían entries del anterior).
     if (rows.length > 0) fetchEntries();
+    else setEntries([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lapso.tipo, lapso.n, rows]);
 
@@ -941,10 +954,11 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [undoStack, deshaciendo]);
 
-  // Al cambiar de lapso los snapshots dejan de corresponder a los entries
+  // Al cambiar de lapso o de periodo los snapshots dejan de corresponder
+  // a los entries cargados (deshacer borraría clases del periodo nuevo).
   useEffect(() => {
     setUndoStack([]);
-  }, [lapso.tipo, lapso.n]);
+  }, [lapso.tipo, lapso.n, periodoSel]);
 
   // Navegación profunda desde el buscador global (Ctrl+K): se aplica cuando
   // `rows` ya está cargado para resolver los selectores de la sección.
@@ -984,7 +998,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     setResolviendo(true);
     const res = await apiFetch<{ runs: number; movidas: number; sin_solucion: number }>(
       '/horarios/entries/resolver-aulas',
-      { method: 'POST' }
+      { method: 'POST', body: JSON.stringify({ periodo: periodoSel ?? undefined }) }
     );
     setResolviendo(false);
     if (res.success) {
@@ -1001,7 +1015,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     const res = await apiFetch<{ agendadas: number; pendientes: any[] }>('/horarios/generar', {
       method: 'POST',
       etiqueta: modo === 'regenerar' ? 'Regenerando el horario…' : 'Generando el horario…',
-      body: JSON.stringify({ tipo: lapso.tipo, trimestre: lapso.n, modo }),
+      body: JSON.stringify({ tipo: lapso.tipo, trimestre: lapso.n, modo, periodo: periodoSel ?? undefined }),
     });
     setGenerando(false);
     if (res.success) {

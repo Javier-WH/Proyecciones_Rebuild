@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
@@ -48,6 +49,9 @@ interface ProfesorGrupo {
 export const CargaDocentePage: React.FC = () => {
   const { user } = useAuth();
   const { colorDePnf } = usePnfColors();
+  // Periodo de trabajo del usuario (activo, o el en planificación que
+  // Master/Coordinador haya seleccionado en el selector global).
+  const { periodo: periodoSel, esPlanificacion, loading: cargandoPeriodo } = usePeriodo();
   const esCoordinador = user?.role === 'ADMINISTRADOR';
   const puedeAsignar = user?.role === 'SUPER_USUARIO' || esCoordinador;
   const esMioPnf = (pnf?: number | null) =>
@@ -129,8 +133,9 @@ export const CargaDocentePage: React.FC = () => {
   const fetchCarga = async () => {
     setLoading(true);
     setErrorMsg(null);
+    const qs = periodoSel ? `?periodo=${encodeURIComponent(periodoSel)}` : '';
     const res = await apiFetch<{ periodo: string; periodo_nombre?: string | null; rows: CargaRow[] }>(
-      '/proyecciones/carga-docente'
+      `/proyecciones/carga-docente${qs}`
     );
     if (res.success && res.data) {
       setRows(res.data.rows);
@@ -148,9 +153,11 @@ export const CargaDocentePage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (cargandoPeriodo) return;
     fetchCarga();
     fetchProfesores();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodoSel, cargandoPeriodo]);
 
   const handleAssign = async (row: CargaRow, profesorId: number | null, todosLapsos = false) => {
     const res = await apiFetch('/proyecciones/asignaciones', {
@@ -765,7 +772,11 @@ export const CargaDocentePage: React.FC = () => {
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             Asignación de unidades curriculares a profesores en las proyecciones activas.
-            {periodo && <span className="text-emerald-400 font-semibold"> Periodo: {periodo}</span>}
+            {periodo && (
+              <span className={`font-semibold ${esPlanificacion ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {' '}Periodo: {periodo}{esPlanificacion ? ' (en planificación)' : ''}
+              </span>
+            )}
           </p>
         </div>
 

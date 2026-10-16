@@ -17,14 +17,15 @@ interface Resultado {
 }
 
 // Modal "Copiar periodo": clona proyecciones + secciones + materias (y
-// opcionalmente las asignaciones de docentes) de un periodo anterior al
-// ACTIVO. Las clases agendadas nunca se copian.
+// opcionalmente las asignaciones de docentes) de otro periodo al periodo
+// de trabajo actual (el activo, o el de planificación seleccionado).
+// Las clases agendadas nunca se copian.
 export const CopiarPeriodoModal: React.FC<{
+  periodoDestino: string | null;
   onClose: () => void;
   onSuccess: () => void;
-}> = ({ onClose, onSuccess }) => {
+}> = ({ periodoDestino, onClose, onSuccess }) => {
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
-  const [activo, setActivo] = useState<string | null>(null);
   const [origen, setOrigen] = useState('');
   const [conAsignaciones, setConAsignaciones] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -37,16 +38,14 @@ export const CopiarPeriodoModal: React.FC<{
       const res = await apiFetch<Periodo[]>('/periodos');
       setCargando(false);
       if (res.success && res.data) {
-        const act = res.data.find((p) => p.estado === 'ACTIVO');
-        setActivo(act?.codigo ?? null);
-        const otros = res.data.filter((p) => p.codigo !== act?.codigo);
+        const otros = res.data.filter((p) => p.codigo !== periodoDestino);
         setPeriodos(otros);
         if (otros.length > 0) setOrigen(otros[0].codigo);
       } else {
         setErrorMsg(res.message || 'No se pudieron cargar los periodos.');
       }
     })();
-  }, []);
+  }, [periodoDestino]);
 
   const copiar = async () => {
     if (!origen || copiando) return;
@@ -56,7 +55,11 @@ export const CopiarPeriodoModal: React.FC<{
     const res = await apiFetch<Resultado>('/proyecciones/copiar-periodo', {
       method: 'POST',
       etiqueta: 'Copiando el periodo…',
-      body: JSON.stringify({ periodo_origen: origen, incluir_asignaciones: conAsignaciones }),
+      body: JSON.stringify({
+        periodo_origen: origen,
+        periodo_destino: periodoDestino ?? undefined,
+        incluir_asignaciones: conAsignaciones,
+      }),
     });
     setCopiando(false);
     if (res.success) {
@@ -97,8 +100,8 @@ export const CopiarPeriodoModal: React.FC<{
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>
                   {resultado.copiadas === 0
-                    ? 'No se copió ninguna proyección (ya existían en el periodo activo).'
-                    : `Copiadas ${resultado.copiadas} proyección(es) a ${activo ?? 'el periodo activo'}.`}
+                    ? 'No se copió ninguna proyección (ya existían en el periodo de destino).'
+                    : `Copiadas ${resultado.copiadas} proyección(es) a ${periodoDestino ?? 'el periodo de destino'}.`}
                 </span>
               </div>
               <ul className="text-slate-300 space-y-1 pl-1">
@@ -139,7 +142,7 @@ export const CopiarPeriodoModal: React.FC<{
                   ))}
                 </select>
                 <p className="text-[10px] text-slate-500 mt-1.5">
-                  Destino: periodo activo <span className="font-bold text-slate-300">{activo ?? '—'}</span>
+                  Destino: periodo seleccionado <span className="font-bold text-slate-300">{periodoDestino ?? '—'}</span>
                 </p>
               </div>
 
@@ -159,7 +162,7 @@ export const CopiarPeriodoModal: React.FC<{
               </label>
 
               <p className="text-[10px] text-slate-500 leading-snug">
-                Se clonan proyecciones activas, sus secciones y materias al periodo activo.
+                Se clonan proyecciones activas, sus secciones y materias al periodo seleccionado.
                 Las que ya existan allí se omiten. <strong>Nunca se copian las clases agendadas</strong> —
                 el horario se arma de nuevo.
               </p>
@@ -177,7 +180,7 @@ export const CopiarPeriodoModal: React.FC<{
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl font-semibold flex items-center gap-2 cursor-pointer"
                 >
                   {copiando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiando ? 'Copiando…' : 'Copiar al periodo activo'}</span>
+                  <span>{copiando ? 'Copiando…' : 'Copiar al periodo seleccionado'}</span>
                 </button>
               </div>
             </>

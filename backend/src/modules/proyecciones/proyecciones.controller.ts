@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
-import { periodoActivo } from '../../utils/periodo.js';
+import { periodoDeLaPeticion, periodoEsEscribible } from '../../utils/periodo.js';
 import { normTxt } from '../../utils/texto.js';
 import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
@@ -104,6 +104,15 @@ export async function createProyeccionHandler(request: FastifyRequest, reply: Fa
   const codigo = body.codigo || `PROY-${body.pnf_saga_id}-${body.trayecto_saga_id}-${body.periodo_academico}-${Date.now().toString().slice(-4)}`;
 
   try {
+    // El periodo destino debe existir y admitir escritura (ACTIVO o
+    // PLANIFICACION) — nunca un CERRADO ni un código inventado.
+    if (!(await periodoEsEscribible(body.periodo_academico))) {
+      return reply.status(400).send({
+        success: false,
+        message: 'El periodo académico indicado no existe o está cerrado.',
+      });
+    }
+
     // RF-23: Si esta proyección se crea como activa, desactivar las demás
     // proyecciones equivalentes: mismo PNF, trayecto, maya y periodo.
     await query(
@@ -233,8 +242,11 @@ export async function listProyeccionesHandler(request: FastifyRequest, reply: Fa
   const user = request.userPayload!;
 
   try {
-    // Solo mostrar proyecciones del periodo académico actualmente ACTIVO
-    const periodo = await periodoActivo();
+    // Periodo de trabajo: el ACTIVO por defecto; Master/Coordinador pueden
+    // pedir uno en PLANIFICACION vía ?periodo= (los demás roles siempre
+    // caen al activo — ver utils/periodo.ts).
+    const { periodo: periodoQ } = request.query as { periodo?: string };
+    const periodo = await periodoDeLaPeticion(user, periodoQ);
 
     let sql = `
       SELECT p.*, u.nombre as creador_nombre, u.apellido as creador_apellido
@@ -311,6 +323,19 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
 
     const nombre = body.nombre?.trim() || proyeccion.nombre;
     const periodoAcademico = body.periodo_academico || proyeccion.periodo_academico;
+
+    // Si se intenta mover la proyección a otro periodo, el destino debe
+    // admitir escritura (ACTIVO o PLANIFICACION, nunca CERRADO).
+    if (
+      body.periodo_academico &&
+      body.periodo_academico !== proyeccion.periodo_academico &&
+      !(await periodoEsEscribible(body.periodo_academico))
+    ) {
+      return reply.status(400).send({
+        success: false,
+        message: 'El periodo académico indicado no existe o está cerrado.',
+      });
+    }
     const tipoProyeccion =
       body.tipo_proyeccion === 'TRIMESTRAL' || body.tipo_proyeccion === 'SEMESTRAL'
         ? body.tipo_proyeccion
@@ -590,13 +615,19 @@ export async function deleteProyeccionHandler(request: FastifyRequest, reply: Fa
 
 // POST /api/proyecciones/copiar-periodo — rollover de periodo.
 // Clona proyecciones + secciones + materias (y opcionalmente asignaciones)
-// del periodo `periodo_origen` al periodo ACTIVO. Nunca copia clases
+// del periodo `periodo_origen` al periodo de trabajo de la petición
+// (el ACTIVO, o el en PLANIFICACION que Master/Coordinador tenga
+// seleccionado — llega como periodo_destino). Nunca copia clases
 // agendadas (horario_entries) ni el estado activo/inactivo: las copias
 // nacen activas. Es idempotente: proyecciones que ya existen en destino
 // (mismo pnf+trayecto+maya+tipo) se omiten.
 // El Coordinador solo puede copiar las proyecciones de su PNF.
 export async function copiarPeriodoHandler(request: FastifyRequest, reply: FastifyReply) {
-  const body = request.body as { periodo_origen?: string; incluir_asignaciones?: boolean };
+  const body = request.body as {
+    periodo_origen?: string;
+    periodo_destino?: string;
+    incluir_asignaciones?: boolean;
+  };
   const origen = String(body.periodo_origen ?? '').trim();
   const conAsignaciones = body.incluir_asignaciones === true;
   const user = request.userPayload!;
@@ -606,12 +637,12 @@ export async function copiarPeriodoHandler(request: FastifyRequest, reply: Fasti
   }
 
   try {
-    const destino = await periodoActivo();
+    const destino = await periodoDeLaPeticion(user, body.periodo_destino);
     if (!destino) {
-      return reply.status(400).send({ success: false, message: 'No hay periodo activo como destino.' });
+      return reply.status(400).send({ success: false, message: 'No hay periodo de destino disponible.' });
     }
     if (origen === destino) {
-      return reply.status(400).send({ success: false, message: 'El periodo de origen no puede ser el activo.' });
+      return reply.status(400).send({ success: false, message: 'El periodo de origen no puede ser el mismo de destino.' });
     }
     const origenExiste = await query<any[]>(
       'SELECT id FROM periodos_academicos WHERE codigo = ? LIMIT 1',

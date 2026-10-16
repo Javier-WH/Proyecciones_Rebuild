@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { query } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
+import { periodoDeLaPeticion } from '../../utils/periodo.js';
 import { lapsosTotales, seTraslapan, TipoProyeccion } from '../horarios/scheduler.service.js';
 
 // Clave del reporte: identifica qué plantilla se pide ('horarios',
@@ -137,22 +138,26 @@ function lapsosDeMateria(m: any, tipo: string): number[] {
   return lapsos.length > 0 ? lapsos : [1];
 }
 
-// GET /api/reportes/resumen — métricas del periodo activo para las tarjetas
-// del dashboard. El conteo de conflictos es una aproximación por pares de
-// clases (aula/profesor con traslape total); el detalle exacto se ve en
-// Horarios → panel Errores. El Coordinador ve las métricas acotadas a su PNF.
+// GET /api/reportes/resumen — métricas del periodo de trabajo para las
+// tarjetas del dashboard (el ACTIVO, o el en PLANIFICACION que Master/
+// Coordinador tenga seleccionado vía ?periodo=). El conteo de conflictos
+// es una aproximación por pares de clases (aula/profesor con traslape
+// total); el detalle exacto se ve en Horarios → panel Errores. El
+// Coordinador ve las métricas acotadas a su PNF.
 export async function resumenHandler(request: FastifyRequest, reply: FastifyReply) {
   const user = request.userPayload!;
   const pnfFiltro = user.role === 'ADMINISTRADOR' ? user.pnf_saga_id : null;
+  const { periodo: periodoQ } = request.query as { periodo?: string };
 
   try {
-    const periodoRows = await query<any[]>(
-      "SELECT codigo, nombre FROM periodos_academicos WHERE estado = 'ACTIVO' ORDER BY id DESC LIMIT 1"
-    );
-    if (periodoRows.length === 0) {
+    const periodo = await periodoDeLaPeticion(user, periodoQ);
+    if (!periodo) {
       return reply.send({ success: true, data: { periodo: null } });
     }
-    const periodo: string = periodoRows[0].codigo;
+    const periodoRows = await query<any[]>(
+      'SELECT nombre FROM periodos_academicos WHERE codigo = ? LIMIT 1',
+      [periodo]
+    );
 
     const pnfCond = pnfFiltro ? 'AND pnf_saga_id = ?' : '';
     const pnfParams = pnfFiltro ? [pnfFiltro] : [];
@@ -243,12 +248,12 @@ export async function resumenHandler(request: FastifyRequest, reply: FastifyRepl
       success: true,
       data: {
         periodo,
-        periodo_nombre: periodoRows[0].nombre,
-        proyecciones_activas: proy[0].n,
-        secciones: secc[0].n,
-        profesores_activos: prof[0].n,
-        aulas_activas: aula[0].n,
-        clases_agendadas: agendadas[0].n,
+        periodo_nombre: periodoRows[0]?.nombre ?? null,
+        proyecciones_activas: proy.n,
+        secciones: secc.n,
+        profesores_activos: prof.n,
+        aulas_activas: aula.n,
+        clases_agendadas: agendadas.n,
         materias_sin_profesor: sinProfesor,
         conflictos,
       },

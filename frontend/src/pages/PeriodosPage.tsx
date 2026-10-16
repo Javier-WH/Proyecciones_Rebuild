@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import {
   CalendarDays,
   Plus,
@@ -30,6 +31,9 @@ export interface PeriodoAcademico {
 
 export const PeriodosPage: React.FC = () => {
   const { user } = useAuth();
+  // refresh() mantiene el selector global sincronizado tras crear/editar/
+  // eliminar periodos (ej. un PLANIFICACION nuevo aparece sin recargar).
+  const { refresh: refreshPeriodos } = usePeriodo();
   // Solo el Master crea/edita/elimina periodos; Coordinador y Usuario solo los ven.
   const puedeGestionarPeriodos = user?.role === 'SUPER_USUARIO';
   const [periodos, setPeriodos] = useState<PeriodoAcademico[]>([]);
@@ -121,6 +125,7 @@ export const PeriodosPage: React.FC = () => {
     if (res.success) {
       setIsModalOpen(false);
       fetchPeriodos();
+      refreshPeriodos();
     } else {
       setFormError(res.message || 'Error guardando el periodo académico.');
     }
@@ -139,6 +144,7 @@ export const PeriodosPage: React.FC = () => {
     if (res.success) {
       setBorrando(null);
       fetchPeriodos();
+      refreshPeriodos();
     } else {
       setDeleteError(res.message || 'No se puede eliminar el periodo.');
     }

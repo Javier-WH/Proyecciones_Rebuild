@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query, getDbPool } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
-import { periodoActivo } from '../../utils/periodo.js';
+import { periodoDeLaPeticion } from '../../utils/periodo.js';
 import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 import {
   cargarEntries,
@@ -96,7 +96,8 @@ export async function listEntriesHandler(request: FastifyRequest, reply: Fastify
   const tipoVal: TipoProyeccion = tipo === 'SEMESTRAL' ? 'SEMESTRAL' : 'TRIMESTRAL';
   const n = Number(trimestre) || 1;
   try {
-    const periodoCodigo = periodo || (await periodoActivo());
+    // ?periodo solo lo honran Master/Coordinador; el resto ve el activo.
+    const periodoCodigo = await periodoDeLaPeticion(user, periodo);
     if (!periodoCodigo) {
       return reply.send({ success: true, data: { periodo: null, entries: [], rivales: [] } });
     }
@@ -1617,7 +1618,7 @@ export async function generarHorarioHandler(request: FastifyRequest, reply: Fast
   const pnfFiltro = user.role === 'ADMINISTRADOR' ? user.pnf_saga_id : body.pnf_saga_id;
 
   try {
-    const periodo = body.periodo || (await periodoActivo());
+    const periodo = await periodoDeLaPeticion(user, body.periodo);
     if (!periodo) return reply.status(400).send({ success: false, message: 'No hay periodo académico activo.' });
 
     if (modo === 'regenerar') {
@@ -2021,7 +2022,8 @@ export async function resolverAulasHandler(request: FastifyRequest, reply: Fasti
     if (user.role === 'ADMINISTRADOR' && !user.pnf_saga_id) {
       return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
     }
-    const periodo = await periodoActivo();
+    const body = (request.body ?? {}) as { periodo?: string };
+    const periodo = await periodoDeLaPeticion(user, body.periodo);
     if (!periodo) {
       return reply.send({ success: false, message: 'No hay período académico activo.' });
     }

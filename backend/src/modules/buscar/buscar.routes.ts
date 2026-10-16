@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
-import { periodoActivo } from '../../utils/periodo.js';
+import { periodoDeLaPeticion } from '../../utils/periodo.js';
 import { authenticate } from '../../plugins/authGuard.js';
 
 // GET /api/buscar?q=texto — buscador global (Ctrl+K).
@@ -19,7 +19,8 @@ async function buscarHandler(request: FastifyRequest, reply: FastifyReply) {
   const digits = q.replace(/\D/g, '');
 
   try {
-    const periodo = await periodoActivo();
+    // ?periodo solo lo honran Master/Coordinador; el resto busca en el activo.
+    const periodo = await periodoDeLaPeticion(user, (request.query as any).periodo);
 
     const profesores = await query<any[]>(
       `SELECT id, cedula, nombres, apellidos, pnf_nombre
