@@ -86,18 +86,6 @@ export const DashboardPage: React.FC = () => {
   // Sub-vistas del Inicio: tarjetas de métricas (por defecto) o el panel de
   // estadísticas con gráficos (se consulta solo al abrirlo — pega contra SAGA).
   const [inicioVista, setInicioVista] = useState<'resumen' | 'estadisticas'>('resumen');
-  const [resumen, setResumen] = useState<{
-    periodo: string | null;
-    periodo_nombre?: string;
-    proyecciones_activas?: number;
-    secciones?: number;
-    profesores_activos?: number;
-    docentes_con_carga?: number;
-    aulas_activas?: number;
-    clases_agendadas?: number;
-    materias_sin_profesor?: number;
-    conflictos?: number;
-  } | null>(null);
   const [panelProfesor, setPanelProfesor] = useState<{
     id: number;
     nombre: string;
@@ -114,15 +102,8 @@ export const DashboardPage: React.FC = () => {
     checkSagaStatus();
   }, []);
 
-  // Métricas del periodo activo (solo en la pestaña Inicio; el docente no
-  // ve dashboard). Se recarga cada vez que se vuelve a Inicio.
-  useEffect(() => {
-    if (activeTab !== 'dashboard' || user?.role === 'PROFESOR') return;
-    const qs = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
-    apiFetch<any>(`/reportes/resumen${qs}`).then((res) => {
-      if (res.success && res.data) setResumen(res.data);
-    });
-  }, [activeTab, user?.role, periodo]);
+  // Las métricas de cabecera fueron reemplazadas por la vista Estadísticas;
+  // /api/reportes/resumen sigue disponible en el backend por si se reusa.
 
   // Ctrl+K abre el buscador global
   useEffect(() => {
@@ -778,78 +759,6 @@ export const DashboardPage: React.FC = () => {
               />
             ) : (
               <>
-            {/* Métricas del periodo activo */}
-            {resumen?.periodo && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                <button
-                  onClick={() => setActiveTab('proyecciones')}
-                  className="bg-slate-900/80 border border-slate-800 hover:border-blue-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Proyecciones</p>
-                  <p className="text-xl font-bold text-white mt-0.5">{resumen.proyecciones_activas ?? 0}</p>
-                  <p className="text-[10px] text-slate-500">activas · {resumen.periodo}</p>
-                </button>
-                <button
-                  onClick={() => setActiveTab('proyecciones')}
-                  className="bg-slate-900/80 border border-slate-800 hover:border-sky-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Secciones</p>
-                  <p className="text-xl font-bold text-white mt-0.5">{resumen.secciones ?? 0}</p>
-                  <p className="text-[10px] text-slate-500">del periodo</p>
-                </button>
-                <button
-                  onClick={() => setActiveTab('profesores')}
-                  className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Docentes</p>
-                  <p className="text-xl font-bold text-white mt-0.5">{resumen.docentes_con_carga ?? resumen.profesores_activos ?? 0}</p>
-                  <p className="text-[10px] text-slate-500">con carga en el periodo</p>
-                </button>
-                <button
-                  onClick={() => setActiveTab('carga')}
-                  className={`rounded-xl px-4 py-3 text-left transition-colors cursor-pointer border ${
-                    (resumen.materias_sin_profesor ?? 0) > 0
-                      ? 'bg-amber-500/10 border-amber-500/40 hover:border-amber-400'
-                      : 'bg-slate-900/80 border-slate-800 hover:border-sky-500/40'
-                  }`}
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Sin profesor</p>
-                  <p className={`text-xl font-bold mt-0.5 ${(resumen.materias_sin_profesor ?? 0) > 0 ? 'text-amber-300' : 'text-white'}`}>
-                    {resumen.materias_sin_profesor ?? 0}
-                  </p>
-                  <p className="text-[10px] text-slate-500">materias por asignar</p>
-                </button>
-                <button
-                  onClick={() => setActiveTab('horarios')}
-                  className={`rounded-xl px-4 py-3 text-left transition-colors cursor-pointer border ${
-                    (resumen.conflictos ?? 0) > 0
-                      ? 'bg-red-500/10 border-red-500/40 hover:border-red-400'
-                      : 'bg-slate-900/80 border-slate-800 hover:border-orange-500/40'
-                  }`}
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Conflictos</p>
-                  <p className={`text-xl font-bold mt-0.5 ${(resumen.conflictos ?? 0) > 0 ? 'text-red-300' : 'text-white'}`}>
-                    {resumen.conflictos ?? 0}
-                  </p>
-                  <p className="text-[10px] text-slate-500">en el horario</p>
-                </button>
-                <button
-                  onClick={() => {
-                    setHorariosSubTab('aulas');
-                    setActiveTab('horarios');
-                  }}
-                  className="bg-slate-900/80 border border-slate-800 hover:border-emerald-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
-                >
-                  <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Clases / Aulas</p>
-                  <p className="text-xl font-bold text-white mt-0.5">
-                    {resumen.clases_agendadas ?? 0}
-                    <span className="text-xs font-semibold text-slate-500"> / {resumen.aulas_activas ?? 0}</span>
-                  </p>
-                  <p className="text-[10px] text-slate-500">agendadas / activas</p>
-                </button>
-              </div>
-            )}
-
             {/* System Module Shortcut Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {modulos.filter((m) => !m.oculto).map((m) => {
