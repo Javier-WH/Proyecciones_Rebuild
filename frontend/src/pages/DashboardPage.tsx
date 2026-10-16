@@ -10,6 +10,7 @@ import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
 import { CargaDocentePage } from './CargaDocentePage.js';
 import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
+import { EstadisticasPanel } from './estadisticas/EstadisticasPanel.js';
 import { ProfesorPortalPage } from './ProfesorPortalPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
 import { ConfigHorariosModal } from './ConfigHorariosModal.js';
@@ -36,6 +37,7 @@ import {
   Building2,
   BookOpen,
   Activity,
+  BarChart3,
   CheckCircle2,
   XCircle,
   Clock,
@@ -79,12 +81,16 @@ export const DashboardPage: React.FC = () => {
   const [historialOpen, setHistorialOpen] = useState(false);
   const [logoReportesOpen, setLogoReportesOpen] = useState(false);
   const [buscarOpen, setBuscarOpen] = useState(false);
+  // Sub-vistas del Inicio: tarjetas de métricas (por defecto) o el panel de
+  // estadísticas con gráficos (se consulta solo al abrirlo — pega contra SAGA).
+  const [inicioVista, setInicioVista] = useState<'resumen' | 'estadisticas'>('resumen');
   const [resumen, setResumen] = useState<{
     periodo: string | null;
     periodo_nombre?: string;
     proyecciones_activas?: number;
     secciones?: number;
     profesores_activos?: number;
+    docentes_con_carga?: number;
     aulas_activas?: number;
     clases_agendadas?: number;
     materias_sin_profesor?: number;
@@ -728,6 +734,36 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Sub-pestañas de Inicio: Resumen (tarjetas) / Estadísticas */}
+            <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-800 rounded-xl p-1 w-fit">
+              <button
+                onClick={() => setInicioVista('resumen')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  inicioVista === 'resumen'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                Resumen
+              </button>
+              <button
+                onClick={() => setInicioVista('estadisticas')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  inicioVista === 'estadisticas'
+                    ? 'bg-slate-800 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                Estadísticas
+              </button>
+            </div>
+
+            {inicioVista === 'estadisticas' ? (
+              <EstadisticasPanel />
+            ) : (
+              <>
             {/* Métricas del periodo activo */}
             {resumen?.periodo && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -752,8 +788,8 @@ export const DashboardPage: React.FC = () => {
                   className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/40 rounded-xl px-4 py-3 text-left transition-colors cursor-pointer"
                 >
                   <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Docentes</p>
-                  <p className="text-xl font-bold text-white mt-0.5">{resumen.profesores_activos ?? 0}</p>
-                  <p className="text-[10px] text-slate-500">activos</p>
+                  <p className="text-xl font-bold text-white mt-0.5">{resumen.docentes_con_carga ?? resumen.profesores_activos ?? 0}</p>
+                  <p className="text-[10px] text-slate-500">con carga en el periodo</p>
                 </button>
                 <button
                   onClick={() => setActiveTab('carga')}
@@ -828,6 +864,8 @@ export const DashboardPage: React.FC = () => {
                 );
               })}
             </div>
+              </>
+            )}
           </>
         )}
       </main>
