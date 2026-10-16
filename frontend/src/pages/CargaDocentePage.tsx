@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { apiFetch, esVistaObsoleta } from '../api/client.js';
+import { useSyncPoll } from '../hooks/useSyncPoll.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
@@ -130,27 +131,44 @@ export const CargaDocentePage: React.FC = () => {
     return () => ro.disconnect();
   }, []);
 
-  const fetchCarga = async () => {
-    setLoading(true);
+  // `fondo` = refetch del poll de sincronización: sin skeleton ni
+  // indicador global — solo actualiza los datos por debajo.
+  const fetchCarga = async (fondo = false) => {
+    if (!fondo) setLoading(true);
     setErrorMsg(null);
     const qs = periodoSel ? `?periodo=${encodeURIComponent(periodoSel)}` : '';
     const res = await apiFetch<{ periodo: string; periodo_nombre?: string | null; rows: CargaRow[] }>(
-      `/proyecciones/carga-docente${qs}`
+      `/proyecciones/carga-docente${qs}`,
+      { silencioso: fondo }
     );
     if (res.success && res.data) {
       setRows(res.data.rows);
       setPeriodo(res.data.periodo);
       setPeriodoNombre(res.data.periodo_nombre ?? null);
-    } else {
+    } else if (!fondo) {
       setErrorMsg(res.message || 'Error cargando la carga docente.');
     }
-    setLoading(false);
+    if (!fondo) setLoading(false);
   };
 
-  const fetchProfesores = async () => {
-    const res = await apiFetch<Profesor[]>('/profesores?para_asignacion=1&incluir_inactivos=1');
+  const fetchProfesores = async (fondo = false) => {
+    const res = await apiFetch<Profesor[]>('/profesores?para_asignacion=1&incluir_inactivos=1', { silencioso: fondo });
     if (res.success && res.data) setProfesores(res.data);
   };
+
+  const [asignando, setAsignando] = useState(false);
+
+  // ── Poll de sincronización (ventana activa) ──────────────────────────
+  // Si otro usuario toca asignaciones/proyecciones se refresca en fondo;
+  // pausado mientras hay una asignación en vuelo para que el refetch no
+  // pise la escritura que está viajando.
+  useSyncPoll(
+    () => {
+      fetchCarga(true);
+      fetchProfesores(true);
+    },
+    { pausado: asignando || loading }
+  );
 
   useEffect(() => {
     if (cargandoPeriodo) return;
@@ -160,24 +178,29 @@ export const CargaDocentePage: React.FC = () => {
   }, [periodoSel, cargandoPeriodo]);
 
   const handleAssign = async (row: CargaRow, profesorId: number | null, todosLapsos = false) => {
-    const res = await apiFetch('/proyecciones/asignaciones', {
-      method: 'PUT',
-      body: JSON.stringify({
-        proyeccion_id: row.proyeccion_id,
-        materia_id: row.materia_id,
-        seccion_id: row.seccion_id,
-        trimestre: row.trimestre,
-        profesor_id: profesorId,
-        todos_lapsos: todosLapsos,
-      }),
-    });
-    if (res.success) {
-      fetchCarga();
-    } else {
-      setErrorMsg(res.message || 'Error asignando profesor.');
-      // 404/409: otro usuario ya tocó la asignación/materia — refrescar
-      // la vista para converger con el estado real del servidor.
-      if (esVistaObsoleta(res)) fetchCarga();
+    setAsignando(true);
+    try {
+      const res = await apiFetch('/proyecciones/asignaciones', {
+        method: 'PUT',
+        body: JSON.stringify({
+          proyeccion_id: row.proyeccion_id,
+          materia_id: row.materia_id,
+          seccion_id: row.seccion_id,
+          trimestre: row.trimestre,
+          profesor_id: profesorId,
+          todos_lapsos: todosLapsos,
+        }),
+      });
+      if (res.success) {
+        await fetchCarga();
+      } else {
+        setErrorMsg(res.message || 'Error asignando profesor.');
+        // 404/409: otro usuario ya tocó la asignación/materia — refrescar
+        // la vista para converger con el estado real del servidor.
+        if (esVistaObsoleta(res)) await fetchCarga();
+      }
+    } finally {
+      setAsignando(false);
     }
   };
 

@@ -69,6 +69,10 @@ interface SeccionGridProps {
   avisosParciales?: Map<number, string[]>; // entry.id → choques parciales T2 (icono verde)
   onBeforeMutate?: () => void; // snapshot para deshacer (Ctrl+Z) antes de cada mutación
   onChanged: () => void;
+  // Reporta cuándo el usuario está interactuando (arrastrando, con el menú
+  // contextual abierto o con una mutación en vuelo): la página pausa el
+  // poll de sincronización para que un refetch no rompa la interacción.
+  onInteraccion?: (activa: boolean) => void;
 }
 
 export const SeccionGrid: React.FC<SeccionGridProps> = ({
@@ -88,11 +92,27 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   avisosParciales,
   onBeforeMutate,
   onChanged,
+  onInteraccion,
 }) => {
   const [activo, setActivo] = useState<DragData | null>(null);
   const [dropPrev, setDropPrev] = useState<{ celdas: Set<string>; valida: boolean } | null>(null);
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error' | 'warn'; msg: string } | null>(null);
   const [menuEntry, setMenuEntry] = useState<HorarioEntry | null>(null);
+  // Mutaciones en vuelo dentro del grid (drop, desagendar, swap…): el
+  // poll de sincronización se pausa mientras haya alguna para que su
+  // refetch no pise la escritura que está volando.
+  const [mutando, setMutando] = useState(0);
+  const mutar = async <T,>(p: Promise<T>): Promise<T> => {
+    setMutando((c) => c + 1);
+    try {
+      return await p;
+    } finally {
+      setMutando((c) => c - 1);
+    }
+  };
+  useEffect(() => {
+    onInteraccion?.(activo !== null || menuEntry !== null || mutando > 0);
+  }, [activo, menuEntry, mutando, onInteraccion]);
   // ⇧+hover sobre una materia: ilumina los bloques donde ese profesor ya
   // tiene clases (en cualquier sección de la proyección), para ubicarla
   // sin cambiar de vista. También funciona mientras se arrastra.
@@ -447,7 +467,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     // Grupo pendiente: agendar todas las horas restantes de la materia en bloque
     if (drag.tipo === 'grupo-pendiente') {
       onBeforeMutate?.();
-      const res = await apiFetch('/horarios/entries/schedule-group', {
+      const res = await mutar(apiFetch('/horarios/entries/schedule-group', {
         method: 'POST',
         etiqueta: 'Agendando el bloque…',
         body: JSON.stringify({
@@ -457,7 +477,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           dia_semana: dia,
           bloque_id: bloque.id,
         }),
-      });
+      }));
       if (res.success) {
         mostrarAviso(res.message || 'Bloque agendado.', 'ok');
         onChanged();
@@ -470,7 +490,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     // Grupo: mover el run completo a partir de esta celda
     if (drag.tipo === 'grupo' && drag.entry_ids?.length) {
       onBeforeMutate?.();
-      const res = await apiFetch('/horarios/entries/move-group', {
+      const res = await mutar(apiFetch('/horarios/entries/move-group', {
         method: 'POST',
         etiqueta: 'Moviendo el bloque…',
         body: JSON.stringify({
@@ -479,7 +499,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           bloque_id: bloque.id,
           forzar: !!forzar,
         }),
-      });
+      }));
       if (res.success) {
         mostrarAviso(res.message || 'Bloque movido.', 'ok');
         onChanged();
@@ -495,7 +515,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     if (destino && destino.id !== drag.entry_id) {
       if (drag.tipo !== 'entry' || !drag.entry_id) return;
       onBeforeMutate?.();
-      const res = await apiFetch('/horarios/entries/swap', {
+      const res = await mutar(apiFetch('/horarios/entries/swap', {
         method: 'POST',
         etiqueta: 'Intercambiando clases…',
         body: JSON.stringify({
@@ -503,7 +523,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           entry_id_b: destino.id,
           forzar: !!forzar,
         }),
-      });
+      }));
       if (res.success) {
         mostrarAviso(`Intercambio: '${drag.titulo}' ↔ '${destino.materia_nombre}'.`, 'ok');
         onChanged();
@@ -514,7 +534,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       return;
     }
     onBeforeMutate?.();
-    const res = await apiFetch('/horarios/entries', {
+    const res = await mutar(apiFetch('/horarios/entries', {
       method: 'PUT',
       etiqueta: 'Agendando la clase…',
       body: JSON.stringify({
@@ -526,7 +546,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         bloque_id: bloque.id,
         forzar: !!forzar,
       }),
-    });
+    }));
     if (res.success) {
       const regla = evaluarReglas(bloque, dia, drag);
       mostrarAviso(regla ?? 'Clase agendada.', regla ? 'warn' : 'ok');
@@ -539,7 +559,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
 
   const handleDesagendar = async (entryId: number) => {
     onBeforeMutate?.();
-    const res = await apiFetch(`/horarios/entries/${entryId}`, { method: 'DELETE', etiqueta: 'Quitando la clase…' });
+    const res = await mutar(apiFetch(`/horarios/entries/${entryId}`, { method: 'DELETE', etiqueta: 'Quitando la clase…' }));
     if (res.success) {
       mostrarAviso('Clase desagendada.');
       setMenuEntry(null);
@@ -553,11 +573,11 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   // Desagendar un bloque completo (varias horas) arrastrado a pendientes
   const handleDesagendarGrupo = async (ids: number[]) => {
     onBeforeMutate?.();
-    const res = await apiFetch('/horarios/entries/unschedule', {
+    const res = await mutar(apiFetch('/horarios/entries/unschedule', {
       method: 'POST',
       etiqueta: 'Desagendando el bloque…',
       body: JSON.stringify({ entry_ids: ids }),
-    });
+    }));
     if (res.success) {
       mostrarAviso(res.message || 'Clases desagendadas.');
       onChanged();
@@ -571,7 +591,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   // materia+sección+profesor ese día); con `forzar` admite aulas ocupadas.
   const handleCambiarAula = async (entry: HorarioEntry, aulaId: number) => {
     onBeforeMutate?.();
-    const res = await apiFetch('/horarios/entries/aula-grupo', {
+    const res = await mutar(apiFetch('/horarios/entries/aula-grupo', {
       method: 'POST',
       etiqueta: 'Cambiando el aula…',
       body: JSON.stringify({
@@ -579,7 +599,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         aula_id: aulaId,
         forzar,
       }),
-    });
+    }));
     if (res.success) {
       mostrarAviso(res.message || 'Aula actualizada.');
       setMenuEntry(null);

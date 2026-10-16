@@ -20,6 +20,7 @@ import { reportesRoutes } from './modules/reportes/reportes.routes.js';
 import { externoRoutes } from './modules/externo/externo.routes.js';
 import { auditoriaRoutes } from './modules/auditoria/auditoria.routes.js';
 import { buscarRoutes } from './modules/buscar/buscar.routes.js';
+import { syncRoutes } from './modules/sync/sync.routes.js';
 import { streamLogErrores } from './utils/errorLog.js';
 
 export function buildApp() {
@@ -144,6 +145,7 @@ export function buildApp() {
   app.register(externoRoutes, { prefix: '/api/externo' });
   app.register(auditoriaRoutes, { prefix: '/api/auditoria' });
   app.register(buscarRoutes, { prefix: '/api/buscar' });
+  app.register(syncRoutes, { prefix: '/api/sync' });
 
   return app;
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiFetch, esVistaObsoleta } from '../api/client.js';
+import { useSyncPoll } from '../hooks/useSyncPoll.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
@@ -74,18 +75,28 @@ export const ProyeccionesPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiarOpen, setCopiarOpen] = useState(false);
 
-  const fetchProyecciones = async () => {
-    setLoading(true);
+  // `fondo` = refetch del poll de sincronización: sin skeleton ni
+  // indicador global — solo actualiza la lista por debajo.
+  const fetchProyecciones = async (fondo = false) => {
+    if (!fondo) setLoading(true);
     setErrorMsg(null);
     const qs = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
-    const res = await apiFetch<ProyeccionItem[]>(`/proyecciones${qs}`);
+    const res = await apiFetch<ProyeccionItem[]>(`/proyecciones${qs}`, { silencioso: fondo });
     if (res.success && res.data) {
       setProyecciones(res.data);
-    } else {
+    } else if (!fondo) {
       setErrorMsg(res.message || 'Error cargando las proyecciones.');
     }
-    setLoading(false);
+    if (!fondo) setLoading(false);
   };
+
+  // ── Poll de sincronización (ventana activa) ──────────────────────────
+  // Si otro usuario crea/edita/borra proyecciones del período se
+  // refresca en fondo; pausado con cualquier modal abierto para que el
+  // refetch no corte una edición en curso.
+  useSyncPoll(() => fetchProyecciones(true), {
+    pausado: loading || isModalOpen || !!editingProyeccion || !!deletingProyeccion || copiarOpen,
+  });
 
   useEffect(() => {
     if (cargandoPeriodo) return;
@@ -239,7 +250,7 @@ export const ProyeccionesPage: React.FC = () => {
         </div>
 
         <button
-          onClick={fetchProyecciones}
+          onClick={() => fetchProyecciones()}
           className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />

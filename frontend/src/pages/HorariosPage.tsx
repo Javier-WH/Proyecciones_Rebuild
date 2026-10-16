@@ -10,6 +10,7 @@ import { VistaRecurso } from './horarios/VistaRecurso.js';
 import { ReporteHorarioModal } from './ReporteHorarioModal.js';
 import { AulasLibresModal } from './AulasLibresModal.js';
 import { NAV_EVENT, NavHorarios, tomarNavPendiente } from './navBus.js';
+import { useSyncPoll } from '../hooks/useSyncPoll.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { ProfesorModal, Profesor } from './ProfesorModal.js';
 import {
@@ -855,17 +856,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
     if (rConfig.success && rConfig.data) setConfig(rConfig.data);
   };
 
-  const fetchEntries = async () => {
+  // `fondo` = refetch silencioso (poll de sincronización o cascada desde
+  // `rows`): no dispara el indicador global de red con tráfico de fondo.
+  const fetchEntries = async (fondo = false) => {
     const qsPeriodo = periodoSel ? `&periodo=${encodeURIComponent(periodoSel)}` : '';
     const res = await apiFetch<{ entries: HorarioEntry[] }>(
-      `/horarios/entries?tipo=${lapso.tipo}&trimestre=${lapso.n}${qsPeriodo}`
+      `/horarios/entries?tipo=${lapso.tipo}&trimestre=${lapso.n}${qsPeriodo}`,
+      { silencioso: fondo }
     );
     const list = res.success && res.data ? res.data.entries || [] : [];
     if (res.success && res.data) setEntries(list);
     // Disponibilidad (bloqueos) de cada profesor presente en el lapso — alimenta la auditoría
     const ids = [...new Set(list.map((e) => e.profesor_id).filter((id): id is number => !!id))];
     const respuestas = await Promise.all(
-      ids.map((id) => apiFetch<DispSlot[]>(`/profesores/${id}/disponibilidad`))
+      ids.map((id) => apiFetch<DispSlot[]>(`/profesores/${id}/disponibilidad`, { silencioso: fondo }))
     );
     const mapa = new Map<number, DispSlot[]>();
     respuestas.forEach((r, i) => {
@@ -887,10 +891,35 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
   useEffect(() => {
     // Sin filas en el periodo no hay nada que agendar: limpiar la pizarra
     // (si no, al cambiar a un periodo vacío quedarían entries del anterior).
-    if (rows.length > 0) fetchEntries();
+    if (rows.length > 0) fetchEntries(true);
     else setEntries([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lapso.tipo, lapso.n, rows]);
+
+  // ── Poll de sincronización (ventana activa) ──────────────────────────
+  // Cuando OTRO usuario toca los datos (el token /api/sync sube) se
+  // refresca la carga del período en silencio; el useEffect de `rows`
+  // arrastra el refetch de entries. Se pausa mientras el usuario está
+  // interactuando con la pizarra (drag, menú o mutación en vuelo) o
+  // durante operaciones pesadas, para que el refetch no rompa la acción.
+  const [interaccion, setInteraccion] = useState(false);
+
+  const syncRefetch = async () => {
+    const qsPeriodo = periodoSel ? `?periodo=${encodeURIComponent(periodoSel)}` : '';
+    const r = await apiFetch<{ periodo: string | null; periodo_nombre?: string | null; rows: MateriaAsignableRow[] }>(
+      `/proyecciones/carga-docente${qsPeriodo}`,
+      { silencioso: true }
+    );
+    if (r.success && r.data) {
+      setRows(r.data.rows || []);
+      setPeriodo(r.data.periodo);
+      setPeriodoNombre(r.data.periodo_nombre ?? null);
+    }
+  };
+
+  useSyncPoll(syncRefetch, {
+    pausado: interaccion || loading || deshaciendo || generando || resolviendo,
+  });
 
   // ── Deshacer (Ctrl+Z) ──────────────────────────────────────────────────
   // Snapshot del estado de entries antes de cada mutación; al deshacer se
@@ -1513,6 +1542,7 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
                 avisosParciales={avisosParciales}
                 onBeforeMutate={pushUndo}
                 onChanged={fetchEntries}
+                onInteraccion={setInteraccion}
               />
             ) : (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400 text-sm">
