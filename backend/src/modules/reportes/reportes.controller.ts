@@ -148,8 +148,8 @@ async function cargarUnidadesAsignables(periodo: string, pnfCond: string, pnfPar
   return query<any[]>(
     `SELECT m.id AS materia_id, m.nombre AS materia_nombre,
             m.q1, m.q2, m.q3, m.semestre1, m.semestre2,
-            s.id AS seccion_id, s.nombre AS seccion_nombre,
-            p.tipo_proyeccion, p.pnf_saga_id, p.pnf_nombre
+            s.id AS seccion_id, s.nombre AS seccion_nombre, s.turno_nombre AS seccion_turno,
+            p.tipo_proyeccion, p.pnf_saga_id, p.pnf_nombre, p.trayecto_nombre
      FROM proyecciones p
      JOIN proyeccion_materias m ON m.proyeccion_id = p.id AND m.eliminada = 0
      JOIN proyeccion_secciones s
@@ -525,18 +525,23 @@ export async function estadisticasHandler(request: FastifyRequest, reply: Fastif
     for (const f of filas) {
       for (const lapso of lapsosDeMateria(f, f.tipo_proyeccion)) {
         const clave = `${f.materia_id}:${f.seccion_id}:${lapso}`;
+        const ubicacion = {
+          seccion_id: f.seccion_id,
+          trayecto: f.trayecto_nombre,
+          turno: f.seccion_turno,
+        };
         if (!asigSet.has(clave)) {
           totalSinProfesor++;
           bump(sinProfesorPorPnf, f);
           if (detalleSinProfesor.length < MAX_DETALLE) {
-            detalleSinProfesor.push({ materia: f.materia_nombre, seccion: f.seccion_nombre, lapso, tipo: f.tipo_proyeccion, pnf: f.pnf_nombre });
+            detalleSinProfesor.push({ materia: f.materia_nombre, seccion: f.seccion_nombre, lapso, tipo: f.tipo_proyeccion, pnf: f.pnf_nombre, ...ubicacion });
           }
         }
         if (!entrySet.has(clave)) {
           totalSinHorario++;
           bump(sinHorarioPorPnf, f);
           if (detalleSinHorario.length < MAX_DETALLE) {
-            detalleSinHorario.push({ materia: f.materia_nombre, seccion: f.seccion_nombre, lapso, tipo: f.tipo_proyeccion, pnf: f.pnf_nombre });
+            detalleSinHorario.push({ materia: f.materia_nombre, seccion: f.seccion_nombre, lapso, tipo: f.tipo_proyeccion, pnf: f.pnf_nombre, ...ubicacion });
           }
         }
       }

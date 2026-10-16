@@ -9,7 +9,7 @@ import { ProyeccionesPage } from './ProyeccionesPage.js';
 import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
 import { CargaDocentePage } from './CargaDocentePage.js';
-import { HorariosPage, HorariosSubTab } from './HorariosPage.js';
+import { HorariosPage, HorariosSubTab, HorariosFoco } from './HorariosPage.js';
 import { EstadisticasPanel } from './estadisticas/EstadisticasPanel.js';
 import { ProfesorPortalPage } from './ProfesorPortalPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
@@ -63,6 +63,8 @@ export const DashboardPage: React.FC = () => {
   const { periodo, esPlanificacion } = usePeriodo();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores' | 'carga' | 'horarios'>('dashboard');
   const [horariosSubTab, setHorariosSubTab] = useState<HorariosSubTab>('horario');
+  // Foco de navegación profunda hacia Horarios (desde las estadísticas)
+  const [horariosFoco, setHorariosFoco] = useState<HorariosFoco | null>(null);
   const [sagaConnected, setSagaConnected] = useState<boolean | null>(null);
   const [loadingSaga, setLoadingSaga] = useState(true);
   const [sagaNota, setSagaNota] = useState<string | null>(null); // feedback breve tras reintentar
@@ -640,7 +642,13 @@ export const DashboardPage: React.FC = () => {
         ) : activeTab === 'carga' ? (
           <CargaDocentePage />
         ) : activeTab === 'horarios' ? (
-          <HorariosPage subTab={horariosSubTab} onSubTabChange={setHorariosSubTab} configTick={horariosConfigTick} />
+          <HorariosPage
+            subTab={horariosSubTab}
+            onSubTabChange={setHorariosSubTab}
+            configTick={horariosConfigTick}
+            foco={horariosFoco}
+            onFocoConsumido={() => setHorariosFoco(null)}
+          />
         ) : activeTab === 'proyecciones' ? (
           <ProyeccionesPage />
         ) : (
@@ -761,7 +769,13 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             {inicioVista === 'estadisticas' ? (
-              <EstadisticasPanel />
+              <EstadisticasPanel
+                onAbrirHorario={(f) => {
+                  setHorariosFoco(f);
+                  setHorariosSubTab('horario');
+                  setActiveTab('horarios');
+                }}
+              />
             ) : (
               <>
             {/* Métricas del periodo activo */}

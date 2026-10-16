@@ -60,10 +60,23 @@ import {
 export type HorariosSubTab = 'horario' | 'aulas' | 'turnos';
 type Vista = 'seccion' | 'aula' | 'profesor';
 
+// Foco de navegación profunda: la vista de estadísticas puede saltar a la
+// grilla de una sección concreta (lapso + cadena de selectores PNF/Trayecto/
+// Turno + id de sección).
+export interface HorariosFoco {
+  lapsoSel?: string; // 'TRIMESTRAL:1' | 'SEMESTRAL:2' | ...
+  pnf?: string;
+  trayecto?: string;
+  turno?: string;
+  seccionId?: number;
+}
+
 interface HorariosPageProps {
   subTab?: HorariosSubTab;
   onSubTabChange?: (t: HorariosSubTab) => void;
   configTick?: number; // se incrementa al guardar ConfigHorariosModal → recarga la config
+  foco?: HorariosFoco | null;
+  onFocoConsumido?: () => void;
 }
 
 interface ProfesorLite {
@@ -91,7 +104,7 @@ interface DispSlot {
   hora_fin: string;
 }
 
-export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick }) => {
+export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChange, configTick, foco, onFocoConsumido }) => {
   const { user } = useAuth();
   // Periodo de trabajo del usuario (activo, o el de planificación que
   // Master/Coordinador haya elegido en el selector global).
@@ -164,6 +177,20 @@ export const HorariosPage: React.FC<HorariosPageProps> = ({ subTab, onSubTabChan
       else n.add(t);
       return n;
     });
+
+  // Navegación profunda desde Estadísticas: aplica el foco recibido sobre los
+  // selectores en cascada (los "Eff" ya caen a la primera opción si el valor
+  // pedido no existe en este período) y luego lo consume para no reaplicarlo.
+  useEffect(() => {
+    if (!foco) return;
+    setVista('seccion');
+    if (foco.lapsoSel) setLapsoSel(foco.lapsoSel);
+    if (foco.pnf !== undefined) setPnfSel(foco.pnf);
+    if (foco.trayecto !== undefined) setTrayectoSel(foco.trayecto);
+    if (foco.turno !== undefined) setTurnoSel(foco.turno);
+    if (foco.seccionId !== undefined) setSeccionId(foco.seccionId);
+    onFocoConsumido?.();
+  }, [foco]);
 
   const lapsos = useMemo(() => {
     const set = new Set<string>();

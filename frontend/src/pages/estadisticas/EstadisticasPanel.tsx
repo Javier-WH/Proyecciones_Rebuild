@@ -48,8 +48,11 @@ interface TurnoUso {
 interface PendienteDetalle {
   materia: string;
   seccion: string;
+  seccion_id?: number;
   lapso: number;
   tipo?: string;
+  trayecto?: string;
+  turno?: string;
   pnf: string;
 }
 
@@ -114,7 +117,19 @@ const nombreLapso = (lapso: number, tipo?: string) =>
 
 // ── Panel principal ──────────────────────────────────────────────────────────
 
-export const EstadisticasPanel: React.FC = () => {
+// Foco que se envía a la pestaña Horarios para abrir la grilla exacta de la
+// sección/lapso del pendiente (mismo formato que usa HorariosPage).
+export interface FocoHorario {
+  lapsoSel: string;
+  pnf: string;
+  trayecto: string;
+  turno: string;
+  seccionId?: number;
+}
+
+export const EstadisticasPanel: React.FC<{ onAbrirHorario?: (foco: FocoHorario) => void }> = ({
+  onAbrirHorario,
+}) => {
   const { periodo } = usePeriodo();
   const [data, setData] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(true);
@@ -361,7 +376,8 @@ export const EstadisticasPanel: React.FC = () => {
               <div className="border-t border-slate-800 pt-2 max-h-44 overflow-y-auto pr-1">
                 {sinProfesor.detalle.map((d, i) => (
                   <p key={i} className="text-[11px] text-slate-400 py-0.5 truncate">
-                    {d.materia} · Sec. {d.seccion} · {nombreLapso(d.lapso, d.tipo)}
+                    <span className="font-semibold text-slate-300">{d.materia}</span>
+                    {` · ${d.pnf} · ${d.trayecto ?? ''} · Sec. ${d.seccion} · ${d.turno ?? ''} · ${nombreLapso(d.lapso, d.tipo)}`}
                   </p>
                 ))}
               </div>
@@ -371,7 +387,7 @@ export const EstadisticasPanel: React.FC = () => {
 
         {/* Materias sin horario */}
         <Card
-          titulo="Materias sin clase agendada"
+          titulo="Materias fuera del horario"
           icono={<CalendarX className="w-4 h-4" />}
           extra={
             <Badge tono={(sinHorario?.total ?? 0) > 0 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}>
@@ -394,9 +410,24 @@ export const EstadisticasPanel: React.FC = () => {
               </div>
               <div className="border-t border-slate-800 pt-2 max-h-44 overflow-y-auto pr-1">
                 {sinHorario.detalle.map((d, i) => (
-                  <p key={i} className="text-[11px] text-slate-400 py-0.5 truncate">
-                    {d.materia} · Sec. {d.seccion} · {nombreLapso(d.lapso, d.tipo)}
-                  </p>
+                  <button
+                    key={i}
+                    onClick={() =>
+                      onAbrirHorario?.({
+                        lapsoSel: `${d.tipo ?? 'TRIMESTRAL'}:${d.lapso}`,
+                        pnf: d.pnf,
+                        trayecto: d.trayecto ?? '',
+                        turno: d.turno ?? '',
+                        seccionId: d.seccion_id,
+                      })
+                    }
+                    disabled={!onAbrirHorario}
+                    title="Abrir esta sección en Horarios"
+                    className="block w-full text-left text-[11px] text-slate-400 hover:text-sky-300 hover:bg-slate-800/40 rounded px-1 py-0.5 truncate cursor-pointer transition-colors"
+                  >
+                    <span className="font-semibold text-slate-300">{d.materia}</span>
+                    {` · ${d.pnf} · ${d.trayecto ?? ''} · Sec. ${d.seccion} · ${d.turno ?? ''} · ${nombreLapso(d.lapso, d.tipo)}`}
+                  </button>
                 ))}
               </div>
             </>
