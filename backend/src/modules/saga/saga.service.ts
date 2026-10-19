@@ -194,6 +194,24 @@ export const sagaService = {
     });
   },
 
+  // Alumnos inscritos (una fila por alumno, con ucs_inscritas anidadas).
+  // Solo se reenvían los parámetros que el endpoint SAGA reconoce; sin
+  // per_page la API devuelve el array completo del alcance pedido.
+  // null = SAGA no responde; [] = sin inscritos para los filtros dados.
+  getEstudiantesInscritos: async (params: Record<string, string | undefined>) => {
+    const permitidos = [
+      'lapso', 'history', 'trayecto', 'pensum', 'turno', 'seccion',
+      'sexo', 'programa', 'estatus', 'condicion', 'ci', 'per_page', 'page',
+    ];
+    const qs = new URLSearchParams();
+    for (const k of permitidos) {
+      const v = params[k];
+      if (v !== undefined && v !== '') qs.set(k, v);
+    }
+    const query = qs.toString();
+    return fetchFromSaga<any>(`/student/enrolled${query ? `?${query}` : ''}`);
+  },
+
   // null = SAGA no responde; [] = sin inscripciones para ese pnf/trayecto
   getInscriptionsSummary: async (pnfSagaId: number | string, trayectoSagaId: number | string): Promise<TurnoEstimacion[] | null> => {
     const rawInscriptions = await fetchFromSaga<any[]>('/student/inscription');

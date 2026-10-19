@@ -10,6 +10,7 @@ import { PeriodosPage } from './PeriodosPage.js';
 import { ProfesoresPage } from './ProfesoresPage.js';
 import { CargaDocentePage } from './CargaDocentePage.js';
 import { HorariosPage, HorariosSubTab, HorariosFoco } from './HorariosPage.js';
+import { EstudiantesPage } from './EstudiantesPage.js';
 import { EstadisticasPanel } from './estadisticas/EstadisticasPanel.js';
 import { ProfesorPortalPage } from './ProfesorPortalPage.js';
 import { UsuariosModal } from './UsuariosModal.js';
@@ -61,7 +62,7 @@ import {
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { periodo, esPlanificacion } = usePeriodo();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'proyecciones' | 'periodos' | 'profesores' | 'carga' | 'horarios'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'estudiantes' | 'proyecciones' | 'periodos' | 'profesores' | 'carga' | 'horarios'>('dashboard');
   const [horariosSubTab, setHorariosSubTab] = useState<HorariosSubTab>('horario');
   // Foco de navegación profunda hacia Horarios (desde las estadísticas)
   const [horariosFoco, setHorariosFoco] = useState<HorariosFoco | null>(null);
@@ -190,6 +191,15 @@ export const DashboardPage: React.FC = () => {
       icono: <CalendarDays className="w-6 h-6" />,
       color: 'amber',
       onClick: () => setActiveTab('periodos'),
+    },
+    {
+      titulo: 'Estudiantes',
+      desc: 'Inscritos en SAGA por PNF y maya, con totales y filtros.',
+      tag: 'Consulta SAGA',
+      accion: 'Ver Estudiantes',
+      icono: <GraduationCap className="w-6 h-6" />,
+      color: 'teal',
+      onClick: () => setActiveTab('estudiantes'),
     },
     {
       titulo: 'Proyecciones',
@@ -630,6 +640,8 @@ export const DashboardPage: React.FC = () => {
             foco={horariosFoco}
             onFocoConsumido={() => setHorariosFoco(null)}
           />
+        ) : activeTab === 'estudiantes' ? (
+          <EstudiantesPage />
         ) : activeTab === 'proyecciones' ? (
           <ProyeccionesPage />
         ) : (

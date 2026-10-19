@@ -53,6 +53,13 @@ export async function sagaRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true, data: data ?? [], connected: data !== null });
   });
 
+  // Proxy de /student/enrolled: los query params de SAGA se reenvían tal
+  // cual (el servicio whitelistea los que la API reconoce).
+  fastify.get('/estudiantes', { preHandler: [authenticate] }, async (req, reply) => {
+    const data = await sagaService.getEstudiantesInscritos(req.query as Record<string, string>);
+    return reply.send({ success: true, data: data ?? [], connected: data !== null });
+  });
+
   fastify.get('/inscriptions-summary/:pnfSagaId/:trayectoSagaId', { preHandler: [authenticate] }, async (req, reply) => {
     const { pnfSagaId, trayectoSagaId } = req.params as { pnfSagaId: string; trayectoSagaId: string };
     const data = await sagaService.getInscriptionsSummary(pnfSagaId, trayectoSagaId);
