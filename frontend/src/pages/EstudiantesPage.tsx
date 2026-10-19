@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
+import { ReporteEstudiantesModal } from './ReporteEstudiantesModal.js';
 import {
   GraduationCap,
   Loader2,
@@ -17,6 +18,7 @@ import {
   UserRound,
   Filter,
   X,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 // ── Tipos del endpoint SAGA /student/enrolled ───────────────────────────────
@@ -139,11 +141,14 @@ export const EstudiantesPage: React.FC = () => {
   const [fSexo, setFSexo] = useState(TODOS);
   const [fEstatus, setFEstatus] = useState(TODOS);
   const [fCondicion, setFCondicion] = useState(TODOS);
-  const [fLapso, setFLapso] = useState(TODOS);
+  // Lapsos seleccionados (multi-select); [] = todos
+  const [fLapsos, setFLapsos] = useState<string[]>([]);
+  const [lapsoMenuOpen, setLapsoMenuOpen] = useState(false);
   const [fTexto, setFTexto] = useState('');
 
   const [expandido, setExpandido] = useState<number | null>(null);
   const [pagina, setPagina] = useState(1);
+  const [reporteOpen, setReporteOpen] = useState(false);
 
   // ── Mayas del PNF seleccionado ────────────────────────────────────────────
   useEffect(() => {
@@ -196,7 +201,7 @@ export const EstudiantesPage: React.FC = () => {
     setFSexo(TODOS);
     setFEstatus(TODOS);
     setFCondicion(TODOS);
-    setFLapso(TODOS);
+    setFLapsos([]);
     setPagina(1);
     setExpandido(null);
   }, [estudiantes]);
@@ -252,7 +257,8 @@ export const EstudiantesPage: React.FC = () => {
       if (fSexo !== TODOS && e.sexo !== fSexo) return false;
       if (fEstatus !== TODOS && e.estatus_academico !== fEstatus) return false;
       if (fCondicion !== TODOS && e.condicion_ingreso !== fCondicion) return false;
-      if (fLapso !== TODOS && !(e.ucs_inscritas ?? []).some((u) => String(u.lapso_id) === fLapso))
+      // Alumno con al menos una UC en ALGUNO de los lapsos elegidos
+      if (fLapsos.length > 0 && !(e.ucs_inscritas ?? []).some((u) => fLapsos.includes(String(u.lapso_id))))
         return false;
       if (texto) {
         const nombre = `${e.nombre ?? ''} ${e.apellido ?? ''}`.toLowerCase();
@@ -260,7 +266,7 @@ export const EstudiantesPage: React.FC = () => {
       }
       return true;
     });
-  }, [estudiantes, fTrayecto, fTurno, fSeccion, fSexo, fEstatus, fCondicion, fLapso, fTexto]);
+  }, [estudiantes, fTrayecto, fTurno, fSeccion, fSexo, fEstatus, fCondicion, fLapsos, fTexto]);
 
   // ── Totales del conjunto filtrado ─────────────────────────────────────────
   const totales = useMemo(() => {
@@ -294,11 +300,11 @@ export const EstudiantesPage: React.FC = () => {
 
   useEffect(() => {
     setPagina(1);
-  }, [fTrayecto, fTurno, fSeccion, fSexo, fEstatus, fCondicion, fLapso, fTexto]);
+  }, [fTrayecto, fTurno, fSeccion, fSexo, fEstatus, fCondicion, fLapsos, fTexto]);
 
   const hayFiltrosActivos =
     fTrayecto !== TODOS || fTurno !== TODOS || fSeccion !== TODOS || fSexo !== TODOS ||
-    fEstatus !== TODOS || fCondicion !== TODOS || fLapso !== TODOS || fTexto.trim() !== '';
+    fEstatus !== TODOS || fCondicion !== TODOS || fLapsos.length > 0 || fTexto.trim() !== '';
 
   const limpiarFiltros = () => {
     setFTrayecto(TODOS);
@@ -307,12 +313,51 @@ export const EstudiantesPage: React.FC = () => {
     setFSexo(TODOS);
     setFEstatus(TODOS);
     setFCondicion(TODOS);
-    setFLapso(TODOS);
+    setFLapsos([]);
     setFTexto('');
   };
 
+  const toggleLapsoFiltro = (id: string) =>
+    setFLapsos((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
   const selectClase =
     'bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-[200px]';
+
+  // Descripción de la selección actual, para el encabezado del reporte
+  const seleccionReporte = useMemo(() => {
+    const pnfTexto =
+      pnfSel === TODOS
+        ? 'Todos los PNF'
+        : pnfCatalogo.find((p) => String(p.id) === pnfSel)?.nombre ?? `PNF ${pnfSel}`;
+    const mayaTexto =
+      pnfSel === TODOS
+        ? '—'
+        : mayaSel === TODOS
+          ? 'Todas las mayas'
+          : mayas.find((m) => String(m.id) === mayaSel)?.descripcion ?? `Maya ${mayaSel}`;
+    const alcanceTexto =
+      alcance === '0' ? 'Lapso en curso' : alcance === '1' ? 'Histórico' : 'Histórico + en curso';
+    const filtros: string[] = [];
+    if (fTrayecto !== TODOS)
+      filtros.push(`Trayecto: ${opciones.trayectos.find(([id]) => id === fTrayecto)?.[1] ?? fTrayecto}`);
+    if (fTurno !== TODOS) filtros.push(`Turno: ${capitalizar(fTurno)}`);
+    if (fSeccion !== TODOS) filtros.push(`Sección: ${fSeccion}`);
+    if (fSexo !== TODOS) filtros.push(`Sexo: ${capitalizar(fSexo)}`);
+    if (fEstatus !== TODOS) filtros.push(`Estatus: ${capitalizar(fEstatus)}`);
+    if (fCondicion !== TODOS) filtros.push(`Condición: ${capitalizar(fCondicion)}`);
+    if (fLapsos.length > 0) {
+      const nombres = fLapsos.map(
+        (id) => opciones.lapsos.find(([lid]) => lid === id)?.[1] ?? `Lapso ${id}`
+      );
+      filtros.push(`Lapsos: ${nombres.join(', ')}`);
+    }
+    if (fTexto.trim()) filtros.push(`Búsqueda: "${fTexto.trim()}"`);
+    return { pnf: pnfTexto, maya: mayaTexto, alcance: alcanceTexto, filtros };
+  }, [
+    pnfSel, mayaSel, alcance, pnfCatalogo, mayas,
+    fTrayecto, fTurno, fSeccion, fSexo, fEstatus, fCondicion, fLapsos, fTexto,
+    opciones,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -327,14 +372,25 @@ export const EstudiantesPage: React.FC = () => {
             Inscritos registrados en SAGA por PNF, maya y lapso.
           </p>
         </div>
-        <button
-          onClick={() => setTick((t) => t + 1)}
-          disabled={loading}
-          className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          <span>Actualizar</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setReporteOpen(true)}
+            disabled={loading || estudiantes === null}
+            title="Generar reporte estadístico (impreso o Excel) de la selección"
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Reporte</span>
+          </button>
+          <button
+            onClick={() => setTick((t) => t + 1)}
+            disabled={loading}
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Actualizar</span>
+          </button>
+        </div>
       </div>
 
       {/* Selectores PNF → Maya + alcance */}
@@ -544,12 +600,66 @@ export const EstudiantesPage: React.FC = () => {
             ))}
           </select>
 
-          <select value={fLapso} onChange={(e) => setFLapso(e.target.value)} className={selectClase}>
-            <option value={TODOS}>Todos los lapsos</option>
-            {opciones.lapsos.map(([id, nombre]) => (
-              <option key={id} value={id}>{nombre}</option>
-            ))}
-          </select>
+          {/* Lapsos: multi-select con checkboxes (puede haber muchos) */}
+          <div className="relative">
+            <button
+              onClick={() => setLapsoMenuOpen((v) => !v)}
+              className={`${selectClase} flex items-center justify-between gap-2 min-w-[170px] ${
+                fLapsos.length > 0 ? 'border-indigo-500/60 text-indigo-200' : ''
+              }`}
+            >
+              <span className="truncate">
+                {fLapsos.length === 0
+                  ? 'Todos los lapsos'
+                  : fLapsos.length === 1
+                    ? opciones.lapsos.find(([id]) => id === fLapsos[0])?.[1] ?? '1 lapso'
+                    : `${fLapsos.length} lapsos`}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            </button>
+            {lapsoMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setLapsoMenuOpen(false)} />
+                <div className="absolute z-50 mt-1 w-72 max-h-60 overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1.5">
+                  {opciones.lapsos.length === 0 ? (
+                    <p className="px-2.5 py-1.5 text-[11px] text-slate-600 italic">
+                      Sin lapsos en los datos cargados.
+                    </p>
+                  ) : (
+                    opciones.lapsos.map(([id, nombre]) => {
+                      const activo = fLapsos.includes(id);
+                      return (
+                        <label
+                          key={id}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-[11px] transition-colors ${
+                            activo
+                              ? 'bg-indigo-500/15 text-indigo-300'
+                              : 'text-slate-300 hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={activo}
+                            onChange={() => toggleLapsoFiltro(id)}
+                            className="accent-indigo-500 shrink-0"
+                          />
+                          <span className="truncate">{nombre}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                  {fLapsos.length > 0 && (
+                    <button
+                      onClick={() => setFLapsos([])}
+                      className="w-full px-2.5 py-1.5 mt-0.5 text-[10px] font-semibold text-slate-400 hover:text-white border-t border-slate-800 text-left cursor-pointer"
+                    >
+                      Limpiar selección
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -715,6 +825,14 @@ export const EstudiantesPage: React.FC = () => {
           )}
         </div>
       )}
+
+      <ReporteEstudiantesModal
+        isOpen={reporteOpen}
+        onClose={() => setReporteOpen(false)}
+        estudiantes={filtrados}
+        seleccion={seleccionReporte}
+        lapsosFiltro={fLapsos}
+      />
     </div>
   );
 };
