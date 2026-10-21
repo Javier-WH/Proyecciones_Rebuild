@@ -14,6 +14,7 @@ export const EVENTO_SESION_EXPIRADA = 'proyecciones:sesion-expirada';
 export interface ApiOpciones extends RequestInit {
   etiqueta?: string;   // texto contextual p. ej. "Cambiando aula…"
   silencioso?: boolean; // fetchs de fondo: no disparan el indicador
+  timeoutMs?: number;  // operaciones largas (sync con SAGA, reportes) superan TIMEOUT_MS
 }
 
 // Timeout generoso: la red de la institución se congestiona; sin él, un
@@ -89,7 +90,7 @@ export async function apiFetch<T = any>(
   endpoint: string,
   options: ApiOpciones = {}
 ): Promise<ApiResponse<T>> {
-  const { etiqueta, silencioso, ...fetchOptions } = options;
+  const { etiqueta, silencioso, timeoutMs, ...fetchOptions } = options;
 
   // Sin red ni siquiera se intenta: el fetch colgaría hasta el timeout.
   // La capa "sin conexión" del indicador ya está visible por el listener
@@ -113,7 +114,7 @@ export async function apiFetch<T = any>(
   }
 
   const controlador = new AbortController();
-  const temporizador = setTimeout(() => controlador.abort(), TIMEOUT_MS);
+  const temporizador = setTimeout(() => controlador.abort(), timeoutMs ?? TIMEOUT_MS);
   const senialLlamador = fetchOptions.signal;
   if (senialLlamador) {
     if (senialLlamador.aborted) controlador.abort();

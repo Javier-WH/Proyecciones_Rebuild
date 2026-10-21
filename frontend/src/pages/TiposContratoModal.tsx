@@ -101,7 +101,7 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
   const handleSync = async () => {
     setSyncing(true);
     setFeedback(null);
-    const res = await apiFetch('/profesores/tipos-contrato/sync', { method: 'POST' });
+    const res = await apiFetch('/profesores/tipos-contrato/sync', { method: 'POST', timeoutMs: 120_000 });
     setSyncing(false);
     setFeedback({
       type: res.success ? 'ok' : 'err',
