@@ -3,8 +3,8 @@ import { env } from './config/env.js';
 import { initializeDatabase } from './db/init.js';
 import { query } from './db/mysql.js';
 import { limpiarLogsViejos, registrarExcepcion } from './utils/errorLog.js';
+import { PUBLIC_DIR } from './config/paths.js';
 import fs from 'fs';
-import path from 'path';
 
 // Errores fuera del ciclo request/response también caen al archivo del día;
 // en uncaughtException PM2 reiniciará el proceso tras registrar el fallo.
@@ -21,7 +21,7 @@ async function startServer() {
     limpiarLogsViejos();
 
     // Asegurar directorio public
-    const publicDir = path.join(process.cwd(), 'public');
+    const publicDir = PUBLIC_DIR;
     if (!fs.existsSync(publicDir)) {
       fs.mkdirSync(publicDir, { recursive: true });
     }

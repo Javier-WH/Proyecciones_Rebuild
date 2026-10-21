@@ -6,6 +6,7 @@ import { audit } from '../../utils/audit.js';
 import { periodoDeLaPeticion } from '../../utils/periodo.js';
 import { sagaService } from '../saga/saga.service.js';
 import { lapsosTotales, seTraslapan, TipoProyeccion } from '../horarios/scheduler.service.js';
+import { PUBLIC_DIR } from '../../config/paths.js';
 
 // Clave del reporte: identifica qué plantilla se pide ('horarios',
 // 'carga_docente', futuros reportes). Se restringe el formato para evitar
@@ -70,7 +71,7 @@ export async function putPlantillaHandler(request: FastifyRequest, reply: Fastif
 // sirve fastify-static en /public/logo-reportes.png. Si el archivo existe,
 // el frontend lo usa en impresión y Excel; si no existe (404) cae al logo
 // empaquetado en el bundle — "restaurar" es simplemente borrar el archivo.
-const LOGO_PATH = path.join(process.cwd(), 'public', 'logo-reportes.png');
+const LOGO_PATH = path.join(PUBLIC_DIR, 'logo-reportes.png');
 const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB ya decodificado
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // ‰PNG
 

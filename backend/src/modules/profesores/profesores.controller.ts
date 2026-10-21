@@ -3,6 +3,7 @@ import { query } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
 import { sagaService } from '../saga/saga.service.js';
 import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
+import { PROFESORES_FOTOS_DIR } from '../../config/paths.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -27,7 +28,7 @@ interface TipoContratoBody {
 }
 
 const MAX_FOTO_BYTES = 2 * 1024 * 1024; // 2 MB de foto decodificada
-const FOTOS_DIR = path.join(process.cwd(), 'public', 'profesores');
+const FOTOS_DIR = PROFESORES_FOTOS_DIR;
 
 // Para docentes, "sin PNF" (null) significa no reclamado: cualquier Coordinador
 // puede gestionarlo y asociarlo a su PNF. A diferencia de
@@ -419,7 +420,7 @@ export async function uploadFotoProfesorHandler(request: FastifyRequest, reply: 
     // Eliminar foto anterior si era un archivo local gestionado por la app
     const prevUrl = rows[0].foto_url as string | null;
     if (prevUrl && prevUrl.startsWith('/public/profesores/')) {
-      const prevPath = path.join(process.cwd(), 'public', 'profesores', path.basename(prevUrl));
+      const prevPath = path.join(PROFESORES_FOTOS_DIR, path.basename(prevUrl));
       if (fs.existsSync(prevPath)) fs.unlinkSync(prevPath);
     }
 
@@ -447,7 +448,7 @@ export async function deleteFotoProfesorHandler(request: FastifyRequest, reply: 
 
     const prevUrl = rows[0].foto_url as string | null;
     if (prevUrl && prevUrl.startsWith('/public/profesores/')) {
-      const prevPath = path.join(process.cwd(), 'public', 'profesores', path.basename(prevUrl));
+      const prevPath = path.join(PROFESORES_FOTOS_DIR, path.basename(prevUrl));
       if (fs.existsSync(prevPath)) fs.unlinkSync(prevPath);
     }
 
