@@ -9,6 +9,7 @@ import {
 } from './catalogoMaterias.js';
 import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search, RefreshCw } from 'lucide-react';
 import { ConfirmModal } from '../ConfirmModal.js';
+import { InputBusqueda } from '../InputBusqueda.js';
 
 const TIPOS = [
   { v: 'AULA_REGULAR', l: 'Aula regular' },
@@ -441,16 +442,14 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
               </div>
             </div>
             <div className="px-5 pt-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-                <input
-                  autoFocus
-                  value={pickerQ}
-                  onChange={(e) => setPickerQ(e.target.value)}
-                  placeholder="Buscar por materia, PNF o malla…"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-xs text-white"
-                />
-              </div>
+              <InputBusqueda
+                autoFocus
+                value={pickerQ}
+                onChange={setPickerQ}
+                placeholder="Buscar por materia, PNF o malla…"
+                iconoClassName="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none"
+                inputClassName="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-8 py-2 text-xs text-white"
+              />
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
               {pickerLoading && (

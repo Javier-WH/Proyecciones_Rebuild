@@ -8,6 +8,7 @@ import { CrearProyeccionModal } from './CrearProyeccionModal.js';
 import { EditarProyeccionModal } from './EditarProyeccionModal.js';
 import { CopiarPeriodoModal } from './CopiarPeriodoModal.js';
 import { ordenTrayecto } from './horarios/types.js';
+import { InputBusqueda } from './InputBusqueda.js';
 import {
   Calendar,
   Plus,
@@ -21,7 +22,6 @@ import {
   Layers,
   BookOpen,
   Users,
-  Search,
   RefreshCw,
   Sparkles,
   Copy,
@@ -238,16 +238,13 @@ export const ProyeccionesPage: React.FC = () => {
 
       {/* Filter and Refresh Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Buscar por PNF, código o nombre..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <InputBusqueda
+          value={filterText}
+          onChange={setFilterText}
+          placeholder="Buscar por PNF, código o nombre..."
+          className="w-full sm:w-80"
+          inputClassName="w-full pl-10 pr-9 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
 
         <button
           onClick={() => fetchProyecciones()}

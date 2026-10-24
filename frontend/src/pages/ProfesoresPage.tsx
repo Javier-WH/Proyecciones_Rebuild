@@ -7,6 +7,7 @@ import { PerfilesModal } from './PerfilesModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
 import { ConfirmModal } from './ConfirmModal.js';
+import { InputBusqueda } from './InputBusqueda.js';
 import {
   Users,
   Plus,
@@ -15,7 +16,6 @@ import {
   CheckCircle2,
   XCircle,
   Pencil,
-  Search,
   RefreshCw,
   CloudDownload,
   Briefcase,
@@ -167,16 +167,13 @@ export const ProfesoresPage: React.FC = () => {
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Buscar por nombre, apellido, cédula o PNF..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
+        <InputBusqueda
+          value={filterText}
+          onChange={setFilterText}
+          placeholder="Buscar por nombre, apellido, cédula o PNF..."
+          className="flex-1 max-w-md"
+          inputClassName="w-full pl-10 pr-9 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
 
         <select
           value={filterEstado}

@@ -10,6 +10,7 @@ import { AsignarProfesorModal, AsignacionRow } from './AsignarProfesorModal.js';
 import { AgregarMateriaModal, MateriaAsignableRow, labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
 import { ReporteCargaModal } from './ReporteCargaModal.js';
 import { ConfirmModal } from './ConfirmModal.js';
+import { InputBusqueda } from './InputBusqueda.js';
 import {
   ClipboardList,
   Loader2,
@@ -815,16 +816,13 @@ export const CargaDocentePage: React.FC = () => {
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-start gap-3 sticky top-16 z-20 bg-slate-950 py-2">
-        <div className="relative flex-1 min-w-[220px] max-w-md">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-          <input
-            type="text"
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder="Buscar profesor, materia, PNF o cédula..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
+        <InputBusqueda
+          value={filterText}
+          onChange={setFilterText}
+          placeholder="Buscar profesor, materia, PNF o cédula..."
+          className="flex-1 min-w-[220px] max-w-md"
+          inputClassName="w-full pl-10 pr-9 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
 
         <div className="flex flex-col gap-1.5">
           <select

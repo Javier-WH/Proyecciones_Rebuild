@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
-import { Search, User, DoorOpen, Users, BookOpen, CornerDownLeft, Loader2 } from 'lucide-react';
+import { Search, X, User, DoorOpen, Users, BookOpen, CornerDownLeft, Loader2 } from 'lucide-react';
 import { irAHorarios } from './navBus.js';
 
 interface Resultados {
@@ -158,6 +158,19 @@ export const BusquedaGlobal: React.FC<{
             placeholder="Buscar sección, docente, aula o materia…"
             className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-600 focus:outline-none"
           />
+          {q && (
+            <button
+              type="button"
+              onClick={() => {
+                setQ('');
+                inputRef.current?.focus();
+              }}
+              title="Limpiar búsqueda"
+              className="p-1 rounded-md text-slate-500 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
           {cargando && <Loader2 className="w-4 h-4 animate-spin text-slate-500" />}
           <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[9px] text-slate-500 font-mono">ESC</kbd>
         </div>

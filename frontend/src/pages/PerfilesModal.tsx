@@ -7,7 +7,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Search,
   GraduationCap,
   CheckCircle2,
   BookOpen,
@@ -17,6 +16,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal.js';
+import { InputBusqueda } from './InputBusqueda.js';
 
 export interface PerfilMateria {
   subject_saga_id: number;
@@ -282,16 +282,13 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
                   </div>
                 )}
 
-                <div className="relative mb-2">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
-                  <input
-                    type="text"
-                    value={buscarMateria}
-                    onChange={(e) => setBuscarMateria(e.target.value)}
-                    placeholder="Buscar materia en el catálogo..."
-                    className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+                <InputBusqueda
+                  value={buscarMateria}
+                  onChange={setBuscarMateria}
+                  placeholder="Buscar materia en el catálogo..."
+                  className="mb-2"
+                  inputClassName="w-full pl-10 pr-9 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
 
                 <div className="max-h-56 overflow-y-auto border border-slate-800 rounded-xl bg-slate-950/60 divide-y divide-slate-800/60">
                   {catalogoFiltrado.length === 0 ? (
@@ -348,16 +345,13 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
             /* ------------------------------- LISTA ------------------------------- */
             <div className="space-y-2">
               {perfiles.length > 0 && (
-                <div className="relative mb-3">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
-                  <input
-                    type="text"
-                    value={buscarPerfil}
-                    onChange={(e) => setBuscarPerfil(e.target.value)}
-                    placeholder="Buscar perfil por nombre, descripción o materia..."
-                    className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+                <InputBusqueda
+                  value={buscarPerfil}
+                  onChange={setBuscarPerfil}
+                  placeholder="Buscar perfil por nombre, descripción o materia..."
+                  className="mb-3"
+                  inputClassName="w-full pl-10 pr-9 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               )}
               {perfiles.length === 0 ? (
                 <div className="py-10 text-center text-slate-500">

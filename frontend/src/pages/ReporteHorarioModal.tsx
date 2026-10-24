@@ -8,7 +8,6 @@ import {
   Loader2,
   Building2,
   Users,
-  Search,
   UserPlus,
   AlertTriangle,
 } from 'lucide-react';
@@ -17,6 +16,7 @@ import { imprimirHtml } from '../utils/print.js';
 import { logoDataUri, logoBase64 } from '../utils/logo.js';
 import { getEncabezado, saveEncabezado } from '../utils/plantillas.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
+import { InputBusqueda } from './InputBusqueda.js';
 import {
   HorarioEntry,
   SeccionRef,
@@ -958,23 +958,21 @@ td.clase { vertical-align: middle; }
         <div className="mt-2">
           <div className="relative">
             <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={profQuery}
-                  disabled={todosMarcados}
-                  onChange={(e) => setProfQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && sugerencias.length > 0) {
-                      e.preventDefault();
-                      agregar(sugerencias[0].id);
-                    }
-                  }}
-                  placeholder="Buscar por nombre, apellido o cédula…"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
-                />
-              </div>
+              <InputBusqueda
+                value={profQuery}
+                disabled={todosMarcados}
+                onChange={setProfQuery}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && sugerencias.length > 0) {
+                    e.preventDefault();
+                    agregar(sugerencias[0].id);
+                  }
+                }}
+                placeholder="Buscar por nombre, apellido o cédula…"
+                className="flex-1"
+                iconoClassName="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                inputClassName="w-full pl-9 pr-8 py-2 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+              />
               <button
                 onClick={() => sugerencias.length > 0 && agregar(sugerencias[0].id)}
                 disabled={todosMarcados || sugerencias.length === 0}

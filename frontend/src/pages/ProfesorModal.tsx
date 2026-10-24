@@ -5,6 +5,7 @@ import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { Perfil } from './PerfilesModal.js';
 import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
 import { ConfirmModal } from './ConfirmModal.js';
+import { InputBusqueda } from './InputBusqueda.js';
 import {
   X,
   Loader2,
@@ -13,7 +14,6 @@ import {
   Camera,
   Trash2,
   GraduationCap,
-  Search,
   HelpCircle,
   CalendarCheck
 } from 'lucide-react';
@@ -453,16 +453,14 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
               Sugiere las materias afines al asignar carga (no restringe la asignación).
             </p>
             {perfilesList.length > 0 && (
-              <div className="relative mt-2">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={buscarPerfil}
-                  onChange={(e) => setBuscarPerfil(e.target.value)}
-                  placeholder="Buscar perfil..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white text-[11px] placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              <InputBusqueda
+                value={buscarPerfil}
+                onChange={setBuscarPerfil}
+                placeholder="Buscar perfil..."
+                className="mt-2"
+                iconoClassName="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                inputClassName="w-full pl-9 pr-8 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-white text-[11px] placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             )}
             <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
               {perfilesList.length === 0 ? (

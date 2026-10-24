@@ -3,7 +3,8 @@ import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
-import { X, Loader2, Search, AlertCircle, UserX } from 'lucide-react';
+import { X, Loader2, AlertCircle, UserX } from 'lucide-react';
+import { InputBusqueda } from './InputBusqueda.js';
 
 export interface AsignacionRow {
   proyeccion_id: number;
@@ -113,17 +114,13 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
         </div>
 
         <div className="p-4 border-b border-slate-800 shrink-0">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre, cédula o PNF..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
+          <InputBusqueda
+            autoFocus
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por nombre, cédula o PNF..."
+            inputClassName="w-full pl-10 pr-9 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
 
         <div className="p-4 overflow-y-auto flex-1 space-y-2">

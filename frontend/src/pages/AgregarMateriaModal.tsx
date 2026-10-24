@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
-import { X, Search, AlertCircle, Plus, CheckCircle2, UserX, Layers, Star, GraduationCap, Repeat } from 'lucide-react';
+import { X, AlertCircle, Plus, CheckCircle2, UserX, Layers, Star, GraduationCap, Repeat } from 'lucide-react';
+import { InputBusqueda } from './InputBusqueda.js';
 
 // Misma forma de fila que usa la página de carga docente
 export interface MateriaAsignableRow {
@@ -402,17 +403,14 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
               </option>
             ))}
           </select>
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-            <input
-              type="text"
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por materia, PNF, sección o proyección..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-          </div>
+          <InputBusqueda
+            autoFocus
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por materia, PNF, sección o proyección..."
+            className="flex-1 min-w-[180px]"
+            inputClassName="w-full pl-10 pr-9 py-2.5 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
           <button
             onClick={() => setSoloSinAsignar(!soloSinAsignar)}
             className={`px-3 py-2.5 border rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shrink-0 ${

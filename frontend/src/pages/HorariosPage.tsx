@@ -48,6 +48,7 @@ import {
   Crosshair,
   CheckCircle2,
   Search,
+  X,
   Pencil,
   Square,
   CheckSquare,
@@ -1694,8 +1695,21 @@ const ProfesorSearchSelect: React.FC<{
           setOpen(true);
         }}
         placeholder="Buscar profesor..."
-        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+        className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
       />
+      {(open ? q : sel ? 'x' : '') !== '' && (
+        <button
+          type="button"
+          onClick={() => {
+            setQ('');
+            setOpen(true);
+          }}
+          title="Limpiar búsqueda"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-500 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
       {open && (
         <>
           <div

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import { ConfirmModal } from './ConfirmModal.js';
+import { InputBusqueda } from './InputBusqueda.js';
 import {
   X,
   Users,
@@ -391,15 +392,14 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
             /* ============ LISTA ============ */
             <>
               <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="relative flex-1 min-w-56 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
-                  <input
-                    value={busqueda}
-                    onChange={(e) => setBusqueda(e.target.value)}
-                    placeholder="Buscar por usuario, nombre, correo, PNF o cédula…"
-                    className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-600"
-                  />
-                </div>
+                <InputBusqueda
+                  value={busqueda}
+                  onChange={setBusqueda}
+                  placeholder="Buscar por usuario, nombre, correo, PNF o cédula…"
+                  className="flex-1 min-w-56 max-w-sm"
+                  iconoClassName="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none"
+                  inputClassName="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-8 py-2 text-white text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-600"
+                />
                 <span className="text-xs text-slate-400">
                   {busqueda.trim()
                     ? `${usuariosFiltrados.length} de ${usuarios.length}`
