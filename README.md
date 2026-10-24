@@ -533,7 +533,7 @@ stateDiagram-v2
 ### Editor de horarios (grilla)
 
 - **Drag & drop**: clase ↔ celda (mover), clase ↔ clase (intercambio), bloque de varias horas como grupo, chip pendiente → celda, clase → panel pendientes (desagendar). Celdas destino se pintan válida/inválida en vivo.
-- **⇧ Shift + hover** sobre una materia: ilumina en ámbar los bloques que su profesor ya tiene ocupados (en cualquier sección; compara por rango horario, respeta traslapes de lapsos). Funciona también durante un arrastre.
+- **⇧ Shift + hover** sobre una materia: filtra el horario de su profesor — atenúa las demás materias y dibuja tarjetas fantasma (borde punteado) con las clases que ya tiene ocupadas en cualquier sección (compara por rango horario, respeta traslapes de lapsos). Funciona también durante un arrastre.
 - **Ctrl + hover** sobre cualquier bloque (incluso bajo una clase): tooltip con las **aulas libres** ahí — máx. 5, las del PNF de la sección primero, `+N más…`.
 - **Ctrl+Z**: deshacer (stack de snapshots por sección).
 - **Ctrl+K**: búsqueda global (paleta de comandos).

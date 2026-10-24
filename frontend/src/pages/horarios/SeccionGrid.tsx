@@ -113,9 +113,10 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
   useEffect(() => {
     onInteraccion?.(activo !== null || menuEntry !== null || mutando > 0);
   }, [activo, menuEntry, mutando, onInteraccion]);
-  // ⇧+hover sobre una materia: ilumina los bloques donde ese profesor ya
-  // tiene clases (en cualquier sección de la proyección), para ubicarla
-  // sin cambiar de vista. También funciona mientras se arrastra.
+  // ⇧+hover sobre una materia: filtra el horario de ese profesor — atenúa
+  // las demás materias y dibuja tarjetas fantasma con las clases que ya
+  // tiene (en cualquier sección de la proyección), para ubicarlas sin
+  // cambiar de vista. También funciona mientras se arrastra.
   const [shiftOn, setShiftOn] = useState(false);
   const [profeHover, setProfeHover] = useState<number | null>(null);
   // Ctrl+hover sobre una celda vacía: tooltip con las aulas libres de ese
@@ -764,8 +765,8 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
         <div className="fixed bottom-6 left-6 z-50 max-w-xs px-4 py-2.5 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-semibold shadow-2xl shadow-black/50 backdrop-blur-sm">
           ⇧{' '}
           {profePeekNombre
-            ? `Bloques ocupados por ${profePeekNombre}`
-            : 'Bloques ocupados por este profesor'}
+            ? `Clases de ${profePeekNombre}`
+            : 'Clases de este profesor'}
         </div>
       )}
 
@@ -824,7 +825,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Panel de materias pendientes (droppable para desagendar) */}
-        <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} onHoverProfe={setProfeHover} />
+        <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} onHoverProfe={setProfeHover} profePeekId={profePeek} />
 
         {/* Grilla días × bloques */}
         <div className="flex-1 min-w-0 overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-3">
@@ -909,6 +910,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                                 )
                               : []
                           }
+                          profePeekId={profePeek}
                           onHoverProfe={setProfeHover}
                           onHoverCelda={
                             !activo
@@ -948,7 +950,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           </table>
           <p className="mt-1.5 text-[10px] text-slate-500">
             Mantén <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Shift</kbd> presionado
-            y pasa el mouse sobre una materia para iluminar los bloques que ya tiene ocupados su profesor.
+            y pasa el mouse sobre una materia para ver las clases de su profesor (incluidas las de otras secciones); el resto se atenúa.
             Con <kbd className="px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-sans">Ctrl</kbd> sobre
             cualquier bloque ves qué aulas están libres ahí (incluso sobre una clase).
           </p>
@@ -1112,7 +1114,8 @@ const PendientesPanel: React.FC<{
   pendientes: { total: number; puestas: number; row: MateriaAsignableRow }[];
   puedeEditar: boolean;
   onHoverProfe?: (id: number | null) => void;
-}> = ({ pendientes, puedeEditar, onHoverProfe }) => {
+  profePeekId?: number | null;
+}> = ({ pendientes, puedeEditar, onHoverProfe, profePeekId }) => {
   const { setNodeRef, isOver } = useDroppable({ id: 'pendientes' });
   return (
     <div
@@ -1131,7 +1134,7 @@ const PendientesPanel: React.FC<{
           </div>
         )}
         {pendientes.map((p) => (
-          <PendienteChip key={p.row.materia_id} p={p} puedeEditar={puedeEditar} onHoverProfe={onHoverProfe} />
+          <PendienteChip key={p.row.materia_id} p={p} puedeEditar={puedeEditar} onHoverProfe={onHoverProfe} profePeekId={profePeekId} />
         ))}
       </div>
     </div>
@@ -1142,7 +1145,8 @@ const PendienteChip: React.FC<{
   p: { total: number; puestas: number; row: MateriaAsignableRow };
   puedeEditar: boolean;
   onHoverProfe?: (id: number | null) => void;
-}> = ({ p, puedeEditar, onHoverProfe }) => {
+  profePeekId?: number | null;
+}> = ({ p, puedeEditar, onHoverProfe, profePeekId }) => {
   const restantes = p.total - p.puestas;
   const sinProfesor = !p.row.profesor_id;
   const usable = puedeEditar && restantes > 0;
@@ -1185,7 +1189,9 @@ const PendienteChip: React.FC<{
       : 'bg-red-500/10 border-red-500/40';
   return (
     <div
-      className={`rounded-lg border px-2 py-1.5 ${color} transition-all`}
+      className={`rounded-lg border px-2 py-1.5 ${color} transition-all ${
+        profePeekId != null && p.row.profesor_id !== profePeekId ? 'opacity-40' : ''
+      }`}
       onMouseEnter={() => onHoverProfe?.(p.row.profesor_id ?? null)}
       onMouseLeave={() => onHoverProfe?.(null)}
     >
@@ -1266,11 +1272,12 @@ const Celda: React.FC<{
   advertencias?: string[];
   avisosParciales?: string[];
   ocupadaProfe?: HorarioEntry[]; // ⇧+peek: clases del profesor que caen aquí
+  profePeekId?: number | null; // ⇧+peek activo: profesor cuyo horario se filtra
   onHoverProfe?: (id: number | null) => void;
   onHoverCelda?: (x: number, y: number) => void; // Ctrl+peek: entra a celda vacía
   onLeaveCelda?: () => void;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, onHoverProfe, onHoverCelda, onLeaveCelda, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, profePeekId, onHoverProfe, onHoverCelda, onLeaveCelda, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   const ocupada = !!ocupadaProfe?.length;
@@ -1282,10 +1289,19 @@ const Celda: React.FC<{
         .join(' | ')}`
     : undefined;
 
+  // ⇧+peek: las clases del profesor ajenas a esta celda (otra sección/lapso)
+  // se dibujan como tarjetas fantasma; la propia de la celda se ve normal.
+  const runIds = new Set(run.map((r) => r.id));
+  const fantasmas = [
+    ...new Map(
+      (ocupadaProfe ?? []).filter((f) => !runIds.has(f.id)).map((f) => [f.id, f])
+    ).values(),
+  ];
+  const atenuar = profePeekId != null && !!entry && entry.profesor_id !== profePeekId;
+
   let cls =
     'relative rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
   if (resaltada) cls += 'ring-2 ring-red-400 animate-pulse ';
-  if (ocupada) cls += 'ring-2 ring-inset ring-amber-400/80 ';
   if (activo) {
     cls += valida
       ? esSwap
@@ -1295,9 +1311,7 @@ const Celda: React.FC<{
   } else {
     cls += entry
       ? 'border-transparent bg-transparent p-0 '
-      : ocupada
-        ? 'border-amber-500/40 bg-amber-500/10 '
-        : 'border-slate-800 bg-slate-950/40 ';
+      : 'border-slate-800 bg-slate-950/40 ';
   }
   if (isOver && valida) {
     cls += esSwap ? 'ring-2 ring-indigo-400 scale-[1.03] ' : 'ring-2 ring-emerald-400 scale-[1.03] ';
@@ -1314,8 +1328,20 @@ const Celda: React.FC<{
       onMouseLeave={onLeaveCelda}
     >
       {entry && (
-        <div className="absolute inset-0 p-0.5">
+        <div className={`absolute inset-0 p-0.5 ${atenuar ? 'opacity-15 saturate-50' : ''}`}>
           <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} avisosParciales={avisosParciales} onAbrirMenu={onAbrirMenu} onHoverProfe={onHoverProfe} />
+        </div>
+      )}
+      {fantasmas.length > 0 && (
+        <div className="absolute inset-0 p-0.5 flex flex-col gap-0.5 z-20 pointer-events-none">
+          {fantasmas.slice(0, 2).map((f) => (
+            <ClaseFantasma key={f.id} entry={f} usa12h={usa12h} />
+          ))}
+          {fantasmas.length > 2 && (
+            <span className="px-1 text-[8px] font-semibold leading-tight text-amber-300">
+              +{fantasmas.length - 2} más…
+            </span>
+          )}
         </div>
       )}
       {dropRango && (
@@ -1334,6 +1360,27 @@ const Celda: React.FC<{
     </td>
   );
 };
+
+// Tarjeta fantasma del ⇧+peek: clase del profesor que cae en esta celda pero
+// pertenece a otra sección/lapso (la propia de la celda ya se ve con su
+// ClaseCard normal). Borde punteado y fondo oscuro para distinguirla; es
+// pointer-events-none (lo pone el contenedor) para no estorbar drag&drop.
+const ClaseFantasma: React.FC<{ entry: HorarioEntry; usa12h?: boolean }> = ({ entry, usa12h }) => (
+  <div
+    className={`flex-1 min-h-0 rounded-md border border-dashed px-1.5 py-0.5 flex flex-col justify-center overflow-hidden ${colorMateria(
+      entry.materia_id
+    )}`}
+    style={{ backgroundColor: 'rgb(2 6 23 / 0.88)' }}
+    title={`${entry.materia_nombre} · ${entry.seccion_nombre} · ${entry.aula_codigo} · ${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(entry.hora_fin, usa12h)}`}
+  >
+    <div className="text-[10px] font-bold leading-tight line-clamp-1">
+      {entry.materia_nombre}
+    </div>
+    <div className="text-[8px] opacity-80 leading-tight truncate">
+      {entry.seccion_nombre} · {entry.aula_codigo}
+    </div>
+  </div>
+);
 
 const EntryChip: React.FC<{
   entry: HorarioEntry;
