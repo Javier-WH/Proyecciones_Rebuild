@@ -50,6 +50,26 @@ interface DragData {
   horas?: number; // 'grupo-pendiente': horas restantes de la materia
 }
 
+// Tarjeta fantasma del ⇧+peek: una clase del profesor que pertenece a otra
+// sección/lapso. Se dibuja UNA sola vez anclada en la celda de su primer
+// bloque y se estira sobre las filas que cubre (como el rowspan de las
+// tarjetas propias). `top`/`height` en rem (filas de alto fijo); `left`/
+// `width` en % del ancho de la celda cuando varias se solapan (carriles).
+interface FantasmaItem {
+  entry: HorarioEntry; // primera entry del run (lleva los datos a mostrar)
+  fin: string; // hora de fin efectiva del run fusionado
+  top: number;
+  height: number;
+  left: number;
+  width: number;
+}
+
+// Geometría fija de las filas de la grilla (ver <tr style height> abajo):
+// 3.5rem por bloque de clase, 1.75rem por receso, 0.25rem de separación.
+const FILA_H = 3.5;
+const RECESO_H = 1.75;
+const FILA_GAP = 0.25;
+
 
 
 interface SeccionGridProps {
@@ -299,6 +319,116 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
     return map;
   }, [profePeek, entries, bloques, dias, tipoProyeccion, trimestre]);
+
+  // ⇧+peek: geometría de las tarjetas fantasma, indexada por la celda donde
+  // se ancla cada una (`bloque_id:dia` de la celda renderizada que contiene
+  // su primer bloque). Las clases de la propia sección no generan fantasma:
+  // ya se ven con su ClaseCard normal. Si varias fantasmas se solapan en el
+  // mismo día reparten el ancho en carriles (el más bajo libre a su inicio).
+  const fantasmasPorCelda = useMemo(() => {
+    if (!ocupadoProfe) return null;
+    const altoFila = (i: number) => (bloques[i].es_receso ? RECESO_H : FILA_H);
+    const rowTop: number[] = [];
+    let acc = 0;
+    for (let i = 0; i < bloques.length; i++) {
+      rowTop[i] = acc;
+      acc += altoFila(i) + FILA_GAP;
+    }
+    const porDia = new Map<
+      number,
+      { e: HorarioEntry; gf: number; gl: number; fin: string }[]
+    >();
+    const vistos = new Set<number>();
+    for (const arr of ocupadoProfe.values()) {
+      for (const e of arr) {
+        if (vistos.has(e.id)) continue;
+        vistos.add(e.id);
+        if (e.seccion_id === seccion.seccion_id) continue;
+        let gf = -1;
+        let gl = -1;
+        bloques.forEach((b, i) => {
+          if (b.es_receso) return;
+          if (traslapan(b.hora_inicio, b.hora_fin, e.hora_inicio, e.hora_fin)) {
+            if (gf < 0) gf = i;
+            gl = i;
+          }
+        });
+        if (gf < 0) continue;
+        const lst = porDia.get(e.dia_semana) ?? [];
+        lst.push({ e, gf, gl, fin: e.hora_fin });
+        porDia.set(e.dia_semana, lst);
+      }
+    }
+    const out = new Map<string, FantasmaItem[]>();
+    for (const [dia, crudo] of porDia) {
+      // Runs consecutivos (sin receso de por medio) de la misma
+      // materia+aula+sección se fusionan en una sola tarjeta, igual que el
+      // rowSpan de las tarjetas reales (cada hora es una entry aparte).
+      const grupos = new Map<string, typeof crudo>();
+      for (const it of crudo) {
+        const k = `${it.e.seccion_id}:${it.e.materia_id}:${it.e.aula_id}`;
+        const l = grupos.get(k) ?? [];
+        l.push(it);
+        grupos.set(k, l);
+      }
+      const items: typeof crudo = [];
+      for (const l of grupos.values()) {
+        l.sort((a, b) => a.gf - b.gf);
+        let prev: (typeof crudo)[number] | null = null;
+        for (const it of l) {
+          if (prev && it.gf === prev.gl + 1) {
+            prev.gl = it.gl;
+            prev.fin = it.fin;
+          } else {
+            prev = { ...it };
+            items.push(prev);
+          }
+        }
+      }
+      items.sort((a, b) => a.gf - b.gf || b.gl - a.gl);
+      const finCarril: number[] = [];
+      const carril = items.map((it) => {
+        let c = finCarril.findIndex((f) => f < it.gf);
+        if (c < 0) {
+          c = finCarril.length;
+          finCarril.push(0);
+        }
+        finCarril[c] = it.gl;
+        return c;
+      });
+      // Clusters de solape vertical: el ancho se reparte entre los carriles
+      // que llegan a tocarse dentro del cluster.
+      let i = 0;
+      while (i < items.length) {
+        let j = i;
+        let fin = items[i].gl;
+        while (j + 1 < items.length && items[j + 1].gf <= fin) {
+          j++;
+          fin = Math.max(fin, items[j].gl);
+        }
+        const carriles = Math.max(...carril.slice(i, j + 1)) + 1;
+        for (let k = i; k <= j; k++) {
+          const it = items[k];
+          let c = it.gf;
+          while (cubiertas.has(`${bloques[c].id}:${dia}`)) c--;
+          const item: FantasmaItem = {
+            entry: it.e,
+            fin: it.fin,
+            top: rowTop[it.gf] - rowTop[c],
+            height: rowTop[it.gl] + altoFila(it.gl) - rowTop[it.gf],
+            left: (carril[k] * 100) / carriles,
+            width: 100 / carriles,
+          };
+          const akey = `${bloques[c].id}:${dia}`;
+          const l = out.get(akey) ?? [];
+          l.push(item);
+          out.set(akey, l);
+        }
+        i = j + 1;
+      }
+    }
+    return out;
+  }, [ocupadoProfe, bloques, cubiertas, seccion.seccion_id]);
 
   const profePeekNombre = useMemo(() => {
     if (!profePeek) return '';
@@ -911,6 +1041,7 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
                               : []
                           }
                           profePeekId={profePeek}
+                          fantasmas={fantasmasPorCelda?.get(key)}
                           onHoverProfe={setProfeHover}
                           onHoverCelda={
                             !activo
@@ -1271,13 +1402,14 @@ const Celda: React.FC<{
   errores: ErrorClase[];
   advertencias?: string[];
   avisosParciales?: string[];
-  ocupadaProfe?: HorarioEntry[]; // ⇧+peek: clases del profesor que caen aquí
+  ocupadaProfe?: HorarioEntry[]; // ⇧+peek: clases del profesor que caen aquí (tooltip)
   profePeekId?: number | null; // ⇧+peek activo: profesor cuyo horario se filtra
+  fantasmas?: FantasmaItem[]; // ⇧+peek: fantasmas anclados en esta celda
   onHoverProfe?: (id: number | null) => void;
   onHoverCelda?: (x: number, y: number) => void; // Ctrl+peek: entra a celda vacía
   onLeaveCelda?: () => void;
   onAbrirMenu: (e: HorarioEntry) => void;
-}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, profePeekId, onHoverProfe, onHoverCelda, onLeaveCelda, onAbrirMenu }) => {
+}> = ({ id, entry, run, span, bloqueIds, dropRango, finHasta, valida, esSwap, activo, puedeEditar, resaltada, usa12h, errores, advertencias, avisosParciales, ocupadaProfe, profePeekId, fantasmas, onHoverProfe, onHoverCelda, onLeaveCelda, onAbrirMenu }) => {
   const { setNodeRef, isOver } = useDroppable({ id, data: { bloqueIds } });
 
   const ocupada = !!ocupadaProfe?.length;
@@ -1289,18 +1421,13 @@ const Celda: React.FC<{
         .join(' | ')}`
     : undefined;
 
-  // ⇧+peek: las clases del profesor ajenas a esta celda (otra sección/lapso)
-  // se dibujan como tarjetas fantasma; la propia de la celda se ve normal.
-  const runIds = new Set(run.map((r) => r.id));
-  const fantasmas = [
-    ...new Map(
-      (ocupadaProfe ?? []).filter((f) => !runIds.has(f.id)).map((f) => [f.id, f])
-    ).values(),
-  ];
   const atenuar = profePeekId != null && !!entry && entry.profesor_id !== profePeekId;
 
   let cls =
-    'relative rounded-lg border align-top p-1 transition-all duration-150 overflow-hidden ';
+    'relative rounded-lg border align-top p-1 transition-all duration-150 ';
+  // El fantasma se estira sobre las filas de abajo: su celda ancla no puede
+  // recortarlo con overflow-hidden.
+  cls += fantasmas?.length ? 'overflow-visible ' : 'overflow-hidden ';
   if (resaltada) cls += 'ring-2 ring-red-400 animate-pulse ';
   if (activo) {
     cls += valida
@@ -1332,18 +1459,20 @@ const Celda: React.FC<{
           <EntryChip entry={entry} run={run} span={span} finHasta={finHasta} puedeEditar={puedeEditar} usa12h={usa12h} errores={errores} advertencias={advertencias} avisosParciales={avisosParciales} onAbrirMenu={onAbrirMenu} onHoverProfe={onHoverProfe} />
         </div>
       )}
-      {fantasmas.length > 0 && (
-        <div className="absolute inset-0 p-0.5 flex flex-col gap-0.5 z-20 pointer-events-none">
-          {fantasmas.slice(0, 2).map((f) => (
-            <ClaseFantasma key={f.id} entry={f} usa12h={usa12h} />
-          ))}
-          {fantasmas.length > 2 && (
-            <span className="px-1 text-[8px] font-semibold leading-tight text-amber-300">
-              +{fantasmas.length - 2} más…
-            </span>
-          )}
+      {fantasmas?.map((f) => (
+        <div
+          key={f.entry.id}
+          className="absolute z-20 px-0.5 pointer-events-none"
+          style={{
+            top: `${f.top}rem`,
+            height: `${f.height}rem`,
+            left: `${f.left}%`,
+            width: `${f.width}%`,
+          }}
+        >
+          <ClaseFantasma entry={f.entry} fin={f.fin} usa12h={usa12h} />
         </div>
-      )}
+      ))}
       {dropRango && (
         <div
           className={`absolute left-0.5 right-0.5 z-30 rounded-md border-2 border-dashed pointer-events-none ${
@@ -1365,19 +1494,23 @@ const Celda: React.FC<{
 // pertenece a otra sección/lapso (la propia de la celda ya se ve con su
 // ClaseCard normal). Borde punteado y fondo oscuro para distinguirla; es
 // pointer-events-none (lo pone el contenedor) para no estorbar drag&drop.
-const ClaseFantasma: React.FC<{ entry: HorarioEntry; usa12h?: boolean }> = ({ entry, usa12h }) => (
+// Se estira sobre todas las filas que ocupa la clase, como una tarjeta real.
+const ClaseFantasma: React.FC<{ entry: HorarioEntry; fin?: string; usa12h?: boolean }> = ({ entry, fin, usa12h }) => (
   <div
-    className={`flex-1 min-h-0 rounded-md border border-dashed px-1.5 py-0.5 flex flex-col justify-center overflow-hidden ${colorMateria(
+    className={`h-full w-full rounded-md border border-dashed px-1.5 py-1 flex flex-col justify-center overflow-hidden ${colorMateria(
       entry.materia_id
     )}`}
     style={{ backgroundColor: 'rgb(2 6 23 / 0.88)' }}
-    title={`${entry.materia_nombre} · ${entry.seccion_nombre} · ${entry.aula_codigo} · ${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(entry.hora_fin, usa12h)}`}
+    title={`${entry.materia_nombre} · ${entry.seccion_nombre} · ${entry.aula_codigo} · ${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(fin ?? entry.hora_fin, usa12h)}`}
   >
-    <div className="text-[10px] font-bold leading-tight line-clamp-1">
+    <div className="text-[10px] font-bold leading-tight line-clamp-2">
       {entry.materia_nombre}
     </div>
-    <div className="text-[8px] opacity-80 leading-tight truncate">
+    <div className="text-[9px] opacity-80 leading-tight truncate mt-0.5">
       {entry.seccion_nombre} · {entry.aula_codigo}
+    </div>
+    <div className="text-[9px] opacity-80 leading-tight truncate">
+      {fmtHoraCfg(entry.hora_inicio, usa12h)}–{fmtHoraCfg(fin ?? entry.hora_fin, usa12h)}
     </div>
   </div>
 );
