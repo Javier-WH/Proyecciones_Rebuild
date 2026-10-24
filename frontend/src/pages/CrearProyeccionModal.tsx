@@ -1053,16 +1053,19 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                                 }}
                                 className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
                               >
-                                {['Mañana', 'Tarde', 'Noche', 'Diurno'].includes(sec.turno_nombre) ||
+                                {/* 'Noche' no se ofrece: es un alias de 'Nocturno'
+                                    (SAGA) que confundía y podía quedar con el
+                                    saga_id de Mañana. Solo se muestra como
+                                    respaldo si la sección ya lo tiene. */}
+                                {['Mañana', 'Tarde', 'Diurno'].includes(sec.turno_nombre) ||
                                 turnosList.some((t) => t.turno === sec.turno_nombre) ? null : (
                                   <option value={sec.turno_nombre}>{sec.turno_nombre}</option>
                                 )}
                                 <option value="Mañana">Mañana</option>
                                 <option value="Tarde">Tarde</option>
-                                <option value="Noche">Noche</option>
                                 <option value="Diurno">Diurno</option>
                                 {turnosList.map((t) => (
-                                  !['Mañana', 'Tarde', 'Noche', 'Diurno'].includes(t.turno) && (
+                                  !['Mañana', 'Tarde', 'Diurno'].includes(t.turno) && (
                                     <option key={t.id} value={t.turno}>
                                       {t.turno}
                                     </option>

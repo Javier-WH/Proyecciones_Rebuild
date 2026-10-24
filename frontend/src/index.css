@@ -100,6 +100,7 @@
 /* …salvo cuando el propio elemento tiene un fondo saturado (botones, badges,
    tabs activas): ahí el blanco sigue siendo el texto correcto. */
 [data-theme='light'] .text-white:is(
+  [class*='bg-gradient'],
   [class*='bg-emerald-5'], [class*='bg-emerald-6'], [class*='bg-emerald-7'],
   [class*='bg-blue-5'],    [class*='bg-blue-6'],    [class*='bg-blue-7'],
   [class*='bg-sky-5'],     [class*='bg-sky-6'],     [class*='bg-sky-7'],
