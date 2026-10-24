@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { useSyncPoll } from '../hooks/useSyncPoll.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -116,20 +116,6 @@ export const CargaDocentePage: React.FC = () => {
     materia: string;
     plural: string;
   } | null>(null);
-
-  // Altura real de la barra de filtros (cambia con los toggles y el wrap);
-  // el thead sticky se posiciona debajo del nav (h-16) + esta barra
-  const filterBarRef = useRef<HTMLDivElement>(null);
-  const [filterBarH, setFilterBarH] = useState(48);
-  useEffect(() => {
-    const el = filterBarRef.current;
-    if (!el) return;
-    const update = () => setFilterBarH(el.offsetHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // `fondo` = refetch del poll de sincronización: sin skeleton ni
   // indicador global — solo actualiza los datos por debajo.
@@ -828,7 +814,7 @@ export const CargaDocentePage: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div ref={filterBarRef} className="flex flex-wrap items-start gap-3 sticky top-16 z-20 bg-slate-950 py-2">
+      <div className="flex flex-wrap items-start gap-3 sticky top-16 z-20 bg-slate-950 py-2">
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
           <input
@@ -1010,15 +996,12 @@ export const CargaDocentePage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="border border-slate-800 rounded-3xl overflow-clip bg-slate-900/80 shadow-xl w-max min-w-full">
+        <div className="border border-slate-800 rounded-3xl overflow-auto bg-slate-900/80 shadow-xl w-full max-h-[calc(100vh-15rem)]">
           <table
             className="w-full text-left text-xs text-slate-300"
             style={{ minWidth: pivoted ? `${820 + lapsoColsVista.length * 80}px` : '1280px' }}
           >
-            <thead
-              className="sticky z-10 bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800"
-              style={{ top: 64 + filterBarH }}
-            >
+            <thead className="sticky top-0 z-10 bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
               {pivoted ? (
                 <>
                   <tr>

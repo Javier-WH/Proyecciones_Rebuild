@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { query } from '../../db/mysql.js';
+import { query, getDbPool } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
 import { sagaService } from '../saga/saga.service.js';
 import { MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
@@ -784,10 +784,22 @@ export async function syncTiposContratoHandler(request: FastifyRequest, reply: F
 // El slot se identifica por (dia_semana, hora_inicio, hora_fin), no por
 // bloque_id, porque la grilla fusiona bloques de varios turnos que pueden
 // compartir horas.
+//
+// Hay dos tablas paralelas con el mismo esquema:
+//   profesor_disponibilidad          — la REAL: la escribe el coordinador y
+//                                      es la única que leen el generador y
+//                                      la auditoría de horarios.
+//   profesor_disponibilidad_sugerida — la SUGERENCIA: la escribe el propio
+//                                      docente desde su portal. No afecta
+//                                      horarios; el coordinador la consulta
+//                                      y la puede copiar a la real con el
+//                                      endpoint de sincronización.
 // ---------------------------------------------------------------------------
 
 const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 const normHora = (h: string) => (h.length === 5 ? `${h}:00` : h);
+const TABLA_DISPONIBILIDAD = 'profesor_disponibilidad';
+const TABLA_SUGERIDA = 'profesor_disponibilidad_sugerida';
 
 // true si el profesor PUEDE dar clases en ese slot. Reusa esto desde el
 // generador de horarios y el reporte de violaciones (solape, no igualdad,
@@ -818,8 +830,13 @@ async function profesorIdDelToken(request: FastifyRequest): Promise<number | nul
   return rows[0]?.id ?? null;
 }
 
-// GET /api/profesores/:id/disponibilidad — slots bloqueados del profesor
-export async function getDisponibilidadHandler(request: FastifyRequest, reply: FastifyReply) {
+// GET — slots bloqueados del profesor, de la tabla indicada.
+// `tabla` es una constante interna (nunca viene del cliente).
+async function getDisponibilidadDe(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  tabla: string
+) {
   const { id } = request.params as { id: string };
   // Un docente solo puede ver su propia disponibilidad
   if (request.userPayload?.role === 'PROFESOR') {
@@ -832,7 +849,7 @@ export async function getDisponibilidadHandler(request: FastifyRequest, reply: F
     const rows = await query<any[]>(
       `SELECT dia_semana, TIME_FORMAT(hora_inicio, '%H:%i') AS hora_inicio,
               TIME_FORMAT(hora_fin, '%H:%i') AS hora_fin
-       FROM profesor_disponibilidad WHERE profesor_id = ?
+       FROM ${tabla} WHERE profesor_id = ?
        ORDER BY dia_semana, hora_inicio`,
       [id]
     );
@@ -843,9 +860,13 @@ export async function getDisponibilidadHandler(request: FastifyRequest, reply: F
   }
 }
 
-// PUT /api/profesores/:id/disponibilidad — marca o libera un slot
+// PUT — marca o libera un slot en la tabla indicada.
 // body: { dia_semana, hora_inicio, hora_fin, disponible }
-export async function setDisponibilidadSlotHandler(request: FastifyRequest, reply: FastifyReply) {
+async function setDisponibilidadSlotDe(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  tabla: string
+) {
   const { id } = request.params as { id: string };
   const body = request.body as {
     dia_semana?: number;
@@ -881,12 +902,12 @@ export async function setDisponibilidadSlotHandler(request: FastifyRequest, repl
     }
     if (body.disponible === false) {
       await query(
-        'INSERT IGNORE INTO profesor_disponibilidad (profesor_id, dia_semana, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)',
+        `INSERT IGNORE INTO ${tabla} (profesor_id, dia_semana, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)`,
         [id, dia, normHora(ini), normHora(fin)]
       );
     } else {
       await query(
-        'DELETE FROM profesor_disponibilidad WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?',
+        `DELETE FROM ${tabla} WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?`,
         [id, dia, normHora(ini), normHora(fin)]
       );
     }
@@ -897,11 +918,15 @@ export async function setDisponibilidadSlotHandler(request: FastifyRequest, repl
   }
 }
 
-// PUT /api/profesores/:id/disponibilidad-bulk — marca o libera varios slots de
-// una vez (toggles de día/hora completos en la grilla).
+// PUT — marca o libera varios slots de una vez (toggles de día/hora
+// completos en la grilla) en la tabla indicada.
 // body: { slots: [{dia_semana, hora_inicio, hora_fin}], disponible }
 const MAX_SLOTS_BULK = 500;
-export async function setDisponibilidadBulkHandler(request: FastifyRequest, reply: FastifyReply) {
+async function setDisponibilidadBulkDe(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  tabla: string
+) {
   const { id } = request.params as { id: string };
   const body = request.body as {
     slots?: { dia_semana?: number; hora_inicio?: string; hora_fin?: string }[];
@@ -945,12 +970,12 @@ export async function setDisponibilidadBulkHandler(request: FastifyRequest, repl
       const fin = normHora(String(s.hora_fin));
       if (marcar) {
         await query(
-          'INSERT IGNORE INTO profesor_disponibilidad (profesor_id, dia_semana, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)',
+          `INSERT IGNORE INTO ${tabla} (profesor_id, dia_semana, hora_inicio, hora_fin) VALUES (?, ?, ?, ?)`,
           [id, dia, ini, fin]
         );
       } else {
         await query(
-          'DELETE FROM profesor_disponibilidad WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?',
+          `DELETE FROM ${tabla} WHERE profesor_id = ? AND dia_semana = ? AND hora_inicio = ? AND hora_fin = ?`,
           [id, dia, ini, fin]
         );
       }
@@ -959,5 +984,79 @@ export async function setDisponibilidadBulkHandler(request: FastifyRequest, repl
   } catch (error: any) {
     request.log.error(error);
     return reply.status(500).send({ success: false, message: 'Error actualizando la disponibilidad.' });
+  }
+}
+
+// GET /api/profesores/:id/disponibilidad — slots bloqueados REALES
+export async function getDisponibilidadHandler(request: FastifyRequest, reply: FastifyReply) {
+  return getDisponibilidadDe(request, reply, TABLA_DISPONIBILIDAD);
+}
+
+// PUT /api/profesores/:id/disponibilidad — disponibilidad REAL (gestores)
+export async function setDisponibilidadSlotHandler(request: FastifyRequest, reply: FastifyReply) {
+  return setDisponibilidadSlotDe(request, reply, TABLA_DISPONIBILIDAD);
+}
+
+// PUT /api/profesores/:id/disponibilidad-bulk — REAL en bloque (gestores)
+export async function setDisponibilidadBulkHandler(request: FastifyRequest, reply: FastifyReply) {
+  return setDisponibilidadBulkDe(request, reply, TABLA_DISPONIBILIDAD);
+}
+
+// GET /api/profesores/:id/disponibilidad-sugerida — sugerencia del docente
+export async function getDisponibilidadSugeridaHandler(request: FastifyRequest, reply: FastifyReply) {
+  return getDisponibilidadDe(request, reply, TABLA_SUGERIDA);
+}
+
+// PUT /api/profesores/:id/disponibilidad-sugerida — el docente marca su
+// sugerencia (la ruta solo admite el rol PROFESOR)
+export async function setDisponibilidadSugeridaSlotHandler(request: FastifyRequest, reply: FastifyReply) {
+  return setDisponibilidadSlotDe(request, reply, TABLA_SUGERIDA);
+}
+
+// PUT /api/profesores/:id/disponibilidad-sugerida-bulk — sugerencia en bloque
+export async function setDisponibilidadSugeridaBulkHandler(request: FastifyRequest, reply: FastifyReply) {
+  return setDisponibilidadBulkDe(request, reply, TABLA_SUGERIDA);
+}
+
+// PUT /api/profesores/:id/disponibilidad/sincronizar — REEMPLAZA la
+// disponibilidad real con la sugerida por el docente (todo en transacción).
+export async function sincronizarDisponibilidadHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const conn = await getDbPool().getConnection();
+  try {
+    const [prof] = await conn.execute<any[]>(
+      'SELECT id, pnf_saga_id FROM profesores WHERE id = ? LIMIT 1',
+      [id]
+    );
+    if (prof.length === 0) {
+      return reply.status(404).send({ success: false, message: 'Profesor no encontrado.' });
+    }
+    if (profesorFueraDelAlcance(request.userPayload!, prof[0].pnf_saga_id)) {
+      return reply.status(403).send({ success: false, message: MSG_PNF_PROHIBIDO });
+    }
+    await conn.beginTransaction();
+    await conn.execute('DELETE FROM profesor_disponibilidad WHERE profesor_id = ?', [id]);
+    const [ins] = await conn.execute<any>(
+      `INSERT INTO profesor_disponibilidad (profesor_id, dia_semana, hora_inicio, hora_fin)
+       SELECT profesor_id, dia_semana, hora_inicio, hora_fin
+       FROM profesor_disponibilidad_sugerida WHERE profesor_id = ?`,
+      [id]
+    );
+    await conn.commit();
+    const n = ins?.affectedRows ?? 0;
+    return reply.send({
+      success: true,
+      message: `Disponibilidad sincronizada: ${n} slot${n === 1 ? '' : 's'} aplicado${n === 1 ? '' : 's'} desde la sugerencia del docente.`,
+    });
+  } catch (error: any) {
+    try {
+      await conn.rollback();
+    } catch {
+      // no había transacción activa
+    }
+    request.log.error(error);
+    return reply.status(500).send({ success: false, message: 'Error sincronizando la disponibilidad.' });
+  } finally {
+    conn.release();
   }
 }

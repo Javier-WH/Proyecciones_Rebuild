@@ -19,6 +19,10 @@ import {
   getDisponibilidadHandler,
   setDisponibilidadSlotHandler,
   setDisponibilidadBulkHandler,
+  getDisponibilidadSugeridaHandler,
+  setDisponibilidadSugeridaSlotHandler,
+  setDisponibilidadSugeridaBulkHandler,
+  sincronizarDisponibilidadHandler,
 } from './profesores.controller.js';
 import { authenticate, authorizeRoles } from '../../plugins/authGuard.js';
 
@@ -49,11 +53,20 @@ export async function profesoresRoutes(fastify: FastifyInstance) {
   fastify.put('/:id/perfiles', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, setPerfilesProfesorHandler);
   fastify.get('/:id/perfiles-materias', { preHandler: [authenticate] }, getPerfilMateriasProfesorHandler);
 
-  // Disponibilidad horaria del profesor (slots bloqueados)
+  // Disponibilidad horaria REAL del profesor (slots bloqueados): la escriben
+  // solo los gestores; es la que usa el generador/auditoría de horarios.
   fastify.get('/:id/disponibilidad', { preHandler: [authenticate] }, getDisponibilidadHandler);
-  // PROFESOR también puede entrar: el handler verifica que solo edite la suya
-  fastify.put('/:id/disponibilidad', { preHandler: [authenticate, authorizeRoles(...GESTORES, 'PROFESOR')] }, setDisponibilidadSlotHandler);
-  fastify.put('/:id/disponibilidad-bulk', { preHandler: [authenticate, authorizeRoles(...GESTORES, 'PROFESOR')] }, setDisponibilidadBulkHandler);
+  fastify.put('/:id/disponibilidad', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, setDisponibilidadSlotHandler);
+  fastify.put('/:id/disponibilidad-bulk', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, setDisponibilidadBulkHandler);
+  // Copia la sugerencia del docente sobre la disponibilidad real (reemplazo).
+  fastify.put('/:id/disponibilidad/sincronizar', { preHandler: [authenticate, authorizeRoles(...GESTORES)] }, sincronizarDisponibilidadHandler);
+
+  // Disponibilidad SUGERIDA: lo que el docente propone desde su portal. Solo
+  // consulta para el coordinador; no afecta el horario. El PROFESOR solo
+  // edita la suya (el handler lo verifica).
+  fastify.get('/:id/disponibilidad-sugerida', { preHandler: [authenticate] }, getDisponibilidadSugeridaHandler);
+  fastify.put('/:id/disponibilidad-sugerida', { preHandler: [authenticate, authorizeRoles('PROFESOR')] }, setDisponibilidadSugeridaSlotHandler);
+  fastify.put('/:id/disponibilidad-sugerida-bulk', { preHandler: [authenticate, authorizeRoles('PROFESOR')] }, setDisponibilidadSugeridaBulkHandler);
 
   // Foto del profesor (base64, máx ~4.5 MB de payload ≈ 3 MB de imagen)
   fastify.put(

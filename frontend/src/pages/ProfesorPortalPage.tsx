@@ -27,6 +27,9 @@ export interface ProfesorPortalViewProps {
   nombre: string;
   cedula?: string | null;
   pnfNombre?: string | null;
+  // true en el portal del propio docente: su grilla de disponibilidad edita
+  // la SUGERENCIA. En el panel del gestor (sin el flag) se edita la REAL.
+  esPropietario?: boolean;
 }
 
 export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
@@ -34,6 +37,7 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
   nombre,
   cedula,
   pnfNombre,
+  esPropietario,
 }) => {
   const [rows, setRows] = useState<MateriaAsignableRow[]>([]);
   const [periodoCodigo, setPeriodoCodigo] = useState<string | null>(null);
@@ -282,10 +286,9 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
               <div className="mb-4 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-start gap-3 text-blue-200/90 text-xs leading-relaxed">
                 <AlertCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                 <span>
-                  Tu disponibilidad será tenida en cuenta por el sistema de generación automática de
-                  horarios al programar tus clases. Ten en cuenta que se considera una preferencia y
-                  no una garantía absoluta: si por la carga académica no existe una forma viable de
-                  respetarla, la coordinación podrá ajustar la asignación.
+                  {esPropietario
+                    ? 'Marca los horarios en los que prefieres no dar clase. Es una sugerencia para la coordinación que arma el horario: la revisarán y la aplicarán a tu disponibilidad oficial según la carga académica.'
+                    : 'Disponibilidad real del docente: es la que usa el horario. El punto ámbar marca lo que el docente sugirió bloquear desde su portal; puedes copiarla con "Sincronizar sugerencia" en el modal de disponibilidad.'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 mb-4">
@@ -293,7 +296,11 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
                 <span className="text-emerald-300 font-semibold">disponible</span> y{' '}
                 <span className="text-red-300 font-semibold">no disponible</span>.
               </p>
-              <DisponibilidadGrid profesorId={profesorId} />
+              <DisponibilidadGrid
+                profesorId={profesorId}
+                endpoint={esPropietario ? 'disponibilidad-sugerida' : 'disponibilidad'}
+                marcarSugeridas={!esPropietario}
+              />
             </div>
           ) : (
             <div className="space-y-5">
@@ -391,6 +398,7 @@ export const ProfesorPortalPage: React.FC = () => {
       nombre={`${user?.nombre ?? ''} ${user?.apellido ?? ''}`.trim()}
       cedula={user?.profesor_cedula ?? user?.username}
       pnfNombre={user?.pnf_nombre}
+      esPropietario
     />
   );
 };

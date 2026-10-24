@@ -62,11 +62,11 @@ const PERMISOS: Record<Rol, PermisoInfo> = {
   },
   PROFESOR: {
     titulo: 'Docente',
-    resumen: 'Portal propio: consulta su horario y gestiona solo su disponibilidad.',
+    resumen: 'Portal propio: consulta su horario y propone su disponibilidad.',
     puede: [
       'Consultar su horario y su carga docente',
       'Imprimir su horario',
-      'Marcar su propia disponibilidad horaria',
+      'Sugerir su disponibilidad horaria (el coordinador decide si la aplica)',
     ],
     noPuede: [
       'Ver o editar datos de otros docentes',

@@ -237,7 +237,7 @@ sequenceDiagram
 | `SUPER_USUARIO` | Master | Acceso total sin restricciones + gestión de usuarios + auditoría completa |
 | `ADMINISTRADOR` | Coordinador | Ve todo e imprime todo; escribe **solo en su PNF**; auditoría **solo de su PNF**. Requiere `pnf_saga_id` obligatorio — sin él, toda escritura acotada a PNF → 403 |
 | `REGULAR` | Usuario | **Solo lectura** en todo el sistema |
-| `PROFESOR` | Docente | Portal propio: solo lectura + editar **su propia** disponibilidad (`PUT /profesores/:id/disponibilidad` y `/disponibilidad-bulk` — el handler verifica que el id sea el suyo) |
+| `PROFESOR` | Docente | Portal propio: solo lectura + editar **su propia** disponibilidad *sugerida* (`PUT /profesores/:id/disponibilidad-sugerida` y `/disponibilidad-sugerida-bulk` — el handler verifica que el id sea el suyo). Es solo consulta para el coordinador; no afecta el horario |
 
 Reglas específicas del **Coordinador** (`ADMINISTRADOR`), aplicadas en cada handler:
 
@@ -303,6 +303,7 @@ erDiagram
     proyeccion_secciones ||--o{ proyeccion_asignaciones : "asignada"
     profesores ||--o{ proyeccion_asignaciones : "dicta"
     profesores ||--o{ profesor_disponibilidad : "bloquea"
+    profesores ||--o{ profesor_disponibilidad_sugerida : "sugiere"
     profesores }o--o{ perfiles : profesor_perfiles
     perfiles ||--o{ perfil_materias : "agrupa"
     tipos_contrato ||--o{ profesores : "dedicación"
@@ -336,7 +337,8 @@ erDiagram
 | `perfiles` | Perfiles docentes (afinidad) | `nombre` UK |
 | `perfil_materias` | Materias de cada perfil | UK `(perfil_id, subject_saga_id)` |
 | `profesor_perfiles` | Perfiles de cada profesor | PK `(profesor_id, perfil_id)` |
-| `profesor_disponibilidad` | Slots **bloqueados** del docente | UK `(profesor_id, dia_semana, hora_inicio, hora_fin)` — ausencia = disponible |
+| `profesor_disponibilidad` | Slots **bloqueados** reales del docente (la escribe el coordinador; la usa el horario) | UK `(profesor_id, dia_semana, hora_inicio, hora_fin)` — ausencia = disponible |
+| `profesor_disponibilidad_sugerida` | Slots bloqueados **sugeridos** por el docente desde su portal (solo consulta; sin efecto en el horario) | Mismo esquema que `profesor_disponibilidad` |
 | `horario_entries` | Una clase agendada | UK `(periodo, tipo, trimestre, dia, bloque, seccion)`; `profesor_id` snapshot; FKs a materia/sección/bloque/aula |
 | `horario_config` | Reglas del generador (fila única id=1) | `min_horas_bloque`, `max_horas_dia`, `formato_12h` |
 | `reportes_plantillas` | Encabezados editables de reportes | PK `reporte` (`horarios_seccion`, `horarios_aulas`, `horarios_profesores`, `carga_docente`), `encabezado` JSON |
@@ -419,9 +421,13 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 | POST | `/sync` | ESCRITORES | Sincronizar docentes desde SAGA |
 | GET | `/:id/perfiles`, `/:id/perfiles-materias` | JWT | Perfiles del docente y sus materias afines |
 | PUT | `/:id/perfiles` | ESCRITORES + PNF | Reemplazar perfiles (Coord: solo su PNF) |
-| GET | `/:id/disponibilidad` | JWT | Slots bloqueados (PROFESOR: solo la propia) |
-| PUT | `/:id/disponibilidad` | ESCRITORES + PROFESOR*(solo la propia)* | Marcar/desmarcar slot bloqueado (Coord: solo profesores de su PNF) |
-| PUT | `/:id/disponibilidad-bulk` | ESCRITORES + PROFESOR*(solo la propia)* | Edición en bloque: marcar/desmarcar varios slots de una vez (día/fila completa) |
+| GET | `/:id/disponibilidad` | JWT | Slots bloqueados reales (PROFESOR: solo la propia) |
+| PUT | `/:id/disponibilidad` | ESCRITORES | Marcar/desmarcar slot bloqueado real (Coord: solo profesores de su PNF) |
+| PUT | `/:id/disponibilidad-bulk` | ESCRITORES | Edición en bloque: marcar/desmarcar varios slots de una vez (día/fila completa) |
+| PUT | `/:id/disponibilidad/sincronizar` | ESCRITORES + PNF | Reemplaza la disponibilidad real con la sugerida por el docente (transacción) |
+| GET | `/:id/disponibilidad-sugerida` | JWT | Slots bloqueados sugeridos (PROFESOR: solo la propia) |
+| PUT | `/:id/disponibilidad-sugerida` | PROFESOR*(solo la propia)* | El docente sugiere/libera un slot; no afecta el horario |
+| PUT | `/:id/disponibilidad-sugerida-bulk` | PROFESOR*(solo la propia)* | Sugerencia en bloque (día/fila completa) |
 | GET/POST/PUT/DELETE | `/tipos-contrato…` | GET: JWT · resto: ESCRITORES | CRUD de dedicaciones |
 | POST | `/tipos-contrato/sync` | ESCRITORES | Sincronizar dedicaciones desde SAGA |
 
@@ -497,7 +503,7 @@ Convención de auth: **JWT** = `Authorization: Bearer`; 🔒roles = `authorizeRo
 
 > Solo se registran métodos GET: no existe forma de escribir por este prefijo.
 
-**Grupos de roles**: `ESCRITORES` = SUPER_USUARIO + ADMINISTRADOR (Coordinador) · `MASTER` = solo SUPER_USUARIO · `+ PNF` = el Coordinador además debe ser dueño del recurso (`esCoordinadorDeOtroPnf`). `REGULAR` (Usuario) y `PROFESOR` reciben 403 en toda escritura — salvo la disponibilidad propia del docente.
+**Grupos de roles**: `ESCRITORES` = SUPER_USUARIO + ADMINISTRADOR (Coordinador) · `MASTER` = solo SUPER_USUARIO · `+ PNF` = el Coordinador además debe ser dueño del recurso (`esCoordinadorDeOtroPnf`). `REGULAR` (Usuario) y `PROFESOR` reciben 403 en toda escritura — salvo la disponibilidad *sugerida* propia del docente.
 
 ---
 

@@ -451,6 +451,24 @@ export async function initializeDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
+  // 9c-quat. Disponibilidad SUGERIDA del profesor: lo que el docente marca en
+  // su portal como horarios en que prefiere no dar clase. No la usa el
+  // generador ni la auditoría — es solo consulta para el coordinador, que la
+  // puede copiar a la tabla real con el endpoint de sincronización.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS profesor_disponibilidad_sugerida (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      profesor_id INT NOT NULL,
+      dia_semana TINYINT NOT NULL,
+      hora_inicio TIME NOT NULL,
+      hora_fin TIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_slot (profesor_id, dia_semana, hora_inicio, hora_fin),
+      FOREIGN KEY (profesor_id) REFERENCES profesores(id) ON DELETE CASCADE,
+      INDEX idx_profesor (profesor_id, dia_semana)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
   // 9d. Tabla de Horarios: una fila = una clase en un bloque/día/aula.
   // La unidad agendada es (materia_id, seccion_id, trimestre) — la misma fila
   // "asignable" de la carga docente; profesor_id es un snapshot denormalizado

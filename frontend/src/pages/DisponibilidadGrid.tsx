@@ -22,9 +22,22 @@ const slotKey = (dia: number, inicio: string, fin: string) =>
 // (unión de bloques de todos los turnos). Click en una celda = toggle
 // disponible/no disponible. Se usa dentro del modal del admin y también
 // embebida en el portal del docente.
-export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorId }) => {
+//
+// `endpoint` elige qué disponibilidad edita:
+//   'disponibilidad'           — la REAL (coordinador; la usa el horario)
+//   'disponibilidad-sugerida'  — la SUGERENCIA del docente (solo consulta)
+// `marcarSugeridas` = además carga la sugerencia y marca con un punto ámbar
+// las celdas que el docente pidió bloquear (vista del coordinador).
+// `recargaKey` fuerza una recarga al cambiar (tras sincronizar sugerencia).
+export const DisponibilidadGrid: React.FC<{
+  profesorId: number;
+  endpoint?: 'disponibilidad' | 'disponibilidad-sugerida';
+  marcarSugeridas?: boolean;
+  recargaKey?: number;
+}> = ({ profesorId, endpoint = 'disponibilidad', marcarSugeridas, recargaKey }) => {
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [bloqueados, setBloqueados] = useState<Set<string>>(new Set());
+  const [sugeridas, setSugeridas] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [guardando, setGuardando] = useState<string | null>(null);
   const [guardandoBulk, setGuardandoBulk] = useState(false);
@@ -33,11 +46,15 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
   useEffect(() => {
     setErrorMsg(null);
     setBloqueados(new Set());
+    setSugeridas(new Set());
     const cargar = async () => {
       setLoading(true);
-      const [rTurnos, rDisp] = await Promise.all([
+      const [rTurnos, rDisp, rSug] = await Promise.all([
         apiFetch<Turno[]>('/horarios/turnos'),
-        apiFetch<SlotBloqueado[]>(`/profesores/${profesorId}/disponibilidad`),
+        apiFetch<SlotBloqueado[]>(`/profesores/${profesorId}/${endpoint}`),
+        marcarSugeridas
+          ? apiFetch<SlotBloqueado[]>(`/profesores/${profesorId}/disponibilidad-sugerida`)
+          : Promise.resolve(null),
       ]);
       if (rTurnos.success && rTurnos.data) setTurnos(rTurnos.data);
       if (rDisp.success && rDisp.data) {
@@ -47,10 +64,15 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
       } else {
         setErrorMsg(rDisp.message || 'Error cargando la disponibilidad.');
       }
+      if (rSug?.success && rSug.data) {
+        setSugeridas(
+          new Set(rSug.data.map((s) => slotKey(s.dia_semana, s.hora_inicio, s.hora_fin)))
+        );
+      }
       setLoading(false);
     };
     cargar();
-  }, [profesorId]);
+  }, [profesorId, endpoint, marcarSugeridas, recargaKey]);
 
   // Filas: rangos hora_inicio–hora_fin únicos de todos los turnos
   const filas = useMemo<Fila[]>(() => {
@@ -95,7 +117,7 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
       return n;
     });
     setGuardandoBulk(true);
-    const res = await apiFetch(`/profesores/${profesorId}/disponibilidad-bulk`, {
+    const res = await apiFetch(`/profesores/${profesorId}/${endpoint}-bulk`, {
       method: 'PUT',
       body: JSON.stringify({
         slots: slots.map((s) => ({
@@ -132,7 +154,7 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
       return n;
     });
     setGuardando(key);
-    const res = await apiFetch(`/profesores/${profesorId}/disponibilidad`, {
+    const res = await apiFetch(`/profesores/${profesorId}/${endpoint}`, {
       method: 'PUT',
       body: JSON.stringify({
         dia_semana: dia,
@@ -217,17 +239,23 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
                     {dias.map((d) => {
                       const key = slotKey(d, f.inicio, f.fin);
                       const bloqueado = bloqueados.has(key);
+                      const sugerida = sugeridas.has(key);
                       const ocupado = guardando === key;
                       return (
                         <td key={d} className="p-0">
                           <button
                             onClick={() => toggleSlot(f, d)}
                             disabled={ocupado}
-                            title={bloqueado ? 'No disponible — click para liberar' : 'Disponible — click para bloquear'}
-                            className={`w-full h-full min-h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-wait ${
+                            title={
+                              (bloqueado ? 'No disponible — click para liberar' : 'Disponible — click para bloquear') +
+                              (sugerida ? '\nEl docente sugirió bloquear este horario' : '')
+                            }
+                            className={`relative w-full h-full min-h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer disabled:cursor-wait ${
                               bloqueado
                                 ? 'bg-red-500/20 border-red-500/50 text-red-300 hover:bg-red-500/30'
-                                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300/70 hover:bg-emerald-500/20'
+                                : sugerida
+                                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-300/80 hover:bg-amber-500/20'
+                                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300/70 hover:bg-emerald-500/20'
                             } ${f.esReceso && !bloqueado ? 'opacity-50' : ''}`}
                           >
                             {ocupado ? (
@@ -236,6 +264,9 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
                               <Ban className="w-3 h-3" />
                             ) : (
                               <Check className="w-3 h-3" />
+                            )}
+                            {sugerida && (
+                              <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
                             )}
                           </button>
                         </td>
@@ -256,6 +287,14 @@ export const DisponibilidadGrid: React.FC<{ profesorId: number }> = ({ profesorI
               <span className="w-3 h-3 rounded bg-red-500/25 border border-red-500/50" />
               No disponible
             </span>
+            {marcarSugeridas && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="relative w-3 h-3 rounded bg-emerald-500/10 border border-amber-500/60">
+                  <span className="absolute top-0 right-0 w-1 h-1 rounded-full bg-amber-400" />
+                </span>
+                Sugerido por el docente
+              </span>
+            )}
             <span className="ml-auto text-slate-600">Clic en día u hora: alternar toda la columna/fila · {bloqueados.size} slot{bloqueados.size === 1 ? '' : 's'} bloqueado{bloqueados.size === 1 ? '' : 's'}</span>
           </div>
         </>
