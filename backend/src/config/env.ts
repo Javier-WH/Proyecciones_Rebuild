@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
-import path from 'path';
+import { ENV_PATH } from './paths.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: ENV_PATH });
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const esProduccion = NODE_ENV === 'production';

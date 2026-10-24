@@ -248,8 +248,6 @@ export async function initializeDatabase() {
     { tabla: 'turnos', nombre: 'dias_semana', definicion: "VARCHAR(20) NOT NULL DEFAULT '1,2,3,4,5' AFTER nombre" },
     { tabla: 'pnf', nombre: 'color', definicion: 'VARCHAR(7) NULL AFTER codigo' },
     { tabla: 'turnos', nombre: 'activo', definicion: 'TINYINT(1) DEFAULT 1 AFTER dias_semana' },
-    { tabla: 'aulas', nombre: 'pnf_saga_id', definicion: 'INT NULL AFTER tipo' },
-    { tabla: 'aulas', nombre: 'pnf_nombre', definicion: 'VARCHAR(255) NULL AFTER pnf_saga_id' },
     { tabla: 'users', nombre: 'token_version', definicion: 'INT NOT NULL DEFAULT 0 AFTER profesor_cedula' },
   ];
   for (const col of columnasExtra) {
@@ -283,6 +281,25 @@ export async function initializeDatabase() {
   await db.query(
     "ALTER TABLE aulas MODIFY COLUMN tipo ENUM('AULA_REGULAR','LABORATORIO','TALLER','AUDITORIO','INSTALACION_DEPORTIVA','SALA_LECTURA') DEFAULT 'AULA_REGULAR'"
   );
+
+  // Columnas PNF del aula: migración DESPUÉS del CREATE — en una BD nueva la
+  // tabla todavía no existe si el ALTER corre antes y el init muere a mitad
+  // de camino dejando el esquema incompleto.
+  const columnasAulas = [
+    { nombre: 'pnf_saga_id', definicion: 'INT NULL AFTER tipo' },
+    { nombre: 'pnf_nombre', definicion: 'VARCHAR(255) NULL AFTER pnf_saga_id' },
+  ];
+  for (const col of columnasAulas) {
+    const [existe] = await db.query<any[]>(
+      `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'aulas' AND COLUMN_NAME = ?`,
+      [env.DB_NAME, col.nombre]
+    );
+    if (existe[0].total === 0) {
+      await db.query(`ALTER TABLE aulas ADD COLUMN ${col.nombre} ${col.definicion}`);
+      console.log(`✅ Columna '${col.nombre}' agregada a la tabla aulas`);
+    }
+  }
 
   // 8b. Materias preferidas por aula (ej. "QUÍMICA I" → Laboratorio de Química):
   // el generador las prioriza y la UI avisa cuando la clase queda fuera de su

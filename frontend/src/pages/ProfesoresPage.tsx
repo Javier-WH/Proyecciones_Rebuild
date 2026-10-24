@@ -82,7 +82,7 @@ export const ProfesoresPage: React.FC = () => {
     setNoticeMsg(null);
     const res = await apiFetch<{ total_saga: number; nuevos: number; actualizados: number; omitidos: number }>(
       '/profesores/sync',
-      { method: 'POST' }
+      { method: 'POST', timeoutMs: 180_000 }
     );
     setSyncing(false);
     if (res.success) {

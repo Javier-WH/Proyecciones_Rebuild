@@ -1,13 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { Writable } from 'stream';
+import { LOGS_DIR } from '../config/paths.js';
 
 // Logger de errores persistente: además del stdout de pino (que PM2 captura
 // en ~/.pm2/logs), los logs de nivel error+ se agregan a un archivo de texto
 // por día en backend/logs/YYYY-MM-DD.log — orden alfabético = cronológico.
 // El cwd del proceso es backend/ tanto en dev (npm --prefix) como en PM2
 // (cwd: './backend' del ecosystem.config.js).
-const DIR_LOGS = path.resolve(process.cwd(), 'logs');
+const DIR_LOGS = LOGS_DIR;
 const DIAS_RETENCION = 30;
 
 function pad(n: number): string {

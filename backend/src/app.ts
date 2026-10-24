@@ -7,6 +7,7 @@ import fastifyStatic from '@fastify/static';
 import path from 'path';
 import fs from 'fs';
 import { env } from './config/env.js';
+import { PUBLIC_DIR, FRONTEND_DIST } from './config/paths.js';
 import { query } from './db/mysql.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { sagaRoutes } from './modules/saga/saga.routes.js';
@@ -81,7 +82,7 @@ export function buildApp() {
   });
 
   // 2. Archivos públicos estáticos
-  const publicPath = path.join(process.cwd(), 'public');
+  const publicPath = PUBLIC_DIR;
   app.register(fastifyStatic, {
     root: publicPath,
     prefix: '/public/',
@@ -91,7 +92,7 @@ export function buildApp() {
   // (frontend/dist) si existe — así el deploy es un solo proceso:
   // `npm run build` (frontend) + `node dist/server.js` (backend).
   // Las rutas que no son /api ni /public devuelven index.html (SPA).
-  const distPath = path.resolve(process.cwd(), '..', 'frontend', 'dist');
+  const distPath = FRONTEND_DIST;
   const indexHtml = path.join(distPath, 'index.html');
   const servirFrontend =
     process.env.SERVE_FRONTEND !== '0' && fs.existsSync(indexHtml);
