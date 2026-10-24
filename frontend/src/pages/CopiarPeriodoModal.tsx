@@ -76,7 +76,7 @@ export const CopiarPeriodoModal: React.FC<{
         className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950">
+        <div className="modal-head flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <Copy className="w-4 h-4 text-blue-300" />
             Copiar desde otro periodo

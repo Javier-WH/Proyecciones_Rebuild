@@ -523,7 +523,7 @@ td.ded { text-align: center; vertical-align: middle; }
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
+        <div className="modal-head px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <FileSpreadsheet className="w-5 h-5 text-emerald-400" />

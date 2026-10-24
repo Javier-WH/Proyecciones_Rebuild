@@ -123,7 +123,7 @@ export const AulasLibresModal: React.FC<Props> = ({ onClose, entries, aulas, tur
         className="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800">
+        <div className="modal-head flex items-center justify-between px-5 py-3.5 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
               <DoorOpen className="w-4 h-4 text-emerald-300" />

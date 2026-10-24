@@ -996,7 +996,7 @@ export const CargaDocentePage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="border border-slate-800 rounded-3xl overflow-auto bg-slate-900/80 shadow-xl w-full max-h-[calc(100vh-15rem)]">
+        <div className="tabla-carga border border-slate-800 rounded-3xl overflow-auto bg-slate-900/80 shadow-xl w-full max-h-[calc(100vh-15rem)]">
           <table
             className="w-full text-left text-xs text-slate-300"
             style={{ minWidth: pivoted ? `${820 + lapsoColsVista.length * 80}px` : '1280px' }}

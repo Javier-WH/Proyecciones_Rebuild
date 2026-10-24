@@ -108,7 +108,7 @@ export const ConfigHorariosModal: React.FC<ConfigHorariosModalProps> = ({ isOpen
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
+        <div className="modal-head flex items-center justify-between px-6 py-5 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
               <CalendarCog className="w-5 h-5" />

@@ -49,7 +49,7 @@ export const ConfirmModal: React.FC<{
           danger ? 'border-red-500/30' : 'border-slate-800'
         }`}
       >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950">
+        <div className="modal-head flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             {icono}
             {titulo}

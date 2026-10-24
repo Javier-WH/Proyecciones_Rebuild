@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { PnfColorProvider } from './context/PnfColorContext.js';
 import { PeriodoProvider } from './context/PeriodoContext.js';
+import { ThemeProvider } from './context/ThemeContext.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { DashboardPage } from './pages/DashboardPage.js';
 import { precargarCatalogoMaterias } from './pages/horarios/catalogoMaterias.js';
@@ -38,15 +39,17 @@ const AppRoutes: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <PeriodoProvider>
-        <PnfColorProvider>
-          <AppRoutes />
-          {/* Indicador global de "esperando respuesta del servidor" */}
-          <IndicadorRed />
-        </PnfColorProvider>
-      </PeriodoProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <PeriodoProvider>
+          <PnfColorProvider>
+            <AppRoutes />
+            {/* Indicador global de "esperando respuesta del servidor" */}
+            <IndicadorRed />
+          </PnfColorProvider>
+        </PeriodoProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

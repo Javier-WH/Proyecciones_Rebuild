@@ -199,7 +199,7 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-slate-800 shrink-0">
+        <div className="modal-head flex items-start justify-between px-6 pt-5 pb-4 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
               <UserRound className="w-5 h-5" />

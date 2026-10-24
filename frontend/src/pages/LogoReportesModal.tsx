@@ -110,7 +110,7 @@ export const LogoReportesModal: React.FC<LogoReportesModalProps> = ({ isOpen, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
+        <div className="modal-head flex items-center justify-between px-6 py-5 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center">
               <ImageIcon className="w-5 h-5" />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
+import { useTema } from '../context/ThemeContext.js';
 import { SelectorPeriodo } from './SelectorPeriodo.js';
 import { apiFetch } from '../api/client.js';
 import { invalidarCatalogoMaterias, precargarCatalogoMaterias } from './horarios/catalogoMaterias.js';
@@ -56,12 +57,15 @@ import {
   UserRound,
   History,
   FlaskConical,
+  Sun,
+  Moon,
   Image as ImageIcon
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
   const { periodo, esPlanificacion } = usePeriodo();
+  const { tema, toggleTema } = useTema();
   const [activeTab, setActiveTab] = useState<'dashboard' | 'estudiantes' | 'proyecciones' | 'periodos' | 'profesores' | 'carga' | 'horarios'>('dashboard');
   const [horariosSubTab, setHorariosSubTab] = useState<HorariosSubTab>('horario');
   // Foco de navegación profunda hacia Horarios (desde las estadísticas)
@@ -319,7 +323,7 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Top Navbar */}
-      <nav className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30">
+      <nav className="nav-top border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left Brand */}
@@ -452,13 +456,34 @@ export const DashboardPage: React.FC = () => {
                         className="fixed inset-0 z-40"
                         onClick={() => setConfigMenuOpen(false)}
                       />
-                      <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
+                      <div className="menu-popup absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden z-50">
                         {/* Periodo de trabajo — solo visible para
                             Master/Coordinador cuando hay algo que elegir */}
                         <SelectorPeriodo onSeleccionado={() => setConfigMenuOpen(false)} />
+                        {/* Tema claro/oscuro: disponible para todos los roles */}
+                        <button
+                          onClick={toggleTema}
+                          className="w-full px-4 py-3 flex items-center gap-3 text-sm text-slate-200 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                        >
+                          {tema === 'dark' ? (
+                            <Sun className="w-4 h-4 text-amber-400" />
+                          ) : (
+                            <Moon className="w-4 h-4 text-indigo-400" />
+                          )}
+                          <div className="text-left">
+                            <div className="font-semibold text-xs">
+                              {tema === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {tema === 'dark'
+                                ? 'Cambiar a tonos pastel claros'
+                                : 'Volver al tema oscuro'}
+                            </div>
+                          </div>
+                        </button>
                         {esAdmin && (
                           <>
-                            <div className="px-4 py-2.5 border-b border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            <div className="px-4 py-2.5 border-t border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                               Configuración
                             </div>
                             {user?.role === 'SUPER_USUARIO' && (
@@ -779,7 +804,7 @@ export const DashboardPage: React.FC = () => {
                   <div
                     key={m.titulo}
                     onClick={m.onClick}
-                    className={`bg-slate-900/90 border border-slate-800 ${c.hover} rounded-2xl p-5 transition-all group cursor-pointer`}
+                    className={`bg-slate-900/90 border border-slate-800 lt-card-${m.color} ${c.hover} rounded-2xl p-5 transition-all group cursor-pointer`}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className={`w-12 h-12 rounded-xl border ${c.icon} flex items-center justify-center group-hover:scale-110 transition-transform`}>

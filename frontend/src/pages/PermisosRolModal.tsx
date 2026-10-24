@@ -87,7 +87,7 @@ export const PermisosRolModal: React.FC<{ role?: string; onClose: () => void }> 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-950 shrink-0 flex items-center justify-between">
+        <div className="modal-head px-6 py-4 border-b border-slate-800 bg-slate-950 shrink-0 flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-purple-400" />
             Permisos: {info.titulo}

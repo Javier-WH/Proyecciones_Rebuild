@@ -1500,7 +1500,7 @@ const ClaseFantasma: React.FC<{ entry: HorarioEntry; fin?: string; usa12h?: bool
     className={`h-full w-full rounded-md border border-dashed px-1.5 py-1 flex flex-col justify-center overflow-hidden ${colorMateria(
       entry.materia_id
     )}`}
-    style={{ backgroundColor: 'rgb(2 6 23 / 0.88)' }}
+    style={{ backgroundColor: 'var(--color-fantasma-bg)' }}
     title={`${entry.materia_nombre} · ${entry.seccion_nombre} · ${entry.aula_codigo} · ${fmtHoraCfg(entry.hora_inicio, usa12h)}–${fmtHoraCfg(fin ?? entry.hora_fin, usa12h)}`}
   >
     <div className="text-[10px] font-bold leading-tight line-clamp-2">

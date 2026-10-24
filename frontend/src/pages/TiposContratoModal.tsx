@@ -113,7 +113,7 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
+        <div className="modal-head flex items-center justify-between px-6 py-5 border-b border-slate-800 bg-slate-950 shrink-0">
           <h3 className="text-base font-bold text-white">Tipos de Contrato Docente</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
