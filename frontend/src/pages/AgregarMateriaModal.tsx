@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
-import { X, Search, AlertCircle, Plus, CheckCircle2, UserX, Layers, Star, GraduationCap } from 'lucide-react';
+import { X, Search, AlertCircle, Plus, CheckCircle2, UserX, Layers, Star, GraduationCap, Repeat } from 'lucide-react';
 
 // Misma forma de fila que usa la página de carga docente
 export interface MateriaAsignableRow {
@@ -66,6 +66,10 @@ interface AgregarMateriaModalProps {
   rows: MateriaAsignableRow[];
   // Lapso seleccionado en la tabla como clave compuesta 'tipo:n' (se preselecciona aquí)
   lapsoInicial?: string | null;
+  // Mapa profesor_id -> (lapsoKey 'tipo:n' -> horas asignadas), igual que AsignarProfesorModal.
+  // Se calcula sobre todas las filas sin filtrar: la carga del profesor incluye
+  // materias de otros PNF aunque `rows` llegue filtrado para coordinadores.
+  cargaPorProfesor?: Map<number, Map<string, number>>;
 }
 
 export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
@@ -75,6 +79,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   profesor,
   rows,
   lapsoInicial,
+  cargaPorProfesor,
 }) => {
   const [search, setSearch] = useState('');
   const [lapso, setLapso] = useState<string>('todos');
@@ -82,6 +87,10 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   const [soloSinAsignar, setSoloSinAsignar] = useState(true);
   const [agruparLapsos, setAgruparLapsos] = useState(true);
   const [soloPerfil, setSoloPerfil] = useState(false);
+  // Vista del indicador de carga: 'T' trimestral (defecto), 'S' semestral,
+  // 'SUM' sumada. null = auto (trimestral, o semestral si solo hay semestrales).
+  // Con ambos regímenes el usuario la rota haciendo click sobre las horas
+  const [vistaCarga, setVistaCarga] = useState<'T' | 'S' | 'SUM' | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -100,6 +109,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
       setSoloSinAsignar(true);
       setAgruparLapsos(true);
       setSoloPerfil(false);
+      setVistaCarga(null);
       setErrorMsg(null);
       setPerfilNombres([]);
       setPerfilMateriaIds(new Set());
@@ -125,6 +135,39 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
   }, [isOpen, lapsoInicial, profesor]);
 
   if (!isOpen || !profesor) return null;
+
+  // Carga del profesor por lapso (horas ya asignadas), calculada por la página
+  // sobre todas las filas. Cada lapso ocurre en un momento distinto del año,
+  // así que no se suman entre regímenes salvo que el usuario lo pida.
+  const carga = cargaPorProfesor?.get(profesor.id) ?? new Map<string, number>();
+  const hT = [1, 2, 3].map((n) => carga.get(`TRIMESTRAL:${n}`) ?? 0);
+  const hS = [1, 2].map((n) => carga.get(`SEMESTRAL:${n}`) ?? 0);
+  const tieneTrim = [...carga.keys()].some((k) => k.startsWith('TRIMESTRAL:'));
+  const tieneSem = [...carga.keys()].some((k) => k.startsWith('SEMESTRAL:'));
+
+  // Vista efectiva del indicador: trimestral por defecto, semestral si el
+  // profesor solo tiene materias semestrales. Con ambos regímenes el click
+  // sobre las horas rota trimestral -> semestral -> sumada.
+  const ambosRegimenes = tieneTrim && tieneSem;
+  // Con un solo régimen la vista queda fijada a él (también si el estado de
+  // usuario quedó apuntando a un régimen que el profesor ya no tiene)
+  const vista = ambosRegimenes ? (vistaCarga ?? 'T') : tieneSem ? 'S' : 'T';
+  // Vista sumada (mismas reglas de carga docente): S1→T1+T2, S2→T2+T3 y
+  // T1→S1, T2→S1+S2, T3→S2 — cada grupo con las horas del otro régimen
+  const hTvista = vista === 'SUM' ? [hT[0] + hS[0], hT[1] + hS[0] + hS[1], hT[2] + hS[1]] : hT;
+  const hSvista = vista === 'SUM' ? [hS[0] + hT[0] + hT[1], hS[1] + hT[1] + hT[2]] : hS;
+  const ciclarVista = () =>
+    setVistaCarga((v) => ((v ?? 'T') === 'T' ? 'S' : v === 'S' ? 'SUM' : 'T'));
+
+  // Misma regla de color que la vista de carga docente: sobrecarga roja,
+  // cerca del contrato ámbar, holgado esmeralda
+  const horaColor = (total: number): string => {
+    const contrato = profesor.tipo_contrato_horas;
+    if (!contrato) return 'text-slate-300';
+    if (total > contrato) return 'text-red-400';
+    if (total >= contrato * 0.8) return 'text-amber-400';
+    return 'text-emerald-400';
+  };
 
   // PNFs presentes en las materias (+ el PNF del profesor aunque no tenga materias)
   const pnfMap = new Map<string, string>();
@@ -271,6 +314,50 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
                   · {profesor.tipo_contrato_nombre} ({profesor.tipo_contrato_horas} hrs/sem)
                 </span>
               )}
+              {/* Carga por lapso: vista trimestral por defecto, semestral si
+                  solo hay semestrales; con ambos regímenes el click sobre las
+                  horas rota trimestral → semestral → sumada */}
+              <div
+                className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 ${
+                  ambosRegimenes
+                    ? 'cursor-pointer select-none rounded-md -mx-1 px-1 hover:bg-slate-800/60 transition-colors'
+                    : ''
+                }`}
+                title={
+                  ambosRegimenes
+                    ? 'Horas asignadas por lapso. Click para alternar: trimestres → semestres → sumada'
+                    : 'Horas semanales ya asignadas al profesor en cada lapso'
+                }
+                onClick={ambosRegimenes ? ciclarVista : undefined}
+              >
+                <span className="text-[9px] uppercase tracking-wide text-slate-600 font-semibold">
+                  Carga
+                </span>
+                {vista !== 'S' && (
+                  <span>
+                    {hTvista.map((h, i) => (
+                      <span key={`t${i}`}>
+                        {i > 0 && ' '}
+                        <span className="text-slate-500">T{i + 1}:</span>
+                        <span className={`font-bold ${horaColor(h)}`}>{h}</span>
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {vista !== 'T' && (
+                  <span>
+                    {vista === 'SUM' && <span className="text-slate-700">· </span>}
+                    {hSvista.map((h, i) => (
+                      <span key={`s${i}`}>
+                        {i > 0 && ' '}
+                        <span className="text-slate-500">S{i + 1}:</span>
+                        <span className={`font-bold ${horaColor(h)}`}>{h}</span>
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {ambosRegimenes && <Repeat className="w-3 h-3 text-slate-500" />}
+              </div>
             </div>
             {perfilNombres.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1">

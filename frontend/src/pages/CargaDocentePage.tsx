@@ -1154,6 +1154,7 @@ export const CargaDocentePage: React.FC = () => {
         profesor={modalMaterias.profesor}
         rows={esCoordinador ? rows.filter((r) => Number(r.pnf_saga_id) === Number(user?.pnf_saga_id)) : rows}
         lapsoInicial={!pivoted ? filterLapso : null}
+        cargaPorProfesor={cargaPorProfesor}
         onClose={() => setModalMaterias({ open: false, profesor: null })}
         onChanged={fetchCarga}
       />
