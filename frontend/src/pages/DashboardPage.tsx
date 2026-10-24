@@ -672,7 +672,7 @@ export const DashboardPage: React.FC = () => {
         ) : (
           <>
             {/* Welcome Hero Card */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900/60 via-indigo-900/40 to-slate-900 border border-blue-500/20 p-6 sm:p-8 shadow-2xl">
+            <div className="relative overflow-hidden rounded-3xl bg-slate-950 bg-gradient-to-r from-blue-900/60 via-indigo-900/40 to-slate-900 border border-blue-500/20 p-6 sm:p-8 shadow-2xl">
               <div className="relative z-10 max-w-3xl">
                 <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 px-3 py-1 rounded-full text-xs font-semibold mb-3">
                   <UserCheck className="w-3.5 h-3.5" />
