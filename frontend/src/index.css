@@ -202,6 +202,42 @@
   color: #ffffff;
 }
 
+/* Zonas siempre oscuras en modo claro (barra superior y cabeceras de
+   modal): los acentos recuperan sus valores originales para que textos,
+   chips y toggles de color mantengan contraste sobre el azul. */
+[data-theme='light'] :is(.nav-top, .modal-head) {
+  --color-blue-950: #172554;    --color-blue-900: #1e3a8a;    --color-blue-800: #1e40af;
+  --color-blue-400: #60a5fa;    --color-blue-300: #93c5fd;    --color-blue-200: #bfdbfe;
+  --color-emerald-950: #022c22; --color-emerald-900: #064e3b; --color-emerald-800: #065f46;
+  --color-emerald-400: #34d399; --color-emerald-300: #6ee7b7; --color-emerald-200: #a7f3d0;
+  --color-amber-950: #451a03;   --color-amber-900: #78350f;   --color-amber-800: #92400e;
+  --color-amber-400: #fbbf24;   --color-amber-300: #fcd34d;   --color-amber-200: #fde68a;
+  --color-red-950: #450a0a;     --color-red-900: #7f1d1d;     --color-red-800: #991b1b;
+  --color-red-400: #f87171;     --color-red-300: #fca5a5;     --color-red-200: #fecaca;
+  --color-indigo-950: #1e1b4b;  --color-indigo-900: #312e81;  --color-indigo-800: #3730a3;
+  --color-indigo-400: #818cf8;  --color-indigo-300: #a5b4fc;  --color-indigo-200: #c7d2fe;
+  --color-violet-950: #2e1065;  --color-violet-900: #4c1d95;  --color-violet-800: #5b21b6;
+  --color-violet-400: #a78bfa;  --color-violet-300: #c4b5fd;  --color-violet-200: #ddd6fe;
+  --color-purple-950: #3b0764;  --color-purple-900: #581c87;  --color-purple-800: #6b21a8;
+  --color-purple-400: #c084fc;  --color-purple-300: #d8b4fe;  --color-purple-200: #e9d5ff;
+  --color-cyan-950: #083344;    --color-cyan-900: #164e63;    --color-cyan-800: #155e75;
+  --color-cyan-400: #22d3ee;    --color-cyan-300: #67e8f9;    --color-cyan-200: #a5f3fc;
+  --color-sky-950: #082f49;     --color-sky-900: #0c4a6e;     --color-sky-800: #075985;
+  --color-sky-400: #38bdf8;     --color-sky-300: #7dd3fc;     --color-sky-200: #bae6fd;
+  --color-teal-950: #042f2e;    --color-teal-900: #134e4a;    --color-teal-800: #115e59;
+  --color-teal-400: #2dd4bf;    --color-teal-300: #5eead4;    --color-teal-200: #99f6e4;
+  --color-fuchsia-950: #4a044e; --color-fuchsia-900: #701a75; --color-fuchsia-800: #86198f;
+  --color-fuchsia-400: #e879f9; --color-fuchsia-300: #f0abfc; --color-fuchsia-200: #f5d0fe;
+  --color-pink-950: #500724;    --color-pink-900: #831843;    --color-pink-800: #9d174d;
+  --color-pink-400: #f472b6;    --color-pink-300: #f9a8d4;    --color-pink-200: #fbcfe8;
+  --color-rose-950: #4c0519;    --color-rose-900: #881337;    --color-rose-800: #9f1239;
+  --color-rose-400: #fb7185;    --color-rose-300: #fda4af;    --color-rose-200: #fecdd3;
+  --color-orange-950: #431407;  --color-orange-900: #7c2d12;  --color-orange-800: #9a3412;
+  --color-orange-400: #fb923c;  --color-orange-300: #fdba74;  --color-orange-200: #fed7aa;
+  --color-yellow-950: #422006;  --color-yellow-900: #713f12;  --color-yellow-800: #854d0e;
+  --color-yellow-400: #facc15;  --color-yellow-300: #fde047;  --color-yellow-200: #fef08a;
+}
+
 /* Líneas de la tabla de Carga Docente más marcadas en modo claro:
    slate-800 global es un beige muy tenue; dentro de la tabla se sube a un
    gris-azul para que divisores y bordes de celda se aprecien. */
