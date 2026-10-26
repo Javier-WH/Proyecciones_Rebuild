@@ -36,7 +36,8 @@ import {
   normMateria,
   ErrorClase,
 } from './types.js';
-import { Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
+import { Archive, Clock, Coffee, GripVertical, Layers, UserX, X } from 'lucide-react';
+import { ConfirmModal } from '../ConfirmModal.js';
 
 interface DragData {
   tipo: 'pendiente' | 'entry' | 'grupo' | 'grupo-pendiente';
@@ -130,9 +131,10 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
       setMutando((c) => c - 1);
     }
   };
+  const [confirmarTodoOpen, setConfirmarTodoOpen] = useState(false);
   useEffect(() => {
-    onInteraccion?.(activo !== null || menuEntry !== null || mutando > 0);
-  }, [activo, menuEntry, mutando, onInteraccion]);
+    onInteraccion?.(activo !== null || menuEntry !== null || confirmarTodoOpen || mutando > 0);
+  }, [activo, menuEntry, confirmarTodoOpen, mutando, onInteraccion]);
   // ⇧+hover sobre una materia: filtra el horario de ese profesor — atenúa
   // las demás materias y dibuja tarjetas fantasma con las clases que ya
   // tiene (en cualquier sección de la proyección), para ubicarlas sin
@@ -194,6 +196,13 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
     return map;
   }, [entries, seccion.seccion_id]);
+
+  // Clases agendadas del horario visible (entries ya viene acotada al lapso:
+  // tipo + trimestre + período; la sección determina su PNF y turno).
+  const entriesSeccion = useMemo(
+    () => entries.filter((e) => e.seccion_id === seccion.seccion_id),
+    [entries, seccion.seccion_id]
+  );
 
   // Runs verticales por día: bloques consecutivos (sin receso de por medio) de la
   // misma materia+aula se fusionan en una sola celda (rowSpan).
@@ -718,6 +727,31 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
     }
   };
 
+  // Guardar TODO el horario visible en el depósito: desagenda todas las
+  // clases de la sección; quedan como horas pendientes de cada materia.
+  const handleDesagendarTodo = async () => {
+    const ids = entriesSeccion.map((e) => e.id);
+    if (ids.length === 0) {
+      setConfirmarTodoOpen(false);
+      return;
+    }
+    onBeforeMutate?.();
+    const res = await mutar(apiFetch('/horarios/entries/unschedule', {
+      method: 'POST',
+      etiqueta: 'Guardando el horario en pendientes…',
+      body: JSON.stringify({ entry_ids: ids }),
+    }));
+    if (res.success) {
+      mostrarAviso(res.message || 'Horario guardado en materias pendientes.');
+      setConfirmarTodoOpen(false);
+      onChanged();
+    } else {
+      mostrarAviso(res.message || 'No se pudo guardar el horario.', 'error');
+      setConfirmarTodoOpen(false);
+      if (esVistaObsoleta(res)) onChanged();
+    }
+  };
+
   // Cambia el aula de todo el bloque fusionado (run contiguo de la misma
   // materia+sección+profesor ese día); con `forzar` admite aulas ocupadas.
   const handleCambiarAula = async (entry: HorarioEntry, aulaId: number) => {
@@ -955,7 +989,14 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
 
       <div className="flex flex-col lg:flex-row gap-4 items-start">
         {/* Panel de materias pendientes (droppable para desagendar) */}
-        <PendientesPanel pendientes={pendientes} puedeEditar={puedeEditar} onHoverProfe={setProfeHover} profePeekId={profePeek} />
+        <PendientesPanel
+          pendientes={pendientes}
+          puedeEditar={puedeEditar}
+          clasesAgendadas={entriesSeccion.length}
+          onGuardarTodo={() => setConfirmarTodoOpen(true)}
+          onHoverProfe={setProfeHover}
+          profePeekId={profePeek}
+        />
 
         {/* Grilla días × bloques */}
         <div className="flex-1 min-w-0 overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-3">
@@ -1087,6 +1128,22 @@ export const SeccionGrid: React.FC<SeccionGridProps> = ({
           </p>
         </div>
       </div>
+
+      {confirmarTodoOpen && (
+        <ConfirmModal
+          titulo="Guardar horario en pendientes"
+          icono={<Archive className="w-5 h-5 text-amber-400" />}
+          mensaje="¿Guardar todas las materias del horario en el depósito de materias pendientes?"
+          lineas={[
+            `Se desagendarán ${entriesSeccion.length} clase${entriesSeccion.length === 1 ? '' : 's'} de la sección ${seccion.seccion_nombre}.`,
+            'La grilla quedará vacía; puedes volver a arrastrar las materias desde el depósito (o deshacer con Ctrl+Z).',
+          ]}
+          confirmLabel="Sí, guardar todo"
+          busy={mutando > 0}
+          onConfirm={handleDesagendarTodo}
+          onCancel={() => setConfirmarTodoOpen(false)}
+        />
+      )}
 
       {/* Menú de una clase agendada: cambiar aula / quitar */}
       {menuEntry && (
@@ -1244,9 +1301,11 @@ const Chip: React.FC<{
 const PendientesPanel: React.FC<{
   pendientes: { total: number; puestas: number; row: MateriaAsignableRow }[];
   puedeEditar: boolean;
+  clasesAgendadas?: number;
+  onGuardarTodo?: () => void;
   onHoverProfe?: (id: number | null) => void;
   profePeekId?: number | null;
-}> = ({ pendientes, puedeEditar, onHoverProfe, profePeekId }) => {
+}> = ({ pendientes, puedeEditar, clasesAgendadas = 0, onGuardarTodo, onHoverProfe, profePeekId }) => {
   const { setNodeRef, isOver } = useDroppable({ id: 'pendientes' });
   return (
     <div
@@ -1257,6 +1316,16 @@ const PendientesPanel: React.FC<{
     >
       <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2 flex items-center gap-1.5">
         <Layers className="w-3.5 h-3.5" /> Materias pendientes
+        {puedeEditar && clasesAgendadas > 0 && onGuardarTodo && (
+          <button
+            type="button"
+            onClick={onGuardarTodo}
+            title="Guardar todas las clases del horario en el depósito"
+            className="ml-auto p-1 rounded-md text-slate-500 hover:text-amber-300 hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <Archive className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
       <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-0.5">
         {pendientes.length === 0 && (
