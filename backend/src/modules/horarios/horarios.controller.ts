@@ -96,7 +96,11 @@ export async function listMateriasHandler(_request: FastifyRequest, reply: Fasti
             const grupos = (await sagaService.getMateriasPorMaya(p.id, m.id)) ?? [];
             for (const g of grupos) {
               for (const uc of g.materias) {
-                const k = `${String(uc.description).trim().toUpperCase()}|${p.id}|${m.id}`;
+                // La dedup es por id de UC dentro de la malla: el nombre se
+                // repite legítimamente entre trayectos (ej. "ACTIVIDADES
+                // ACREDITABLES" en Trayecto I-IV) y por nombre desaparecería
+                // de todos menos del primero.
+                const k = `${m.id}:${uc.id}`;
                 if (vistos.has(k)) continue;
                 vistos.add(k);
                 out.push({
