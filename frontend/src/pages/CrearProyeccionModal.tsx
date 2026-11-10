@@ -201,7 +201,16 @@ export const MateriasReadonlyTable: React.FC<{
   tipo: 'TRIMESTRAL' | 'SEMESTRAL';
   onRemove?: (m: MateriaPayload) => void;
   onUpdate?: (m: MateriaPayload, patch: Partial<MateriaPayload>) => void;
-}> = ({ rows, tipo, onRemove, onUpdate }) => (
+}> = ({ rows, tipo, onRemove, onUpdate }) => {
+  // Total de horas semanales cursadas en cada lapso (materias no ignoradas)
+  const activas = rows.filter((m) => !m.eliminada);
+  const lapsos: Array<'q1' | 'q2' | 'q3' | 'semestre1' | 'semestre2'> =
+    tipo === 'TRIMESTRAL' ? ['q1', 'q2', 'q3'] : ['semestre1', 'semestre2'];
+  const totalesLapso = lapsos.map((flag) =>
+    activas.reduce((acc, m) => acc + (m[flag] ? m.horas_semanales : 0), 0)
+  );
+
+  return (
   <div className="border border-slate-800 rounded-2xl overflow-hidden">
     <table className="w-full text-left text-xs text-slate-300">
       <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
@@ -323,9 +332,38 @@ export const MateriasReadonlyTable: React.FC<{
           </tr>
         ))}
       </tbody>
+      <tfoot className="bg-slate-950 border-t border-slate-800">
+        <tr>
+          <td className="py-2.5 px-4 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+            Horas por {tipo === 'TRIMESTRAL' ? 'trimestre' : 'semestre'}
+          </td>
+          <td className="py-2.5 px-4"></td>
+          <td className="py-2.5 px-4 text-center">
+            <div className="flex items-center justify-center gap-1">
+              {totalesLapso.map((horas, i) => (
+                <span
+                  key={lapsos[i]}
+                  title={`Carga semanal total del ${tipo === 'TRIMESTRAL' ? `trimestre ${i + 1}` : `semestre ${i + 1}`}`}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                    horas === 0
+                      ? 'bg-slate-800 text-slate-600 border-transparent'
+                      : tipo === 'TRIMESTRAL'
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  }`}
+                >
+                  {tipo === 'TRIMESTRAL' ? `T${i + 1}` : `S${i + 1}`}: {horas}h
+                </span>
+              ))}
+            </div>
+          </td>
+          {onRemove && <td className="py-2.5 px-4"></td>}
+        </tr>
+      </tfoot>
     </table>
   </div>
-);
+  );
+};
 
 export function applySectionNamingConvention(seccionesList: SeccionForm[]): SeccionForm[] {
   let mananaCount = 0;
