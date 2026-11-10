@@ -29,7 +29,21 @@ interface MateriaMalla {
   id: number;
   description: string;
   horasSemanales: number;
+  trimestres?: number[];
+  semestral?: boolean;
 }
+
+// Lapso(s) en que se dicta la UC, en texto discreto: "T1·T2·T3" en mallas
+// trimestrales; "S1", "S2" o "S1·S2" en semestrales (S1=Q1, S2=Q2|Q3).
+const lapsoDe = (m: MateriaMalla): string => {
+  const ts = m.trimestres ?? [];
+  if (m.semestral) {
+    return [ts.includes(1) && 'S1', (ts.includes(2) || ts.includes(3)) && 'S2']
+      .filter(Boolean)
+      .join('·');
+  }
+  return ts.map((t) => `T${t}`).join('·');
+};
 
 interface GrupoTrayecto {
   trayecto_saga_id: number;
@@ -123,7 +137,13 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
       const gg = grupos.get(k) ?? new Map<number, GrupoTrayecto>();
       const tId = o.trayecto_saga_id ?? 0;
       const g = gg.get(tId) ?? { trayecto_saga_id: tId, trayecto: o.trayecto || 'Sin trayecto', materias: [] };
-      g.materias.push({ id: o.materia_id ?? 0, description: o.nombre, horasSemanales: o.horas ?? 0 });
+      g.materias.push({
+        id: o.materia_id ?? 0,
+        description: o.nombre,
+        horasSemanales: o.horas ?? 0,
+        trimestres: o.trimestres,
+        semestral: o.semestral,
+      });
       gg.set(tId, g);
       grupos.set(k, gg);
     }
@@ -313,7 +333,10 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
                                               className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800/80"
                                             >
                                               <span className="text-[11px] text-slate-300 truncate">{m.description}</span>
-                                              <span className="text-[10px] text-slate-500 shrink-0">{m.horasSemanales}h/sem</span>
+                                              <span className="text-[10px] text-slate-500 shrink-0 whitespace-nowrap">
+                                                {lapsoDe(m) && <span className="text-slate-600 mr-1">{lapsoDe(m)}</span>}
+                                                {m.horasSemanales}h/sem
+                                              </span>
                                             </div>
                                           ))}
                                         </div>

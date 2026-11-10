@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { query } from '../../db/mysql.js';
 import { audit } from '../../utils/audit.js';
-import { sagaService } from '../saga/saga.service.js';
+import { sagaService, esMayaSemestral } from '../saga/saga.service.js';
 import { esCoordinadorDeOtroPnf, MSG_PNF_PROHIBIDO } from '../../plugins/authGuard.js';
 
 const TIPOS_AULA = ['AULA_REGULAR', 'LABORATORIO', 'TALLER', 'AUDITORIO', 'INSTALACION_DEPORTIVA', 'SALA_LECTURA'] as const;
@@ -83,6 +83,9 @@ export async function listMateriasHandler(_request: FastifyRequest, reply: Fasti
     trayecto_saga_id?: number;
     horas?: number;
     materia_id?: number;
+    // Trimestres en los que se dicta la UC (1-3) y si la malla es semestral
+    trimestres?: number[];
+    semestral?: boolean;
   }
   try {
     const out: MateriaOpcion[] = [];
@@ -113,6 +116,8 @@ export async function listMateriasHandler(_request: FastifyRequest, reply: Fasti
                   trayecto_saga_id: g.trayecto_saga_id,
                   horas: uc.horasSemanales,
                   materia_id: uc.id,
+                  trimestres: uc.trimestresActivos,
+                  semestral: esMayaSemestral(m.id),
                 });
               }
             }

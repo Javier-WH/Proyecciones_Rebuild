@@ -12,6 +12,9 @@ export interface MateriaOpcion {
   trayecto_saga_id?: number;
   horas?: number;
   materia_id?: number;
+  // Trimestres en los que se dicta (1-3) y si la malla es semestral
+  trimestres?: number[];
+  semestral?: boolean;
 }
 
 // Caché en memoria del catálogo global de materias (se pierde al recargar la

@@ -63,6 +63,12 @@ export async function getApiToken(): Promise<string | null> {
   }
 }
 
+// Pensums semestrales: SAGA no distingue el régimen en `pensums`; se mantiene
+// la lista explícita ya usada para el cálculo de horas (Cohorte III de
+// Medicina Veterinaria). q1 = semestre 1, q2/q3 = semestre 2.
+const MAYAS_SEMESTRALES = new Set([24]);
+export const esMayaSemestral = (mayaId: number | string) => MAYAS_SEMESTRALES.has(Number(mayaId));
+
 async function fetchFromSaga<T = any>(endpoint: string): Promise<T | null> {
   const token = await getApiToken();
   if (!token) {
@@ -154,7 +160,7 @@ export const sagaService = {
     const rawList = await fetchFromSaga<any[]>(`/ucslist/${pnfSagaId}/${trayectoSagaId}/${mayaId}`);
     if (!rawList) return null;
 
-    const weeksInTerm = Number(mayaId) === 24 ? 18 : 12;
+    const weeksInTerm = esMayaSemestral(mayaId) ? 18 : 12;
 
     return rawList.map((item) => {
       const total = item.hours?.total || 0;
