@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../api/client.js';
-import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHoraCfg, hora12De, a24 } from './types.js';
-import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle, Merge } from 'lucide-react';
+import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHoraCfg, hora12De, a24, minutos } from './types.js';
+import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle, Merge, Wand2 } from 'lucide-react';
 import { ConfirmModal } from '../ConfirmModal.js';
 
 interface TurnosPanelProps {
@@ -106,6 +106,358 @@ const CampoHora: React.FC<{
   );
 };
 
+// ── Generador automático de bloques ─────────────────────────────────────────
+interface RecesoGen {
+  posicion: number; // el receso se inserta después del bloque de clase N
+  duracion: number; // minutos
+}
+
+const GeneradorBloquesModal: React.FC<{
+  formato12?: boolean;
+  diasIniciales: number[];
+  inicioInicial: string;
+  onClose: () => void;
+  onGenerar: (bloques: BloqueEdit[], dias: number[], recesosDescartados: number) => void;
+}> = ({ formato12, diasIniciales, inicioInicial, onClose, onGenerar }) => {
+  const [inicio, setInicio] = useState(inicioInicial);
+  const [inicioPm, setInicioPm] = useState<'AM' | 'PM'>(
+    Number(inicioInicial.slice(0, 2)) >= 12 ? 'PM' : 'AM'
+  );
+  const [duracion, setDuracion] = useState(45);
+  const [modo, setModo] = useState<'bloques' | 'fin'>('bloques');
+  const [cantidad, setCantidad] = useState(10);
+  const [fin, setFin] = useState('');
+  const [finPm, setFinPm] = useState<'AM' | 'PM'>('PM');
+  const [recesos, setRecesos] = useState<RecesoGen[]>([]);
+  const [diasSel, setDiasSel] = useState<number[]>(diasIniciales);
+  const [error, setError] = useState<string | null>(null);
+
+  const convMeridiem = (h24: string, m: 'AM' | 'PM') => {
+    const p12 = hora12De(h24);
+    return h24 ? a24(p12.hh, p12.mm, m === 'PM') : h24;
+  };
+
+  const toggleDiaGen = (d: number) =>
+    setDiasSel((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+
+  const numInput =
+    'w-16 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:ring-1 focus:ring-blue-500 focus:outline-none';
+  const selMeridiem =
+    'bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold text-white cursor-pointer';
+
+  const generar = () => {
+    setError(null);
+    if (!HORA_RE.test(inicio)) {
+      setError('Completa la hora de inicio (HH:MM).');
+      return;
+    }
+    const dur = Math.floor(duracion);
+    if (!Number.isFinite(dur) || dur < 5 || dur > 180) {
+      setError('La duración del bloque debe estar entre 5 y 180 minutos.');
+      return;
+    }
+    if (diasSel.length === 0) {
+      setError('Selecciona al menos un día de clase.');
+      return;
+    }
+
+    const iniMin = minutos(inicio);
+    const sumaRecesos = recesos.reduce((acc, r) => acc + (Math.floor(r.duracion) || 0), 0);
+
+    let n: number;
+    if (modo === 'bloques') {
+      n = Math.floor(cantidad);
+      if (!Number.isFinite(n) || n < 1 || n > 40) {
+        setError('Indica una cantidad de bloques válida (1–40).');
+        return;
+      }
+    } else {
+      if (!HORA_RE.test(fin)) {
+        setError('Completa la hora de fin (HH:MM).');
+        return;
+      }
+      const finMin = minutos(fin);
+      if (finMin <= iniMin) {
+        setError('La hora de fin debe ser mayor que la de inicio.');
+        return;
+      }
+      n = Math.floor((finMin - iniMin - sumaRecesos) / dur);
+      if (n < 1) {
+        setError('Entre esa hora de inicio y fin no cabe ni un bloque (resta recesos o alarga el rango).');
+        return;
+      }
+    }
+
+    // Recesos cuya posición queda fuera de los bloques generados se descartan
+    const recesosValidos = recesos
+      .filter((r) => r.posicion >= 1 && r.posicion <= n && r.duracion > 0)
+      .sort((a, b) => a.posicion - b.posicion);
+    const descartados = recesos.length - recesosValidos.length;
+
+    const fmt = (m: number) =>
+      `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    const mk = (hi: number, hf: number, es_receso: boolean): BloqueEdit => ({
+      hora_inicio: fmt(hi),
+      hora_fin: fmt(hf),
+      es_receso,
+      meridiem: Math.floor(hi / 60) >= 12 ? 'PM' : 'AM',
+    });
+
+    const nuevos: BloqueEdit[] = [];
+    let t = iniMin;
+    for (let i = 1; i <= n; i++) {
+      nuevos.push(mk(t, t + dur, false));
+      t += dur;
+      for (const r of recesosValidos.filter((x) => x.posicion === i)) {
+        nuevos.push(mk(t, t + Math.floor(r.duracion), true));
+        t += Math.floor(r.duracion);
+      }
+    }
+
+    onGenerar(nuevos, diasSel, descartados);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+            <Wand2 className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">Generar bloques del turno</h3>
+            <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+              Crea la lista de bloques automáticamente. Revisa el resultado en el editor y pulsa
+              Guardar.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {/* Inicio + duración */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] text-slate-400 font-semibold mb-1">
+                Hora de inicio del turno
+              </label>
+              <div className="flex items-center gap-1">
+                <CampoHora
+                  value={inicio}
+                  usa12h={formato12}
+                  pm={inicioPm === 'PM'}
+                  onChange={setInicio}
+                />
+                {formato12 && (
+                  <select
+                    value={inicioPm}
+                    onChange={(e) => {
+                      const m = e.target.value as 'AM' | 'PM';
+                      setInicioPm(m);
+                      setInicio((v) => convMeridiem(v, m));
+                    }}
+                    className={selMeridiem}
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] text-slate-400 font-semibold mb-1">
+                Duración de cada bloque
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={5}
+                  max={180}
+                  value={duracion}
+                  onChange={(e) => setDuracion(Number(e.target.value))}
+                  className={numInput}
+                />
+                <span className="text-[11px] text-slate-400">min</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Alcance: N bloques u hora de fin */}
+          <div>
+            <label className="block text-[10px] text-slate-400 font-semibold mb-1">
+              Definir el turno por
+            </label>
+            <div className="flex gap-1 bg-slate-950 border border-slate-800 rounded-xl p-1">
+              {(['bloques', 'fin'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setModo(m)}
+                  className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                    modo === m ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {m === 'bloques' ? 'Cantidad de bloques' : 'Hora de fin'}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2">
+              {modo === 'bloques' ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    max={40}
+                    value={cantidad}
+                    onChange={(e) => setCantidad(Number(e.target.value))}
+                    className={numInput}
+                  />
+                  <span className="text-[11px] text-slate-400">bloques de clase</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <CampoHora value={fin} usa12h={formato12} pm={finPm === 'PM'} onChange={setFin} />
+                  {formato12 && (
+                    <select
+                      value={finPm}
+                      onChange={(e) => {
+                        const m = e.target.value as 'AM' | 'PM';
+                        setFinPm(m);
+                        setFin((v) => convMeridiem(v, m));
+                      }}
+                      className={selMeridiem}
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  )}
+                  <span className="text-[11px] text-slate-400 ml-1">hora de fin</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recesos */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-slate-400 font-semibold">
+                Recesos entre bloques
+              </label>
+              <button
+                type="button"
+                onClick={() => setRecesos((p) => [...p, { posicion: 1, duracion: 15 }])}
+                className="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
+              >
+                <Coffee className="w-3 h-3" /> Agregar
+              </button>
+            </div>
+            {recesos.length === 0 && (
+              <div className="text-[11px] text-slate-500 italic">
+                Sin recesos: los bloques quedan pegados uno tras otro.
+              </div>
+            )}
+            <div className="space-y-1.5">
+              {recesos.map((r, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-1.5"
+                >
+                  <Coffee className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-[11px] text-slate-300">después del bloque</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={r.posicion}
+                    onChange={(e) =>
+                      setRecesos((p) =>
+                        p.map((x, j) => (j === i ? { ...x, posicion: Number(e.target.value) } : x))
+                      )
+                    }
+                    className={numInput}
+                  />
+                  <span className="text-[11px] text-slate-400">·</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={r.duracion}
+                    onChange={(e) =>
+                      setRecesos((p) =>
+                        p.map((x, j) => (j === i ? { ...x, duracion: Number(e.target.value) } : x))
+                      )
+                    }
+                    className={numInput}
+                  />
+                  <span className="text-[11px] text-slate-400">min</span>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => setRecesos((p) => p.filter((_, j) => j !== i))}
+                    className="p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-300 cursor-pointer"
+                    title="Quitar receso"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Días de clase */}
+          <div>
+            <label className="block text-[10px] text-slate-400 font-semibold mb-1">
+              Días de clase
+            </label>
+            <div className="flex gap-1.5 flex-wrap">
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => toggleDiaGen(d)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    diasSel.includes(d)
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-slate-950 border-slate-700 text-slate-500'
+                  }`}
+                >
+                  {DIAS_CORTOS[d]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="px-3 py-2 rounded-lg text-xs font-semibold border bg-red-500/10 border-red-500/40 text-red-300">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={generar}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+          >
+            <Wand2 className="w-4 h-4" /> Generar bloques
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, formato12, onChanged }) => {
   const [sel, setSel] = useState<number | null>(turnos[0]?.id ?? null);
   const [dias, setDias] = useState<number[]>([]);
@@ -117,6 +469,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
   const [conflicto, setConflicto] = useState<{ total: number; clases: ClaseConflicto[] } | null>(null);
   const [desagendando, setDesagendando] = useState(false);
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
   const esAdmin = puedeEditar; // creación de turnos locales solo SUPER/ADMIN se valida server-side
 
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];
@@ -238,6 +591,22 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
       texto:
         `Bloques combinados de Mañana y Tarde` +
         (finM < iniT ? `, con receso ${finM}–${iniT}` : '') +
+        '. Revisa y pulsa Guardar.',
+    });
+  };
+
+  // Recibe los bloques del generador: reemplaza la lista del editor y los días
+  const aplicarBloquesGenerados = (nuevos: BloqueEdit[], diasGen: number[], descartados: number) => {
+    editBloques(nuevos);
+    editDias(diasGen);
+    setGenOpen(false);
+    setMsg({
+      error: false,
+      texto:
+        'Bloques generados' +
+        (descartados > 0
+          ? ` (${descartados} receso${descartados === 1 ? '' : 's'} descartado${descartados === 1 ? '' : 's'} por quedar fuera del rango)`
+          : '') +
         '. Revisa y pulsa Guardar.',
     });
   };
@@ -520,6 +889,13 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
               </div>
               {puedeEditar && (
                 <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setGenOpen(true)}
+                    title="Generar los bloques automáticamente"
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <Wand2 className="w-3 h-3" /> Generar
+                  </button>
                   {esDiurno && (
                     <button
                       onClick={combinarMananaTarde}
@@ -713,6 +1089,17 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal: generador automático de bloques */}
+      {genOpen && (
+        <GeneradorBloquesModal
+          formato12={formato12}
+          diasIniciales={dias}
+          inicioInicial={bloques[0]?.hora_inicio || '07:00'}
+          onClose={() => setGenOpen(false)}
+          onGenerar={aplicarBloquesGenerados}
+        />
       )}
 
       {confirmarBorrar && turno && (
