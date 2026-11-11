@@ -160,6 +160,9 @@ Periodo Académico (Año Escolar)
 - **RF-62**: Refetch automático de la vista ante respuestas 404/409 de mutaciones colaborativas (la pantalla converge con el estado real sin perder el mensaje de conflicto).
 - **RF-63**: Panel de estadísticas del periodo seleccionado (`GET /api/reportes/estadisticas`): cobertura de proyecciones PNF×trayecto (trayectos esperados desde la malla vigente en SAGA — unión por mayas, caché en memoria 1 h / 5 min en fallo — con fallback al historial de proyecciones), uso de aulas vs. capacidad teórica, unidades asignables sin profesor y fuera del horario (desglose por PNF + detalle navegable), turnos disponibles, conflictos de horario, docentes con carga y accesos al sistema desde `audit_log`. Acotado al PNF del Coordinador.
 - **RF-64**: Navegación profunda desde el panel de estadísticas hacia la grilla de Horarios de la sección/lapso pendiente (prop `foco` de `HorariosPage`).
+- **RF-65**: Asistente de generación de bloques de turno (`TurnosPanel` → botón **Generar**, `GeneradorBloquesModal`): solicita hora de inicio, duración del bloque en minutos, alcance (por *cantidad de bloques* o por *hora de fin*, descontando la duración de los recesos), recesos configurables (posición + duración) y días de clase. Produce filas contiguas en el estado del editor — nada persiste hasta Guardar (`PUT /turnos/:id` + `PUT /turnos/:id/bloques`).
+- **RF-66**: Protección de cambios sin guardar en el editor de turnos: al cambiar de turno con ediciones pendientes se exige confirmación (*Descartar y cambiar*) — evita que los bloques de un turno se persistan sobre otro.
+- **RF-67**: Conteo de horas semanales por lapso en las tablas de materias de proyección (componente compartido `MateriasReadonlyTable`, usado al crear y al editar — pensum general y pensum por sección): pie de tabla con el total por trimestre/semestre.
 
 ---
 

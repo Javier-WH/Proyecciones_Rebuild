@@ -174,6 +174,7 @@
   <li>Para <strong>editar</strong> una proyección: haga clic sobre ella en la lista.</li>
   <li>Si una proyección ya no se ofrecerá, puede <strong>desactivarla</strong> (no se borra la información).</li>
 </ul>
+<div class="nota">💡 En la tabla de materias (al crear <strong>y</strong> al editar) verá al final el <strong>conteo de horas por lapso</strong> — por ejemplo <code>T1: 20h · T2: 20h · T3: 20h</code>. Es la carga semanal total que cursa una sección en cada trimestre/semestre y sirve para verificar que no exceda la jornada de su turno.</div>
 <div class="nota">💡 <strong>Consejo:</strong> los nombres de PNF, trayectos y materias vienen del sistema SAGA. Si una materia no aparece, verifique la sincronización o consulte al administrador.</div>
 
 <h2>6. Gestión de profesores</h2>
@@ -268,7 +269,20 @@
 <figure class="captura"><img src="screenshots/12-generar.png" alt="Botones de generación y ventana de configuración de horarios."><figcaption><strong>Captura 12.</strong> Botones de generación y ventana de configuración de horarios.</figcaption></figure>
 <h3>Turnos, bloques y aulas</h3>
 <ul>
-  <li><strong>Turnos y Bloques</strong>: define las horas de clase de cada turno (ej. Mañana: 7:00–12:00 en bloques de 45 min) y qué días de la semana aplica.</li>
+  <li><strong>Turnos y Bloques</strong>: define las horas de clase de cada turno (ej. Mañana: 7:00–12:00 en bloques de 45 min) y qué días de la semana aplica.
+    <ul>
+      <li>Puede cargarlos a mano (botones <strong>+ Bloque</strong> y <strong>Receso</strong>) o usar el botón <strong>Generar</strong> (✨), que abre un asistente con estas preguntas:
+        <ul>
+          <li><strong>Hora de inicio</strong> del turno y <strong>duración de cada bloque</strong> en minutos.</li>
+          <li><strong>Alcance</strong>: por <em>cantidad de bloques</em> o por <em>hora de fin</em> (el sistema calcula cuántos bloques caben, descontando los recesos).</li>
+          <li><strong>Recesos</strong> opcionales: después de qué bloque va cada uno y su duración.</li>
+          <li><strong>Días de clase</strong> del turno.</li>
+        </ul>
+      </li>
+      <li>Al confirmar, la lista de bloques se llena sola: <strong>revísela y pulse Guardar</strong> — nada se persiste hasta entonces. En el turno <strong>Diurno</strong>, el botón <strong>Mañana+Tarde</strong> copia los bloques de ambos turnos con el receso del mediodía.</li>
+      <li>Si intenta <strong>cambiar de turno con cambios sin guardar</strong>, el sistema le pedirá confirmación para descartarlos — así los bloques de un turno nunca se guardan sobre otro por accidente.</li>
+    </ul>
+  </li>
   <li><strong>Aulas</strong>: catálogo de salones, laboratorios e instalaciones. Cada aula puede tener un <strong>PNF preferido</strong> y <strong>materias preferidas</strong> (el generador las prioriza, pero no es exclusivo).</li>
 </ul>
 <h3>Ver por aula o por profesor</h3>

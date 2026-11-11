@@ -160,6 +160,8 @@ La **proyección** es la oferta académica de un trayecto de un PNF para el peri
 - Para **editar** una proyección: haga clic sobre ella en la lista.
 - Si una proyección ya no se ofrecerá, puede **desactivarla** (no se borra la información).
 
+> 💡 En la tabla de materias (al crear **y** al editar) verá al final el **conteo de horas por lapso** — por ejemplo `T1: 20h · T2: 20h · T3: 20h`. Es la carga semanal total que cursa una sección en cada trimestre/semestre y sirve para verificar que no exceda la jornada de su turno.
+
 > 💡 **Consejo:** los nombres de PNF, trayectos y materias vienen del sistema SAGA. Si una materia no aparece, verifique la sincronización (sección 6) o consulte al administrador.
 
 ---
@@ -282,6 +284,13 @@ Lo que no pudo agendarse queda en la lista de **pendientes** con el motivo.
 ### Turnos, bloques y aulas
 
 - **Turnos y Bloques**: define las horas de clase de cada turno (ej. Mañana: 7:00–12:00 en bloques de 45 min) y qué días de la semana aplica.
+  - Puede cargarlos a mano (botones **+ Bloque** y **Receso**) o usar el botón **Generar** (✨), que abre un asistente con estas preguntas:
+    - **Hora de inicio** del turno y **duración de cada bloque** en minutos.
+    - **Alcance**: por *cantidad de bloques* o por *hora de fin* (el sistema calcula cuántos bloques caben, descontando los recesos).
+    - **Recesos** opcionales: después de qué bloque va cada uno y su duración.
+    - **Días de clase** del turno.
+  - Al confirmar, la lista de bloques se llena sola: **revísela y pulse Guardar** — nada se persiste hasta entonces. En el turno **Diurno**, el botón **Mañana+Tarde** copia los bloques de ambos turnos con el receso del mediodía.
+  - Si intenta **cambiar de turno con cambios sin guardar**, el sistema le pedirá confirmación para descartarlos — así los bloques de un turno nunca se guardan sobre otro por accidente.
 - **Aulas**: catálogo de salones, laboratorios e instalaciones. Cada aula puede tener un **PNF preferido** y **materias preferidas** (el generador las prioriza, pero no es exclusivo).
 
 ### Ver por aula o por profesor
