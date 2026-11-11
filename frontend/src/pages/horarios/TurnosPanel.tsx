@@ -470,6 +470,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
   const [desagendando, setDesagendando] = useState(false);
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
+  const [pendienteCambio, setPendienteCambio] = useState<number | null>(null);
   const esAdmin = puedeEditar; // creación de turnos locales solo SUPER/ADMIN se valida server-side
 
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];
@@ -516,6 +517,22 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
 
   const toggleDia = (d: number) =>
     editDias((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()));
+
+  // Cambiar de turno con edición pendiente: sin este aviso el efecto de carga
+  // se salta (turno.id === sel) y los cambios sucios del turno anterior se
+  // guardarían sobre el turno recién seleccionado.
+  const pedirCambioTurno = (id: number) => {
+    if (id === turno?.id) return;
+    if (dirtyRef.current) setPendienteCambio(id);
+    else setSel(id);
+  };
+
+  const confirmarCambioTurno = () => {
+    if (pendienteCambio === null) return;
+    dirtyRef.current = false;
+    setSel(pendienteCambio);
+    setPendienteCambio(null);
+  };
 
   // AM/PM del bloque: reinterpreta ambas horas con el nuevo meridiem
   const cambiarMeridiem = (i: number, m: 'AM' | 'PM') => {
@@ -757,7 +774,7 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
         {turnos.map((t) => (
           <button
             key={t.id}
-            onClick={() => setSel(t.id)}
+            onClick={() => pedirCambioTurno(t.id)}
             className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
               turno?.id === t.id
                 ? 'bg-blue-600 text-white'
@@ -1099,6 +1116,18 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
           inicioInicial={bloques[0]?.hora_inicio || '07:00'}
           onClose={() => setGenOpen(false)}
           onGenerar={aplicarBloquesGenerados}
+        />
+      )}
+
+      {pendienteCambio !== null && turno && (
+        <ConfirmModal
+          titulo="Cambios sin guardar"
+          icono={<AlertTriangle className="w-5 h-5 text-amber-400" />}
+          danger
+          confirmLabel="Descartar y cambiar"
+          mensaje={`Tienes cambios sin guardar en '${turno.nombre}'. Si cambias de turno se descartarán.`}
+          onConfirm={confirmarCambioTurno}
+          onCancel={() => setPendienteCambio(null)}
         />
       )}
 
