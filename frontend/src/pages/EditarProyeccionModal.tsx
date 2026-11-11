@@ -10,7 +10,6 @@ import {
   AlertCircle,
   Plus,
   Trash2,
-  RotateCcw,
   Save,
   Pencil,
 } from 'lucide-react';
@@ -198,6 +197,13 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
       prev.map((m) =>
         m.subject_saga_id === subjectSagaId ? { ...m, eliminada: !m.eliminada } : m
       )
+    );
+  };
+
+  // Editar una materia del pensum general
+  const handleUpdateMateriaGeneral = (subjectSagaId: number, patch: Partial<MateriaPayload>) => {
+    setMaterias((prev) =>
+      prev.map((m) => (m.subject_saga_id === subjectSagaId ? { ...m, ...patch } : m))
     );
   };
 
@@ -588,107 +594,12 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                 Esta proyección no tiene materias asociadas.
               </div>
             ) : (
-              <div className="border border-slate-800 rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs text-slate-300">
-                  <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
-                    <tr>
-                      <th className="py-3 px-4">Materia / Unidad Curricular</th>
-                      <th className="py-3 px-4 text-center">Horas Semanales</th>
-                      <th className="py-3 px-4 text-center">
-                        {tipoProyeccion === 'TRIMESTRAL' ? 'Trimestres Activos' : 'Semestres Activos'}
-                      </th>
-                      <th className="py-3 px-4 text-center w-12"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 bg-slate-900/50">
-                    {materias.map((m, idx) => (
-                      <tr
-                        key={idx}
-                        className={`transition-colors ${m.eliminada ? 'opacity-40 bg-slate-950/40' : 'hover:bg-slate-800/40'}`}
-                      >
-                        <td className="py-3 px-4 font-semibold text-white">
-                          <span className={m.eliminada ? 'line-through text-slate-500' : ''}>{m.nombre}</span>
-                          {m.eliminada && (
-                            <span className="ml-2 text-[9px] uppercase font-bold bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded">
-                              Ignorada
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            value={m.horas_semanales}
-                            onChange={(e) => {
-                              const newArr = [...materias];
-                              newArr[idx].horas_semanales = Number(e.target.value);
-                              setMaterias(newArr);
-                            }}
-                            className="w-16 bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1 text-white text-xs text-center focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                          />
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center gap-1">
-                            {tipoProyeccion === 'TRIMESTRAL' ? (
-                              (['q1', 'q2', 'q3'] as const).map((key, qi) => (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => {
-                                    const newArr = [...materias];
-                                    newArr[idx][key] = !newArr[idx][key];
-                                    setMaterias(newArr);
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                                    m[key]
-                                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                                      : 'bg-slate-800 text-slate-600 hover:text-slate-400'
-                                  }`}
-                                >
-                                  T{qi + 1}
-                                </button>
-                              ))
-                            ) : (
-                              (['semestre1', 'semestre2'] as const).map((key, si) => (
-                                <button
-                                  key={key}
-                                  type="button"
-                                  onClick={() => {
-                                    const newArr = [...materias];
-                                    newArr[idx][key] = !newArr[idx][key];
-                                    setMaterias(newArr);
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
-                                    m[key]
-                                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                                      : 'bg-slate-800 text-slate-600 hover:text-slate-400'
-                                  }`}
-                                >
-                                  Semestre {si === 0 ? 'I' : 'II'}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleMateriaGeneral(m.subject_saga_id)}
-                            className={`p-1.5 rounded-lg transition-colors ${
-                              m.eliminada
-                                ? 'text-emerald-500/70 hover:text-emerald-300 hover:bg-emerald-500/10'
-                                : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'
-                            }`}
-                            title={m.eliminada ? 'Restaurar materia' : 'Ignorar materia'}
-                          >
-                            {m.eliminada ? <RotateCcw className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <MateriasReadonlyTable
+                rows={materias}
+                tipo={tipoProyeccion}
+                onRemove={(m) => handleToggleMateriaGeneral(m.subject_saga_id)}
+                onUpdate={(m, patch) => handleUpdateMateriaGeneral(m.subject_saga_id, patch)}
+              />
             )}
           </div>
 
