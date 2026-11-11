@@ -97,6 +97,7 @@ export const CargaDocentePage: React.FC = () => {
   const [filterText, setFilterText] = useState('');
   const [soloSinAsignar, setSoloSinAsignar] = useState(false);
   const [soloPnf, setSoloPnf] = useState(true);
+  const [mostrarPlaceholders, setMostrarPlaceholders] = useState(true);
 
   const [modalAsignar, setModalAsignar] = useState<{ open: boolean; row: CargaRow | null; todosLapsos?: boolean }>({
     open: false,
@@ -331,6 +332,8 @@ export const CargaDocentePage: React.FC = () => {
       for (const p of profesores) {
         // Toggle "Mis profesores": solo profesores del PNF del usuario
         if (soloPnf && pnfReferencia != null && Number(p.pnf_saga_id) !== pnfReferencia) continue;
+        // Check "Sustitutos": oculta los profesores placeholder
+        if (!mostrarPlaceholders && p.es_placeholder) continue;
         // Con texto: incluir si coincide el profesor O alguna de sus materias
         const susRows = rowsVista
           .filter((r) => r.profesor_id === p.id && (coincideTextoProfesor(p) || coincideTextoMateria(r)))
@@ -359,7 +362,7 @@ export const CargaDocentePage: React.FC = () => {
 
     const sinAsignarRows = rowsVista.filter((r) => r.profesor_id === null && coincideTextoMateria(r));
     return { grupos: lista, sinAsignar: sinAsignarRows };
-  }, [profesores, rowsVista, filterText, soloSinAsignar, soloPnf, pnfReferencia]);
+  }, [profesores, rowsVista, filterText, soloSinAsignar, soloPnf, mostrarPlaceholders, pnfReferencia]);
 
   // Columnas de lapsos de la tabla agrupada: solo regímenes presentes en las
   // filas visibles (profesores mostrados + sin asignar). Sin datos visibles,
@@ -410,7 +413,7 @@ export const CargaDocentePage: React.FC = () => {
             : undefined
         }
       >
-        <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} />
+        <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} esPlaceholder={!!p.es_placeholder} />
         <div className="min-w-0">
           <div className="font-bold text-white text-sm leading-tight uppercase">
             {p.apellidos} {p.nombres}
@@ -965,6 +968,24 @@ export const CargaDocentePage: React.FC = () => {
           <UserX className="w-3.5 h-3.5" />
           <span>Sin asignar</span>
         </button>
+
+        {/* Check "Sustitutos": muestra u oculta los profesores placeholder */}
+        <label
+          title="Mostrar u ocultar los profesores sustitutos (placeholder)"
+          className={`px-3.5 py-2 border rounded-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer select-none ${
+            mostrarPlaceholders
+              ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={mostrarPlaceholders}
+            onChange={(e) => setMostrarPlaceholders(e.target.checked)}
+            className="w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+          />
+          <span>Sustitutos</span>
+        </label>
       </div>
 
       {/* Error Banner */}

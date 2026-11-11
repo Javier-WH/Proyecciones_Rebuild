@@ -18,6 +18,7 @@ interface ProfesorBody {
   pnf_saga_id?: number | null;
   pnf_nombre?: string;
   tipo_contrato_id?: number | null;
+  es_placeholder?: boolean;
 }
 
 interface TipoContratoBody {
@@ -229,8 +230,8 @@ export async function createProfesorHandler(request: FastifyRequest, reply: Fast
 
     const insert: any = await query(
       `INSERT INTO profesores
-       (cedula, nombres, apellidos, nacionalidad, sexo, email, telefono, pnf_saga_id, pnf_nombre, tipo_contrato_id, origen, activo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', 1)`,
+       (cedula, nombres, apellidos, nacionalidad, sexo, email, telefono, pnf_saga_id, pnf_nombre, tipo_contrato_id, origen, es_placeholder, activo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?, 1)`,
       [
         cedula,
         body.nombres.trim(),
@@ -242,6 +243,7 @@ export async function createProfesorHandler(request: FastifyRequest, reply: Fast
         pnfSagaId,
         pnfNombre,
         body.tipo_contrato_id || null,
+        body.es_placeholder ? 1 : 0,
       ]
     );
 
@@ -308,7 +310,7 @@ export async function updateProfesorHandler(request: FastifyRequest, reply: Fast
     await query(
       `UPDATE profesores SET
         cedula = ?, nombres = ?, apellidos = ?, nacionalidad = ?, sexo = ?,
-        email = ?, telefono = ?, pnf_saga_id = ?, pnf_nombre = ?, tipo_contrato_id = ?
+        email = ?, telefono = ?, pnf_saga_id = ?, pnf_nombre = ?, tipo_contrato_id = ?, es_placeholder = ?
        WHERE id = ?`,
       [
         cedula,
@@ -321,6 +323,7 @@ export async function updateProfesorHandler(request: FastifyRequest, reply: Fast
         pnfSagaId,
         pnfNombre,
         body.tipo_contrato_id !== undefined ? body.tipo_contrato_id : current.tipo_contrato_id,
+        body.es_placeholder !== undefined ? (body.es_placeholder ? 1 : 0) : current.es_placeholder,
         id,
       ]
     );

@@ -304,6 +304,7 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
               nombres={profesor.nombres}
               apellidos={profesor.apellidos}
               size="sm"
+              esPlaceholder={!!profesor.es_placeholder}
             />
             <div className="text-[11px] text-slate-400">
               <span className="font-semibold text-indigo-300">

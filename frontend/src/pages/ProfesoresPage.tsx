@@ -265,10 +265,18 @@ export const ProfesoresPage: React.FC = () => {
                 >
                   <td className="py-3.5 px-5">
                     <div className="flex items-center gap-3">
-                      <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} />
+                      <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} esPlaceholder={!!p.es_placeholder} />
                       <div className="min-w-0">
-                        <div className="font-semibold text-white text-sm truncate">
+                        <div className="font-semibold text-white text-sm truncate flex items-center gap-1.5">
                           {p.apellidos}, {p.nombres}
+                          {!!p.es_placeholder && (
+                            <span
+                              title="Profesor sustituto (placeholder)"
+                              className="bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0"
+                            >
+                              Sustituto
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-slate-500 font-mono">
                           {p.nacionalidad}-{p.cedula}

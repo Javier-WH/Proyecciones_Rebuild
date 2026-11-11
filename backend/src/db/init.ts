@@ -360,6 +360,7 @@ export async function initializeDatabase() {
       tipo_contrato_id INT NULL,
       foto_url VARCHAR(255) NULL,
       origen ENUM('SAGA', 'LOCAL') NOT NULL DEFAULT 'LOCAL',
+      es_placeholder TINYINT(1) NOT NULL DEFAULT 0,
       ultima_sincronizacion TIMESTAMP NULL,
       activo TINYINT(1) DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -371,6 +372,23 @@ export async function initializeDatabase() {
       INDEX idx_activo (activo)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // Migración idempotente: marca al profesor como sustituto/placeholder
+  // (registro provisional que ocupa una asignación hasta contratar al real).
+  // No se puede usar el bloque columnasExtra porque corre antes del CREATE
+  // de esta tabla; el ALTER solo se ejecuta si la columna no existe — nunca
+  // borra datos de una BD en producción.
+  const [existePlaceholder] = await db.query<any[]>(
+    `SELECT COUNT(*) AS total FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'profesores' AND COLUMN_NAME = 'es_placeholder'`,
+    [env.DB_NAME]
+  );
+  if (existePlaceholder[0].total === 0) {
+    await db.query(
+      "ALTER TABLE profesores ADD COLUMN es_placeholder TINYINT(1) NOT NULL DEFAULT 0 AFTER origen"
+    );
+    console.log("✅ Columna 'es_placeholder' agregada a la tabla profesores");
+  }
 
   // 9c. Tabla de Asignaciones: qué profesor dicta cada materia en cada sección/lapso
   // La ausencia de fila = materia sin asignar. trimestre: 1..3 (trimestral) o 1..2 (semestral)

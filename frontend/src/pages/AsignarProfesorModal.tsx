@@ -159,7 +159,7 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
                   disabled={assigning}
                   className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-indigo-500/50 hover:bg-slate-800/60 transition-colors cursor-pointer text-left disabled:opacity-50"
                 >
-                  <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} size="sm" />
+                  <ProfesorAvatar fotoUrl={p.foto_url} sexo={p.sexo} nombres={p.nombres} apellidos={p.apellidos} size="sm" esPlaceholder={!!p.es_placeholder} />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-white truncate">
                       {p.apellidos}, {p.nombres}

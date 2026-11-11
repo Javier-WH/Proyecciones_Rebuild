@@ -35,6 +35,7 @@ export interface Profesor {
   tipo_contrato_horas?: number | null;
   foto_url: string | null;
   origen: 'SAGA' | 'LOCAL';
+  es_placeholder: number;
   activo: number;
 }
 
@@ -76,6 +77,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
   const [telefono, setTelefono] = useState('');
   const [pnfSagaId, setPnfSagaId] = useState<number | ''>('');
   const [tipoContratoId, setTipoContratoId] = useState<number | ''>('');
+  const [esPlaceholder, setEsPlaceholder] = useState(false);
 
   const [pnfList, setPnfList] = useState<PNF[]>([]);
   const [tiposContrato, setTiposContrato] = useState<TipoContrato[]>([]);
@@ -108,6 +110,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     // el PNF del coordinador cuando tiene uno
     setPnfSagaId(profesor?.pnf_saga_id ?? pnfPropio ?? '');
     setTipoContratoId(profesor?.tipo_contrato_id || '');
+    setEsPlaceholder(!!profesor?.es_placeholder);
     setFotoPreview(profesor?.foto_url || null);
     setFotoDataUrl(null);
     setEliminarFoto(false);
@@ -151,7 +154,8 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
       email !== (profesor?.email || '') ||
       telefono !== (profesor?.telefono || '') ||
       pnfSagaId !== (profesor?.pnf_saga_id ?? pnfPropio ?? '') ||
-      tipoContratoId !== (profesor?.tipo_contrato_id || '')
+      tipoContratoId !== (profesor?.tipo_contrato_id || '') ||
+      esPlaceholder !== !!profesor?.es_placeholder
     ) {
       return true;
     }
@@ -161,7 +165,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
     return false;
   }, [
     profesor, pnfPropio, nombres, apellidos, nacionalidad, cedula, sexo, email, telefono,
-    pnfSagaId, tipoContratoId, fotoDataUrl, eliminarFoto, perfilIdsSel, perfilIdsInicial,
+    pnfSagaId, tipoContratoId, esPlaceholder, fotoDataUrl, eliminarFoto, perfilIdsSel, perfilIdsInicial,
   ]);
 
   const pedirCerrar = () => (dirty ? setConfirmCerrar(true) : onClose());
@@ -209,6 +213,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
       pnf_saga_id: pnfSagaId === '' ? null : Number(pnfSagaId),
       pnf_nombre: pnfSagaId === '' ? '' : pnfObj?.programa || profesor?.pnf_nombre || '',
       tipo_contrato_id: tipoContratoId === '' ? null : Number(tipoContratoId),
+      es_placeholder: esPlaceholder,
     };
 
     const res = await apiFetch<{ id: number }>(
@@ -279,7 +284,7 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
           {/* Foto + identidad */}
           <div className="flex items-start gap-4">
             <div className="flex flex-col items-center gap-2 shrink-0">
-              <ProfesorAvatar fotoUrl={fotoPreview} sexo={sexo} nombres={nombres} apellidos={apellidos} size="lg" />
+              <ProfesorAvatar fotoUrl={fotoPreview} sexo={sexo} nombres={nombres} apellidos={apellidos} size="lg" esPlaceholder={esPlaceholder} />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -287,7 +292,9 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
                 className="hidden"
                 onChange={handleFotoChange}
               />
-              <div className="flex gap-1">
+              {/* Con placeholder el avatar siempre es el logo del sistema:
+                  los controles de foto se ocultan (la foto guardada se conserva) */}
+              <div className={`flex gap-1 ${esPlaceholder ? 'invisible' : ''}`}>
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -439,6 +446,31 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
               />
             </div>
           </div>
+
+          {/* Marca al profesor como sustituto/placeholder: registro provisional
+              que ocupa la asignación hasta que se contrate al docente real */}
+          <label
+            className={`flex items-start gap-2.5 px-3.5 py-3 rounded-xl border cursor-pointer transition-colors ${
+              esPlaceholder
+                ? 'border-amber-500/40 bg-amber-500/10'
+                : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={esPlaceholder}
+              onChange={(e) => setEsPlaceholder(e.target.checked)}
+              className="w-3.5 h-3.5 mt-0.5 accent-amber-500 cursor-pointer"
+            />
+            <span>
+              <span className={`block text-[11px] font-semibold ${esPlaceholder ? 'text-amber-200' : 'text-slate-300'}`}>
+                Profesor sustituto (placeholder)
+              </span>
+              <span className="block text-[10px] text-slate-500 mt-0.5">
+                El registro es provisional: ocupa el cupo de la asignación hasta que se incorpore el docente real.
+              </span>
+            </span>
+          </label>
 
           {/* Perfiles docentes: especialidades que sugieren materias afines */}
           <div className="border border-slate-800 rounded-2xl p-4 bg-slate-950/50">

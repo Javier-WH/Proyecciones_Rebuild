@@ -90,6 +90,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const [lapsoSel, setLapsoSel] = useState<string[]>([]); // vacío = todos los lapsos
   const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
   const [incluirSinAsignar, setIncluirSinAsignar] = useState(false); // agrega un bloque "Sin Profesor" al final de cada hoja
+  const [incluirPlaceholders, setIncluirPlaceholders] = useState(true); // desmarcar excluye a los docentes sustitutos
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
   const [vista, setVista] = useState<'seleccion' | 'encabezado'>('seleccion');
   // Evita guardar el default sobre la plantilla de BD antes de cargarla
@@ -161,6 +162,8 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         continue;
       }
       const prof = profMap.get(r.profesor_id);
+      // Check "Incluir sustitutos": desmarcado, los docentes placeholder no salen en el reporte
+      if (!incluirPlaceholders && prof?.es_placeholder) continue;
       if (pnfId !== null) {
         if (incluirOtrosPnf) {
           // Docentes del propio PNF: todas sus materias. Docentes de otros PNF:
@@ -240,7 +243,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     }
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pnfSel, lapsoSel, incluirOtrosPnf, incluirSinAsignar, lapsos, rows, profMap, pnfOptions]);
+  }, [pnfSel, lapsoSel, incluirOtrosPnf, incluirSinAsignar, incluirPlaceholders, lapsos, rows, profMap, pnfOptions]);
 
   const linea = (tpl: string, hoja: HojaReporte): string =>
     tpl
@@ -667,6 +670,21 @@ td.ded { text-align: center; vertical-align: middle; }
               <span>
                 <span className="font-semibold text-slate-300">Incluir materias sin profesor</span>: se
                 agregan al final de cada hoja en un bloque &quot;Sin Profesor&quot;
+              </span>
+            </label>
+            <label
+              className="mt-2 flex items-start gap-2 text-[11px] text-slate-400 cursor-pointer select-none"
+              title="Marcado: los docentes sustitutos aparecen en el reporte. Desmarcado: se excluyen junto con sus materias asignadas"
+            >
+              <input
+                type="checkbox"
+                checked={incluirPlaceholders}
+                onChange={(e) => setIncluirPlaceholders(e.target.checked)}
+                className="w-3.5 h-3.5 mt-0.5 accent-emerald-500 cursor-pointer"
+              />
+              <span>
+                <span className="font-semibold text-slate-300">Incluir profesores sustitutos</span>: al
+                desmarcar, los docentes placeholder quedan fuera del reporte
               </span>
             </label>
           </div>
