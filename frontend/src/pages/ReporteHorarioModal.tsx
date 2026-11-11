@@ -679,8 +679,9 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
             c.alignment = { horizontal: 'center', vertical: 'middle' };
             if (f.kind === 'sep') c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
           } else {
-            r.getCell(1).value = f.hora;
-            r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+            // En formato 12h el rango con AM/PM no cabe en la columna: se apila en dos líneas
+            r.getCell(1).value = formato12 ? f.hora.replace('-', '\n') : f.hora;
+            r.getCell(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: formato12 };
             f.celdas.forEach((celda, i) => {
               const c = r.getCell(2 + i);
               if (h.cubiertas.has(`${fi}:${i}`)) return; // absorbida por el merge de arriba
@@ -776,7 +777,9 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
                   : `<td${rs}></td>`;
               })
               .join('');
-            return `<tr><td class="hora">${escapeHtml(f.hora)}</td>${tds}</tr>`;
+            // En formato 12h el rango con AM/PM desborda la columna: se apila en dos líneas
+            const horaHtml = formato12 ? escapeHtml(f.hora).replace('-', '<br/>') : escapeHtml(f.hora);
+            return `<tr><td class="hora">${horaHtml}</td>${tds}</tr>`;
           })
           .join('');
         const thDias = h.dias.map((d) => `<th>${escapeHtml(DIAS_NOMBRES[d])}</th>`).join('');
