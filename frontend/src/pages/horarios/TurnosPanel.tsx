@@ -116,19 +116,35 @@ const GeneradorBloquesModal: React.FC<{
   formato12?: boolean;
   diasIniciales: number[];
   inicioInicial: string;
+  duracionInicial?: number;
+  cantidadInicial?: number;
+  finInicial?: string;
+  recesosIniciales?: RecesoGen[];
   onClose: () => void;
   onGenerar: (bloques: BloqueEdit[], dias: number[], recesosDescartados: number) => void;
-}> = ({ formato12, diasIniciales, inicioInicial, onClose, onGenerar }) => {
+}> = ({
+  formato12,
+  diasIniciales,
+  inicioInicial,
+  duracionInicial = 45,
+  cantidadInicial = 10,
+  finInicial = '',
+  recesosIniciales = [],
+  onClose,
+  onGenerar,
+}) => {
   const [inicio, setInicio] = useState(inicioInicial);
   const [inicioPm, setInicioPm] = useState<'AM' | 'PM'>(
     Number(inicioInicial.slice(0, 2)) >= 12 ? 'PM' : 'AM'
   );
-  const [duracion, setDuracion] = useState(45);
+  const [duracion, setDuracion] = useState(duracionInicial);
   const [modo, setModo] = useState<'bloques' | 'fin'>('bloques');
-  const [cantidad, setCantidad] = useState(10);
-  const [fin, setFin] = useState('');
-  const [finPm, setFinPm] = useState<'AM' | 'PM'>('PM');
-  const [recesos, setRecesos] = useState<RecesoGen[]>([]);
+  const [cantidad, setCantidad] = useState(cantidadInicial);
+  const [fin, setFin] = useState(finInicial);
+  const [finPm, setFinPm] = useState<'AM' | 'PM'>(
+    !finInicial || Number(finInicial.slice(0, 2)) >= 12 ? 'PM' : 'AM'
+  );
+  const [recesos, setRecesos] = useState<RecesoGen[]>(recesosIniciales);
   const [diasSel, setDiasSel] = useState<number[]>(diasIniciales);
   const [error, setError] = useState<string | null>(null);
 
@@ -162,7 +178,12 @@ const GeneradorBloquesModal: React.FC<{
     }
 
     const iniMin = minutos(inicio);
-    const sumaRecesos = recesos.reduce((acc, r) => acc + (Math.floor(r.duracion) || 0), 0);
+    // Recesos válidos: su costo solo descuenta rango si su posición queda
+    // dentro de los bloques que finalmente se generen (evita que un receso
+    // inválido reste bloques que sí cabrían).
+    const recesosSanos = recesos.filter((r) => r.posicion >= 1 && r.duracion > 0);
+    const sumaEn = (n: number) =>
+      recesosSanos.reduce((acc, r) => acc + (r.posicion <= n ? Math.floor(r.duracion) : 0), 0);
 
     let n: number;
     if (modo === 'bloques') {
@@ -176,21 +197,29 @@ const GeneradorBloquesModal: React.FC<{
         setError('Completa la hora de fin (HH:MM).');
         return;
       }
-      const finMin = minutos(fin);
-      if (finMin <= iniMin) {
+      const rango = minutos(fin) - iniMin;
+      if (rango <= 0) {
         setError('La hora de fin debe ser mayor que la de inicio.');
         return;
       }
-      n = Math.floor((finMin - iniMin - sumaRecesos) / dur);
+      // Mayor n tal que n·dur + recesos(con posición ≤ n) quepan en el rango
+      n = Math.floor(rango / dur);
+      while (n > 0 && n * dur + sumaEn(n) > rango) n--;
       if (n < 1) {
         setError('Entre esa hora de inicio y fin no cabe ni un bloque (resta recesos o alarga el rango).');
         return;
       }
     }
 
+    // Ningún bloque puede terminar después de las 23:59 (formato HH:MM)
+    if (iniMin + n * dur + sumaEn(n) > 23 * 60 + 59) {
+      setError('El turno terminaría después de las 23:59. Reduce bloques, duración o recesos.');
+      return;
+    }
+
     // Recesos cuya posición queda fuera de los bloques generados se descartan
-    const recesosValidos = recesos
-      .filter((r) => r.posicion >= 1 && r.posicion <= n && r.duracion > 0)
+    const recesosValidos = recesosSanos
+      .filter((r) => r.posicion <= n)
       .sort((a, b) => a.posicion - b.posicion);
     const descartados = recesos.length - recesosValidos.length;
 
@@ -622,10 +651,43 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
       texto:
         'Bloques generados' +
         (descartados > 0
-          ? ` (${descartados} receso${descartados === 1 ? '' : 's'} descartado${descartados === 1 ? '' : 's'} por quedar fuera del rango)`
+          ? ` (${descartados} receso${descartados === 1 ? '' : 's'} descartado${descartados === 1 ? '' : 's'} por posición o duración inválida)`
           : '') +
         '. Revisa y pulsa Guardar.',
     });
+  };
+
+  // Valores iniciales del asistente, derivados de la configuración actual del
+  // turno: duración de la primera hora de clase, cantidad de bloques, hora de
+  // fin de la última fila y recesos existentes (posición = clases que le
+  // preceden). Sirve para regenerar o ajustar un turno ya configurado.
+  const initGenerador = () => {
+    let clases = 0;
+    const recesosIni: RecesoGen[] = [];
+    let primeraClase: BloqueEdit | undefined;
+    let ultimoFin = '';
+    for (const b of bloques) {
+      if (!b.hora_inicio || !b.hora_fin) continue;
+      ultimoFin = b.hora_fin;
+      if (b.es_receso) {
+        recesosIni.push({
+          posicion: Math.max(clases, 1),
+          duracion: minutos(b.hora_fin) - minutos(b.hora_inicio),
+        });
+      } else {
+        clases++;
+        if (!primeraClase) primeraClase = b;
+      }
+    }
+    return {
+      inicio: primeraClase?.hora_inicio || '07:00',
+      duracion: primeraClase
+        ? Math.max(minutos(primeraClase.hora_fin) - minutos(primeraClase.hora_inicio), 5)
+        : 45,
+      cantidad: clases || 10,
+      fin: ultimoFin,
+      recesos: recesosIni,
+    };
   };
 
   const guardar = async () => {
@@ -1109,15 +1171,23 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
       )}
 
       {/* Modal: generador automático de bloques */}
-      {genOpen && (
-        <GeneradorBloquesModal
-          formato12={formato12}
-          diasIniciales={dias}
-          inicioInicial={bloques[0]?.hora_inicio || '07:00'}
-          onClose={() => setGenOpen(false)}
-          onGenerar={aplicarBloquesGenerados}
-        />
-      )}
+      {genOpen &&
+        (() => {
+          const g = initGenerador();
+          return (
+            <GeneradorBloquesModal
+              formato12={formato12}
+              diasIniciales={dias}
+              inicioInicial={g.inicio}
+              duracionInicial={g.duracion}
+              cantidadInicial={g.cantidad}
+              finInicial={g.fin}
+              recesosIniciales={g.recesos}
+              onClose={() => setGenOpen(false)}
+              onGenerar={aplicarBloquesGenerados}
+            />
+          );
+        })()}
 
       {pendienteCambio !== null && turno && (
         <ConfirmModal
