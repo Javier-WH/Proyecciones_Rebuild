@@ -149,7 +149,7 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
   return (
     <div className="max-w-7xl mx-auto w-full">
       {/* Encabezado del portal */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900/60 via-indigo-900/40 to-slate-900 border border-blue-500/20 p-6 sm:p-8 shadow-2xl mb-6">
+      <div className="cabecera-hero relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900/60 via-indigo-900/40 to-slate-900 border border-blue-500/20 p-6 sm:p-8 shadow-2xl mb-6">
         <div className="relative z-10">
           <div className="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 px-3 py-1 rounded-full text-xs font-semibold mb-3">
             <GraduationCap className="w-3.5 h-3.5" />

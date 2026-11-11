@@ -208,6 +208,14 @@
   color: #ffffff;
 }
 
+/* Banners hero (portal del docente, bienvenida, tarjeta de estudiantes):
+   en claro usan el mismo azul acero de la barra superior en lugar del
+   degradado azul oscuro. El restore de acentos dentro de gradientes ya
+   mantiene blancos y chips legibles sobre el acero. */
+[data-theme='light'] .cabecera-hero {
+  background: linear-gradient(90deg, #4c6a92 0%, #43618b 55%, #496690 100%);
+}
+
 /* Zonas oscuras en modo claro: barra superior, cabeceras de modal y
    cualquier superficie sólida saturada (bg-*-400..700 sin alfa, no hover).
    Dentro de ellas los acentos recuperan sus valores originales para que

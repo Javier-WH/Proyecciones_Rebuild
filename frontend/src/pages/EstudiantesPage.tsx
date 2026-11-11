@@ -476,7 +476,7 @@ export const EstudiantesPage: React.FC = () => {
 
       {/* Totales */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <section className="bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-500/20 rounded-2xl p-5 flex flex-col justify-center">
+        <section className="cabecera-hero bg-gradient-to-br from-indigo-900/40 to-slate-900 border border-indigo-500/20 rounded-2xl p-5 flex flex-col justify-center">
           <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300/80 flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5" /> Total de estudiantes
           </p>
