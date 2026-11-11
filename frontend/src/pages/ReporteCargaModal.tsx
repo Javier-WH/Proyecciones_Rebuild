@@ -33,6 +33,30 @@ interface HojaReporte {
   profes: ProfReporte[];
 }
 
+// Reporte anual: una materia×sección pivoteada con sus horas en cada lapso
+// del régimen (misma fusión que la vista "Todos los lapsos" de Carga Docente)
+interface ItemAnual {
+  base: ReporteRow;
+  horasPorLapso: Map<number, number>;
+}
+
+interface ProfAnual {
+  nombre: string;
+  cedula: number;
+  dedicacion: string;
+  items: ItemAnual[];
+  totalPorLapso: Map<number, number>;
+}
+
+interface HojaAnual {
+  nombreHoja: string;
+  tipo: TipoLapso;
+  lapsosHoja: number[]; // lapsos presentes del régimen, ordenados ([1,2,3] / [1,2])
+  lapsoLabel: string; // 'ANUAL'
+  pnfTexto: string;
+  profes: ProfAnual[];
+}
+
 const romano = (n: number): string => ['I', 'II', 'III', 'IV', 'V', 'VI'][n - 1] ?? String(n);
 
 const lapsoTitulo = (l: LapsoRef): string =>
@@ -91,6 +115,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
   const [incluirOtrosPnf, setIncluirOtrosPnf] = useState(false); // incluir docentes de otros PNF con materias del PNF seleccionado
   const [incluirSinAsignar, setIncluirSinAsignar] = useState(false); // agrega un bloque "Sin Profesor" al final de cada hoja
   const [incluirPlaceholders, setIncluirPlaceholders] = useState(true); // desmarcar excluye a los docentes sustitutos
+  const [reporteAnual, setReporteAnual] = useState(false); // hoja(s) pivotada(s) por régimen (T1-T3 / S1-S2)
   const [header, setHeader] = useState<string[]>(HEADER_DEFAULT);
   const [vista, setVista] = useState<'seleccion' | 'encabezado'>('seleccion');
   // Evita guardar el default sobre la plantilla de BD antes de cargarla
@@ -208,13 +233,107 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     return lista;
   };
 
+  // Versión anual de profesDe: agrupa por docente TODAS las filas de un régimen
+  // (sin filtro de lapso) y pivotea cada materia×sección en una sola fila con
+  // horas por lapso — mismo merge que la vista "Todos los lapsos" de la página.
+  const profesAnualDe = (tipo: TipoLapso, pnfId: number | null): ProfAnual[] => {
+    const grupos = new Map<number, ReporteRow[]>();
+    const sinAsignar: ReporteRow[] = [];
+    for (const r of rows) {
+      if (r.tipo_proyeccion !== tipo) continue;
+      if (r.profesor_id == null) {
+        if (incluirSinAsignar && (pnfId === null || r.pnf_saga_id === pnfId)) {
+          sinAsignar.push(r);
+        }
+        continue;
+      }
+      const prof = profMap.get(r.profesor_id);
+      // Check "Incluir sustitutos": desmarcado, los docentes placeholder no salen en el reporte
+      if (!incluirPlaceholders && prof?.es_placeholder) continue;
+      if (pnfId !== null) {
+        if (incluirOtrosPnf) {
+          const esPropio = prof?.pnf_saga_id === pnfId;
+          if (!esPropio && r.pnf_saga_id !== pnfId) continue;
+        } else if (prof?.pnf_saga_id !== pnfId) {
+          continue;
+        }
+      }
+      let g = grupos.get(r.profesor_id);
+      if (!g) {
+        g = [];
+        grupos.set(r.profesor_id, g);
+      }
+      g.push(r);
+    }
+
+    // Pivotea: una fila por materia×sección, horas acumuladas por lapso
+    const pivotar = (items: ReporteRow[]): ItemAnual[] => {
+      const merged = new Map<string, ItemAnual>();
+      for (const r of items) {
+        const k = `${r.materia_id}:${r.seccion_id}`;
+        let e = merged.get(k);
+        if (!e) {
+          e = { base: r, horasPorLapso: new Map() };
+          merged.set(k, e);
+        }
+        e.horasPorLapso.set(
+          r.trimestre,
+          (e.horasPorLapso.get(r.trimestre) || 0) + (r.horas_semanales || 0)
+        );
+      }
+      return [...merged.values()].sort((a, b) =>
+        a.base.materia_nombre.localeCompare(b.base.materia_nombre)
+      );
+    };
+
+    const lista = [...grupos.entries()]
+      .map(([id, items]) => {
+        const prof = profMap.get(id);
+        const nombre = (
+          (prof ? `${prof.apellidos} ${prof.nombres}` : `${items[0].prof_apellidos ?? ''} ${items[0].prof_nombres ?? ''}`)
+            .trim() || `Docente #${id}`
+        ).toUpperCase();
+        const cedula = parseInt(prof?.cedula ?? items[0].prof_cedula ?? '', 10) || Number.MAX_SAFE_INTEGER;
+        const dedicacion = prof?.tipo_contrato_nombre ?? items[0].contrato_nombre ?? '';
+        const totalPorLapso = new Map<number, number>();
+        for (const r of items) {
+          totalPorLapso.set(r.trimestre, (totalPorLapso.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+        }
+        return { nombre, cedula, dedicacion, items: pivotar(items), totalPorLapso };
+      })
+      .sort((a, b) => a.cedula - b.cedula);
+
+    // Bloque "Sin Profesor": siempre al final de la hoja, como un docente más
+    if (sinAsignar.length > 0) {
+      const totalPorLapso = new Map<number, number>();
+      for (const r of sinAsignar) {
+        totalPorLapso.set(r.trimestre, (totalPorLapso.get(r.trimestre) || 0) + (r.horas_semanales || 0));
+      }
+      lista.push({
+        nombre: 'SIN PROFESOR',
+        cedula: Number.MAX_SAFE_INTEGER,
+        dedicacion: '',
+        items: pivotar(sinAsignar),
+        totalPorLapso,
+      });
+    }
+    return lista;
+  };
+
   // Una hoja por (PNF seleccionado × lapso) — o por lapso cuando es reporte general
   const hojas = useMemo<HojaReporte[]>(() => {
     const nombrarHoja = crearNombradorHojas();
     const lista: HojaReporte[] = [];
     // Sin selección se incluyen todos; con selección solo los marcados.
     // Cada hoja se crea solo si hay datos (docentes con carga) en ese lapso.
-    const lapsosUso = lapsoSel.length > 0 ? lapsos.filter((l) => lapsoSel.includes(`${l.tipo}:${l.n}`)) : lapsos;
+    // Con reporte anual y sin lapsos seleccionados, solo salen las hojas anuales;
+    // con lapsos marcados, se agregan las hojas de esos lapsos además de las anuales
+    const lapsosUso =
+      lapsoSel.length > 0
+        ? lapsos.filter((l) => lapsoSel.includes(`${l.tipo}:${l.n}`))
+        : reporteAnual
+          ? []
+          : lapsos;
     if (pnfSel.length === 0) {
       for (const lapso of lapsosUso) {
         const profes = profesDe(lapso, null);
@@ -243,9 +362,45 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
     }
     return lista;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pnfSel, lapsoSel, incluirOtrosPnf, incluirSinAsignar, incluirPlaceholders, lapsos, rows, profMap, pnfOptions]);
+  }, [pnfSel, lapsoSel, reporteAnual, incluirOtrosPnf, incluirSinAsignar, incluirPlaceholders, lapsos, rows, profMap, pnfOptions]);
 
-  const linea = (tpl: string, hoja: HojaReporte): string =>
+  // Hojas anuales pivotadas: una por régimen presente en los datos (T1-T3
+  // trimestral / S1-S2 semestral), por cada PNF seleccionado o "General"
+  const hojasAnuales = useMemo<HojaAnual[]>(() => {
+    if (!reporteAnual) return [];
+    const nombrarHoja = crearNombradorHojas();
+    const lista: HojaAnual[] = [];
+    for (const tipo of ['TRIMESTRAL', 'SEMESTRAL'] as const) {
+      const lapsosHoja = [
+        ...new Set(rows.filter((r) => r.tipo_proyeccion === tipo).map((r) => r.trimestre)),
+      ].sort((a, b) => a - b);
+      if (lapsosHoja.length === 0) continue;
+      const tag = tipo === 'SEMESTRAL' ? 'Anual S' : 'Anual T';
+      const armar = (pnfId: number | null, pnfNombre: string | null) => {
+        const profes = profesAnualDe(tipo, pnfId);
+        if (profes.length === 0) return;
+        lista.push({
+          nombreHoja: nombrarHoja(pnfNombre ? `${pnfCorto(pnfNombre)} ${tag}` : `General ${tag}`),
+          tipo,
+          lapsosHoja,
+          lapsoLabel: 'ANUAL',
+          pnfTexto: pnfNombre ? pnfCorto(pnfNombre).toUpperCase() : 'TODOS LOS PROGRAMAS',
+          profes,
+        });
+      };
+      if (pnfSel.length === 0) {
+        armar(null, null);
+      } else {
+        for (const pnfId of pnfSel) {
+          armar(pnfId, pnfOptions.find(([id]) => id === pnfId)?.[1] ?? `PNF ${pnfId}`);
+        }
+      }
+    }
+    return lista;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reporteAnual, pnfSel, incluirOtrosPnf, incluirSinAsignar, incluirPlaceholders, rows, profMap, pnfOptions]);
+
+  const linea = (tpl: string, hoja: { lapsoLabel: string; pnfTexto: string }): string =>
     tpl
       .replace(/\{PNF\}/gi, hoja.pnfTexto)
       .replace(/\{LAPSO\}/gi, hoja.lapsoLabel)
@@ -266,6 +421,23 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
       };
       const fuenteDatos: Partial<ExcelJS.Font> = { size: 9 };
       const logoImg = wb.addImage({ base64: await logoBase64(), extension: 'png' });
+
+      // Datos. Para que un docente no quede partido entre páginas impresas
+      // se estima la altura de su bloque (filas con texto envuelto) y se
+      // inserta un salto de página manual antes del bloque que no quepa.
+      const anchoCol = { A: 34, B: 46, C: 26, I: 16 };
+      const lineasWrap = (texto: string | null | undefined, ancho: number) =>
+        Math.max(1, Math.ceil((texto || '').length / (ancho * 1.15)));
+      const altoItem = (item: ReporteRow) =>
+        Math.max(
+          15,
+          Math.max(
+            lineasWrap(item.materia_nombre, anchoCol.B),
+            lineasWrap(item.pnf_nombre, anchoCol.C)
+          ) * 12.5 + 4
+        );
+      // Carta apaisada: ~500pt útiles menos el encabezado repetido (filas 1-8 ≈ 140pt)
+      const CAP_DATOS = 355;
 
       for (const hoja of hojas) {
         const ws = wb.addWorksheet(hoja.nombreHoja);
@@ -338,22 +510,6 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         ws.getRow(7).height = 18;
         ws.getRow(8).height = 30;
 
-        // Datos. Para que un docente no quede partido entre páginas impresas
-        // se estima la altura de su bloque (filas con texto envuelto) y se
-        // inserta un salto de página manual antes del bloque que no quepa.
-        const anchoCol = { A: 34, B: 46, C: 26, I: 16 };
-        const lineasWrap = (texto: string | null | undefined, ancho: number) =>
-          Math.max(1, Math.ceil((texto || '').length / (ancho * 1.15)));
-        const altoItem = (item: ReporteRow) =>
-          Math.max(
-            15,
-            Math.max(
-              lineasWrap(item.materia_nombre, anchoCol.B),
-              lineasWrap(item.pnf_nombre, anchoCol.C)
-            ) * 12.5 + 4
-          );
-        // Carta apaisada: ~500pt útiles menos el encabezado repetido (filas 1-8 ≈ 140pt)
-        const CAP_DATOS = 355;
         let resto = CAP_DATOS;
 
         let fila = 9;
@@ -428,7 +584,160 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
         } as ExcelJS.PageSetup;
       }
 
-      if (hojas.length === 0) {
+      // Hojas anuales pivotadas: una fila por materia con un par de columnas
+      // (Horas por U/C + Total) por cada lapso del régimen
+      for (const hoja of hojasAnuales) {
+        const ws = wb.addWorksheet(hoja.nombreHoja);
+        ws.headerFooter = { oddHeader: '&R&P/&N' };
+        ws.addImage(logoImg, {
+          tl: {
+            nativeCol: 0,
+            nativeColOff: 200025,
+            nativeRow: 0,
+            nativeRowOff: 6858000,
+          } as unknown as { col: number; row: number },
+          ext: { width: 127, height: 60 },
+        });
+
+        const nLapsos = hoja.lapsosHoja.length;
+        const colDed = 7 + nLapsos * 2; // última columna: Dedicación
+        const ultimaLetra = String.fromCharCode(64 + colDed);
+        ws.columns = [
+          { width: 34 }, // A Profesor
+          { width: 46 }, // B Unidad Curricular
+          { width: 26 }, // C PNF
+          { width: 13 }, // D Trayecto
+          { width: 10 }, // E Sección
+          { width: 10 }, // F Turno
+          ...Array.from({ length: nLapsos * 2 }, () => ({ width: 8 })),
+          { width: 16 }, // Dedicación
+        ];
+
+        // Encabezado institucional combinado hasta la última columna
+        header.forEach((tpl, i) => {
+          const r = ws.getRow(i + 1);
+          ws.mergeCells(i + 1, 1, i + 1, colDed);
+          const cell = r.getCell(1);
+          cell.value = linea(tpl, hoja);
+          cell.font = { bold: true, size: 11 };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        // Encabezados de tabla (filas 7-8): fijos + un grupo por lapso
+        const fijosAnual: Array<[number, string]> = [
+          [1, 'Profesor'],
+          [2, 'Unidad Curricular'],
+          [3, 'PNF'],
+          [4, 'Trayecto'],
+          [5, 'Sección'],
+          [6, 'Turno'],
+          [colDed, 'Dedicación'],
+        ];
+        for (const [c, texto] of fijosAnual) {
+          ws.mergeCells(7, c, 8, c);
+          const cell = ws.getCell(7, c);
+          cell.value = texto;
+          cell.font = { bold: true };
+          cell.alignment = centrado;
+        }
+        hoja.lapsosHoja.forEach((n, i) => {
+          const c1 = 7 + i * 2;
+          ws.mergeCells(7, c1, 7, c1 + 1);
+          const cTitulo = ws.getCell(7, c1);
+          cTitulo.value = lapsoTitulo({ n, tipo: hoja.tipo });
+          cTitulo.font = { bold: true };
+          cTitulo.alignment = centrado;
+          const cHrs = ws.getCell(8, c1);
+          cHrs.value = 'Horas por U/C';
+          const cTot = ws.getCell(8, c1 + 1);
+          cTot.value = 'Total de Horas';
+          for (const c of [cHrs, cTot]) {
+            c.font = { bold: true };
+            c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+          }
+        });
+        ws.getRow(7).height = 18;
+        ws.getRow(8).height = 30;
+
+        let resto = CAP_DATOS;
+        let fila = 9;
+        for (const prof of hoja.profes) {
+          const inicio = fila;
+          let altoBloque = 0;
+          for (const item of prof.items) {
+            const r = ws.getRow(fila);
+            r.getCell(2).value = item.base.materia_nombre;
+            r.getCell(3).value = item.base.pnf_nombre;
+            r.getCell(4).value = item.base.trayecto_nombre;
+            r.getCell(5).value = item.base.seccion_nombre;
+            r.getCell(6).value = item.base.turno_nombre;
+            hoja.lapsosHoja.forEach((n, i) => {
+              const cell = r.getCell(7 + i * 2);
+              cell.value = item.horasPorLapso.get(n) ?? '—';
+              cell.alignment = centrado;
+              cell.font = fuenteDatos;
+            });
+            r.getCell(2).alignment = { vertical: 'middle', wrapText: true };
+            for (const col of [3, 4, 5, 6]) {
+              r.getCell(col).alignment = col === 3 ? centradoWrap : centrado;
+            }
+            for (const col of [2, 3, 4, 5, 6]) r.getCell(col).font = fuenteDatos;
+            altoBloque += altoItem(item.base);
+            fila++;
+          }
+          altoBloque = Math.max(
+            altoBloque,
+            lineasWrap(prof.nombre, anchoCol.A) * 12.5 + 4,
+            lineasWrap(prof.dedicacion, anchoCol.I) * 12.5 + 4
+          );
+          if (altoBloque > resto && inicio > 9) {
+            ws.getRow(inicio - 1).addPageBreak();
+            resto = CAP_DATOS;
+          }
+          resto -= altoBloque;
+          const fin = fila - 1;
+          if (fin > inicio) {
+            ws.mergeCells(inicio, 1, fin, 1);
+            hoja.lapsosHoja.forEach((_n, i) => ws.mergeCells(inicio, 8 + i * 2, fin, 8 + i * 2));
+            ws.mergeCells(inicio, colDed, fin, colDed);
+          }
+          const cNom = ws.getCell(inicio, 1);
+          cNom.value = prof.nombre;
+          cNom.font = { size: 9, bold: true };
+          cNom.alignment = { vertical: 'middle', wrapText: true };
+          hoja.lapsosHoja.forEach((n, i) => {
+            const cTotal = ws.getCell(inicio, 8 + i * 2);
+            cTotal.value = prof.totalPorLapso.get(n) ?? 0;
+            cTotal.font = { bold: true, size: 10 };
+            cTotal.alignment = centrado;
+          });
+          const cDed = ws.getCell(inicio, colDed);
+          cDed.value = prof.dedicacion || null;
+          cDed.font = fuenteDatos;
+          cDed.alignment = centradoWrap;
+        }
+        const ultima = fila - 1;
+
+        // Bordes en toda la tabla (encabezados + datos)
+        for (let f = 7; f <= ultima; f++) {
+          for (let c = 1; c <= colDed; c++) {
+            ws.getCell(f, c).border = borde;
+          }
+        }
+
+        ws.pageSetup = {
+          paperSize: 5, // Carta
+          orientation: 'landscape',
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
+          printArea: `A1:${ultimaLetra}${ultima}`,
+          printTitlesRow: '1:8',
+        } as ExcelJS.PageSetup;
+      }
+
+      if (hojas.length === 0 && hojasAnuales.length === 0) {
         setAviso('No hay docentes con carga para la selección realizada.');
         return;
       }
@@ -451,7 +760,7 @@ export const ReporteCargaModal: React.FC<ReporteCargaModalProps> = ({
 
   // ------------------------- IMPRESIÓN DIRECTA -------------------------
   const imprimir = async () => {
-    if (hojas.length === 0) {
+    if (hojas.length === 0 && hojasAnuales.length === 0) {
       setAviso('No hay docentes con carga para la selección realizada.');
       return;
     }
@@ -489,6 +798,51 @@ ${filas}
       })
       .join('\n');
 
+    // Secciones anuales pivotadas: un grupo de 2 columnas por lapso del régimen
+    const seccionesAnuales = hojasAnuales
+      .map((hoja) => {
+        const encabezado = header
+          .map((tpl) => `<div class="hline">${escapeHtml(linea(tpl, hoja))}</div>`)
+          .join('');
+        const filas = hoja.profes
+          .map((prof) =>
+            `<tbody class="grp">${prof.items
+              .map((item, i) => {
+                const tdProf =
+                  i === 0 ? `<td rowspan="${prof.items.length}" class="prof">${escapeHtml(prof.nombre)}</td>` : '';
+                const tdDed =
+                  i === 0 ? `<td rowspan="${prof.items.length}" class="ded">${escapeHtml(prof.dedicacion)}</td>` : '';
+                const tdsLapsos = hoja.lapsosHoja
+                  .map((n) => {
+                    const tdTot =
+                      i === 0
+                        ? `<td rowspan="${prof.items.length}" class="num tot">${prof.totalPorLapso.get(n) ?? 0}</td>`
+                        : '';
+                    return `<td class="num">${item.horasPorLapso.get(n) ?? '—'}</td>${tdTot}`;
+                  })
+                  .join('');
+                return `<tr>${tdProf}<td>${escapeHtml(item.base.materia_nombre)}</td><td>${escapeHtml(item.base.pnf_nombre)}</td><td>${escapeHtml(item.base.trayecto_nombre)}</td><td>${escapeHtml(item.base.seccion_nombre)}</td><td>${escapeHtml(item.base.turno_nombre)}</td>${tdsLapsos}${tdDed}</tr>`;
+              })
+              .join('')}</tbody>`
+          )
+          .join('');
+        const thLapsos = hoja.lapsosHoja
+          .map((n) => `<th colspan="2">${escapeHtml(lapsoTitulo({ n, tipo: hoja.tipo }))}</th>`)
+          .join('');
+        const thSub = hoja.lapsosHoja
+          .map(() => '<th class="v">Horas por U/C</th><th class="v">Total de Horas</th>')
+          .join('');
+        return `<section class="hoja"><img class="logo" src="${logo}" alt="">${encabezado}
+<table>
+<thead>
+<tr><th rowspan="2">Profesor</th><th rowspan="2">Unidad Curricular</th><th rowspan="2">PNF</th><th rowspan="2">Trayecto</th><th rowspan="2">Sección</th><th rowspan="2">Turno</th>${thLapsos}<th rowspan="2">Dedicación</th></tr>
+<tr>${thSub}</tr>
+</thead>
+${filas}
+</table></section>`;
+      })
+      .join('\n');
+
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Carga Docente</title>
 <style>
 @page { size: letter landscape; margin: 1.5cm 1.5cm 1.2cm;
@@ -511,7 +865,8 @@ td.num { text-align: center; }
 td.prof { vertical-align: middle; font-weight: bold; }
 td.tot { font-weight: bold; font-size: 11pt; vertical-align: middle; }
 td.ded { text-align: center; vertical-align: middle; }
-</style></head><body>${secciones}</body></html>`;
+</style></head><body>${secciones}
+${seccionesAnuales}</body></html>`;
 
     imprimirHtml(html);
   };
@@ -731,6 +1086,23 @@ td.ded { text-align: center; vertical-align: middle; }
             <p className="text-[10px] text-slate-500 mt-1.5">
               Sin selección se incluyen todos. Cada lapso genera su propia hoja solo si existen datos en él.
             </p>
+            <label
+              className="mt-2 flex items-start gap-2 text-[11px] text-slate-400 cursor-pointer select-none"
+              title="Genera una hoja por régimen con los lapsos pivotados: una fila por materia y columnas T1-T3 (trimestral) o S1-S2 (semestral), igual que la vista 'Todos los lapsos' de Carga Docente"
+            >
+              <input
+                type="checkbox"
+                checked={reporteAnual}
+                onChange={(e) => setReporteAnual(e.target.checked)}
+                className="w-3.5 h-3.5 mt-0.5 accent-emerald-500 cursor-pointer"
+              />
+              <span>
+                <span className="font-semibold text-slate-300">Generar reporte anual</span>: una hoja
+                por régimen con todos los trimestres o semestres pivotados por materia. Sin lapsos
+                marcados solo salen las anuales; con lapsos marcados se agregan las hojas de esos
+                lapsos
+              </span>
+            </label>
           </div>
           </>
           )}
