@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { apiFetch } from '../api/client.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import { imprimirHtml } from '../utils/print.js';
 import { logoDataUri, logoBase64 } from '../utils/logo.js';
 import { getEncabezado, saveEncabezado } from '../utils/plantillas.js';
@@ -828,6 +829,8 @@ td.clase { vertical-align: middle; }
 
     imprimirHtml(html);
   };
+
+  useModalUx({ enabled: isOpen, onEscape: generando ? undefined : onClose });
 
   if (!isOpen) return null;
 

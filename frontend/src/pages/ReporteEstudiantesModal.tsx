@@ -4,6 +4,7 @@ import { imprimirHtml } from '../utils/print.js';
 import { logoDataUri, logoBase64 } from '../utils/logo.js';
 import { getEncabezado, saveEncabezado } from '../utils/plantillas.js';
 import { X, FileSpreadsheet, Printer, BarChart3, AlertTriangle } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 // Subconjunto de la fila de /student/enrolled que el reporte necesita
 export interface EstudianteReporte {
@@ -364,6 +365,8 @@ ${stats.tablas.map(tablaHtml).join('\n')}
 
     imprimirHtml(html);
   };
+
+  useModalUx({ enabled: isOpen, onEscape: generando ? undefined : onClose });
 
   if (!isOpen) return null;
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { logoDataUri, hayLogoPersonalizado, invalidarLogoCache } from '../utils/logo.js';
 import { X, Image as ImageIcon, Loader2, AlertCircle, Info, Upload, RotateCcw } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 interface LogoReportesModalProps {
   isOpen: boolean;
@@ -60,6 +61,8 @@ export const LogoReportesModal: React.FC<LogoReportesModalProps> = ({ isOpen, on
     setCargando(true);
     recargar().finally(() => setCargando(false));
   }, [isOpen]);
+
+  useModalUx({ enabled: isOpen, onEscape: cargando ? undefined : onClose });
 
   if (!isOpen) return null;
 

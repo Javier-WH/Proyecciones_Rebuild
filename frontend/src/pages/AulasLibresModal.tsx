@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { X, DoorOpen, Check, Ban } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   Aula, HorarioEntry, Turno, DIAS_NOMBRES, DIAS_CORTOS,
   fmtHora, fmtHoraCfg, minutos, traslapan, sortAulas,
@@ -29,6 +30,7 @@ const celdaKey = (dia: number, f: Franja) => `${dia}|${f.inicio}|${f.fin}`;
 // Usa los entries ya cargados en HorariosPage (lapso + lapsos rivales): un
 // aula se considera ocupada si cualquier clase traslapa el rango ese día.
 export const AulasLibresModal: React.FC<Props> = ({ onClose, entries, aulas, turnos, usa12 }) => {
+  useModalUx({ onEscape: onClose });
   const [celdaSel, setCeldaSel] = useState<string | null>(null);
   const [modo, setModo] = useState<'libres' | 'ocupacion'>('libres');
   const [diaOcup, setDiaOcup] = useState(1);

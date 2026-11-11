@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client.js';
+import { ConfirmModal } from './ConfirmModal.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
 import {
@@ -464,6 +466,20 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
   const [sagaCaido, setSagaCaido] = useState(false);
   const [sagaRetry, setSagaRetry] = useState(0);
 
+  // Guarda anti-pérdida: pide confirmación si el usuario ya empezó a armar la
+  // proyección (nombre, pensum elegido o secciones). `tieneContenido` es una
+  // función pura del estado — las cargas async de catálogos no la disparan.
+  const [confirmCerrar, setConfirmCerrar] = useState(false);
+  const tieneContenido =
+    nombreProyeccion.trim() !== '' || selectedMaya !== '' || secciones.length > 0;
+  const pedirCerrar = () => {
+    if (saving) return;
+    if (tieneContenido) setConfirmCerrar(true);
+    else onClose();
+  };
+
+  useModalUx({ enabled: isOpen, onEscape: pedirCerrar });
+
   // 1. Cargar catálogos base (PNF, Trayectos, Turnos y Periodos Académicos) al abrir el modal
   useEffect(() => {
     if (!isOpen) return;
@@ -848,7 +864,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={pedirCerrar}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -1276,7 +1292,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={pedirCerrar}
               className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
             >
               Cancelar
@@ -1301,6 +1317,21 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
           </div>
         </form>
       </div>
+
+      {confirmCerrar && (
+        <ConfirmModal
+          titulo="Descartar proyección"
+          mensaje="Ya empezó a configurar esta proyección. Si cierra ahora, se perderá lo ingresado."
+          confirmLabel="Descartar y cerrar"
+          cancelLabel="Seguir editando"
+          danger
+          onConfirm={() => {
+            setConfirmCerrar(false);
+            onClose();
+          }}
+          onCancel={() => setConfirmCerrar(false)}
+        />
+      )}
     </div>
   );
 };

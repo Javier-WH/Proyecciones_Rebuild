@@ -6,6 +6,7 @@ import { Perfil } from './PerfilesModal.js';
 import { DisponibilidadProfesorModal } from './DisponibilidadProfesorModal.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { InputBusqueda } from './InputBusqueda.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   X,
   Loader2,
@@ -169,6 +170,8 @@ export const ProfesorModal: React.FC<ProfesorModalProps> = ({ isOpen, onClose, o
   ]);
 
   const pedirCerrar = () => (dirty ? setConfirmCerrar(true) : onClose());
+
+  useModalUx({ enabled: isOpen, onEscape: saving ? undefined : pedirCerrar });
 
   if (!isOpen) return null;
 

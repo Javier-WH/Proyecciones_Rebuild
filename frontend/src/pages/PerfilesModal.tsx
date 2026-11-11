@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   X,
   Loader2,
@@ -166,6 +167,8 @@ export const PerfilesModal: React.FC<PerfilesModalProps> = ({ isOpen, onClose })
       setBorrandoPerfil(null);
     }
   };
+
+  useModalUx({ enabled: isOpen, onEscape: saving ? undefined : onClose });
 
   if (!isOpen) return null;
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { Turno } from './horarios/types.js';
 import { X, CalendarCog, Loader2, AlertCircle, Info } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 interface ConfigHorariosModalProps {
   isOpen: boolean;
@@ -62,6 +63,8 @@ export const ConfigHorariosModal: React.FC<ConfigHorariosModalProps> = ({ isOpen
       }
     });
   }, [isOpen]);
+
+  useModalUx({ enabled: isOpen, onEscape: saving ? undefined : onClose });
 
   if (!isOpen) return null;
 

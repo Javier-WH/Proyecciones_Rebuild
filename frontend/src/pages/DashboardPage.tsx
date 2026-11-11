@@ -4,6 +4,7 @@ import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
 import { useTema } from '../context/ThemeContext.js';
 import { SelectorPeriodo } from './SelectorPeriodo.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import { apiFetch } from '../api/client.js';
 import { invalidarCatalogoMaterias, precargarCatalogoMaterias } from './horarios/catalogoMaterias.js';
 import { ProyeccionesPage } from './ProyeccionesPage.js';
@@ -88,6 +89,11 @@ export const DashboardPage: React.FC = () => {
   const [historialOpen, setHistorialOpen] = useState(false);
   const [logoReportesOpen, setLogoReportesOpen] = useState(false);
   const [buscarOpen, setBuscarOpen] = useState(false);
+  useModalUx({ enabled: acercaOpen, onEscape: () => setAcercaOpen(false) });
+  useModalUx({
+    enabled: logoutConfirmOpen,
+    onEscape: () => setLogoutConfirmOpen(false),
+  });
   // Sub-vistas del Inicio: tarjetas de métricas (por defecto) o el panel de
   // estadísticas con gráficos (se consulta solo al abrirlo — pega contra SAGA).
   const [inicioVista, setInicioVista] = useState<'resumen' | 'estadisticas'>('resumen');

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { RecuperarPasswordModal } from './RecuperarPasswordModal.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import { Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Loader2, GraduationCap, IdCard, X, KeyRound } from 'lucide-react';
 import logoProyecciones from '../images/Gemini_back_transparent.png';
 import logoUptll from '../images/UPTLL_logo_transparent_outlined.png';
@@ -17,6 +18,10 @@ export const LoginPage: React.FC = () => {
   const [cedula, setCedula] = useState('');
   const [profLoading, setProfLoading] = useState(false);
   const [profError, setProfError] = useState<string | null>(null);
+  useModalUx({
+    enabled: profModalOpen,
+    onEscape: profLoading ? undefined : () => setProfModalOpen(false),
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

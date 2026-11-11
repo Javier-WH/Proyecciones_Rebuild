@@ -3,6 +3,7 @@ import { apiFetch } from '../api/client.js';
 import { TipoContrato } from './ProfesorModal.js';
 import { X, Loader2, AlertCircle, Plus, RefreshCw, Save, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 interface TiposContratoModalProps {
   isOpen: boolean;
@@ -37,6 +38,8 @@ export const TiposContratoModal: React.FC<TiposContratoModalProps> = ({ isOpen, 
       fetchTipos();
     }
   }, [isOpen]);
+
+  useModalUx({ enabled: isOpen, onEscape: savingId !== null ? undefined : onClose });
 
   if (!isOpen) return null;
 

@@ -4,6 +4,7 @@ import { Profesor } from './ProfesorModal.js';
 import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { X, AlertCircle, Plus, CheckCircle2, UserX, Layers, Star, GraduationCap, Repeat } from 'lucide-react';
 import { InputBusqueda } from './InputBusqueda.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 // Misma forma de fila que usa la página de carga docente
 export interface MateriaAsignableRow {
@@ -134,6 +135,8 @@ export const AgregarMateriaModal: React.FC<AgregarMateriaModalProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, lapsoInicial, profesor]);
+
+  useModalUx({ enabled: isOpen, onEscape: busyKey ? undefined : onClose });
 
   if (!isOpen || !profesor) return null;
 

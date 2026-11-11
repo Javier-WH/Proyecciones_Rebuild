@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   X,
   History,
@@ -134,6 +135,7 @@ export const HistorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
   const [fAccion, setFAccion] = useState('');
   const [fPnf, setFPnf] = useState('');
   const [fUsuario, setFUsuario] = useState('');
+  useModalUx({ onEscape: onClose });
   const [pnfs, setPnfs] = useState<PnfOpcion[]>([]);
 
   const cargar = async () => {

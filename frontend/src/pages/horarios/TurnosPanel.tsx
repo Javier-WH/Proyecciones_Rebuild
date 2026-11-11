@@ -3,6 +3,7 @@ import { apiFetch } from '../../api/client.js';
 import { Turno, DIAS_CORTOS, DIAS_NOMBRES, fmtHoraCfg, hora12De, a24, minutos } from './types.js';
 import { Clock, Plus, Trash2, X, Loader2, Coffee, ArrowUp, ArrowDown, AlertTriangle, Merge, Wand2 } from 'lucide-react';
 import { ConfirmModal } from '../ConfirmModal.js';
+import { useModalUx } from '../../hooks/useModalUx.js';
 
 interface TurnosPanelProps {
   turnos: Turno[];
@@ -133,6 +134,7 @@ const GeneradorBloquesModal: React.FC<{
   onClose,
   onGenerar,
 }) => {
+  useModalUx({ onEscape: onClose });
   const [inicio, setInicio] = useState(inicioInicial);
   const [inicioPm, setInicioPm] = useState<'AM' | 'PM'>(
     Number(inicioInicial.slice(0, 2)) >= 12 ? 'PM' : 'AM'
@@ -500,6 +502,10 @@ export const TurnosPanel: React.FC<TurnosPanelProps> = ({ turnos, puedeEditar, f
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
   const [pendienteCambio, setPendienteCambio] = useState<number | null>(null);
+  useModalUx({
+    enabled: !!conflicto,
+    onEscape: desagendando ? undefined : () => setConflicto(null),
+  });
   const esAdmin = puedeEditar; // creación de turnos locales solo SUPER/ADMIN se valida server-side
 
   const turno = turnos.find((t) => t.id === sel) ?? turnos[0];

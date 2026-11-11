@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertTriangle, Loader2, ChevronsRight } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 // Diálogo de confirmación reutilizable. `slideToConfirm` exige arrastrar un
 // deslizador completamente a la derecha antes de habilitar el botón de acción
@@ -33,6 +34,13 @@ export const ConfirmModal: React.FC<{
 }) => {
   const [slide, setSlide] = useState(0);
   const listo = !slideToConfirm || slide >= 100;
+
+  // Escape cancela; Enter confirma solo cuando la acción está habilitada
+  // (sin `busy` y con el deslizador completado si aplica).
+  useModalUx({
+    onEscape: busy ? undefined : onCancel,
+    onEnter: busy || !listo ? undefined : onConfirm,
+  });
 
   const soltarSlide = () => {
     if (slide < 100) setSlide(0);

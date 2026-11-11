@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Check, ShieldCheck, Ban } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 type Rol = 'SUPER_USUARIO' | 'ADMINISTRADOR' | 'REGULAR' | 'PROFESOR';
 
@@ -82,6 +83,8 @@ export const PermisosRolModal: React.FC<{ role?: string; onClose: () => void }> 
   onClose,
 }) => {
   const info = PERMISOS[role as Rol];
+  useModalUx({ enabled: !!info, onEscape: onClose });
+
   if (!info) return null;
 
   return (

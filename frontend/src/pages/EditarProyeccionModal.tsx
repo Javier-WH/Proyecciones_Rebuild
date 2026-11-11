@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch, esVistaObsoleta } from '../api/client.js';
+import { ConfirmModal } from './ConfirmModal.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning, resolverTurnoSeccion } from './CrearProyeccionModal.js';
 import {
   X,
@@ -41,9 +43,25 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
 
   const isOpen = !!proyeccion;
 
+  // Guarda anti-pérdida: los setters con sufijo D marcan dirtyRef; la carga
+  // inicial usa los setters crudos para no ensuciar el formulario.
+  const dirtyRef = useRef(false);
+  const [confirmCerrar, setConfirmCerrar] = useState(false);
+  const setSeccionesD: typeof setSecciones = (v) => { dirtyRef.current = true; setSecciones(v); };
+  const setMateriasD: typeof setMaterias = (v) => { dirtyRef.current = true; setMaterias(v); };
+
+  const pedirCerrar = () => {
+    if (saving) return;
+    if (dirtyRef.current) setConfirmCerrar(true);
+    else onClose();
+  };
+
+  useModalUx({ enabled: isOpen, onEscape: pedirCerrar });
+
   useEffect(() => {
     if (!proyeccion) return;
 
+    dirtyRef.current = false;
     setNombre(proyeccion.nombre || '');
     setPeriodoAcademico(proyeccion.periodo_academico || '');
     setTipoProyeccion(proyeccion.tipo_proyeccion === 'SEMESTRAL' ? 'SEMESTRAL' : 'TRIMESTRAL');
@@ -115,17 +133,17 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
       ...secciones,
       { nombre: '', turno_saga_id: 1, turno_nombre: 'Mañana', estudiantes_estimados: 30 },
     ];
-    setSecciones(applySectionNamingConvention(updated));
+    setSeccionesD(applySectionNamingConvention(updated));
   };
 
   const handleRemoveSeccion = (index: number) => {
-    setSecciones(applySectionNamingConvention(secciones.filter((_, i) => i !== index)));
+    setSeccionesD(applySectionNamingConvention(secciones.filter((_, i) => i !== index)));
   };
 
   // Cambiar el pensum de una sección específica (usa materias de otra malla)
   const handleSeccionMayaChange = async (idx: number, mayaId: number | '') => {
     if (mayaId === '') {
-      setSecciones((prev) => {
+      setSeccionesD((prev) => {
         const arr = [...prev];
         arr[idx] = { ...arr[idx], maya_id: null, maya_descripcion: undefined, materias: undefined, loadingMaterias: false };
         return arr;
@@ -134,7 +152,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     }
 
     const mayaObj = mayasList.find((m) => m.id === Number(mayaId));
-    setSecciones((prev) => {
+    setSeccionesD((prev) => {
       const arr = [...prev];
       arr[idx] = {
         ...arr[idx],
@@ -150,7 +168,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
       `/saga/ucslist/${proyeccion.pnf_saga_id}/${proyeccion.trayecto_saga_id}/${mayaId}`
     );
 
-    setSecciones((prev) => {
+    setSeccionesD((prev) => {
       const arr = [...prev];
       if (!arr[idx] || arr[idx].maya_id !== Number(mayaId)) return prev;
       arr[idx] = {
@@ -177,7 +195,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
 
   // Soft-delete: alternar 'eliminada' en todas las secciones que usan una maya dada
   const handleToggleMateriaMaya = (mayaId: number, subjectSagaId: number) => {
-    setSecciones((prev) =>
+    setSeccionesD((prev) =>
       prev.map((s) =>
         s.maya_id === mayaId
           ? {
@@ -193,7 +211,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
 
   // Soft-delete en el pensum general
   const handleToggleMateriaGeneral = (subjectSagaId: number) => {
-    setMaterias((prev) =>
+    setMateriasD((prev) =>
       prev.map((m) =>
         m.subject_saga_id === subjectSagaId ? { ...m, eliminada: !m.eliminada } : m
       )
@@ -202,14 +220,14 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
 
   // Editar una materia del pensum general
   const handleUpdateMateriaGeneral = (subjectSagaId: number, patch: Partial<MateriaPayload>) => {
-    setMaterias((prev) =>
+    setMateriasD((prev) =>
       prev.map((m) => (m.subject_saga_id === subjectSagaId ? { ...m, ...patch } : m))
     );
   };
 
   // Editar una materia en todas las secciones que usan una maya dada
   const handleUpdateMateriaMaya = (mayaId: number, subjectSagaId: number, patch: Partial<MateriaPayload>) => {
-    setSecciones((prev) =>
+    setSeccionesD((prev) =>
       prev.map((s) =>
         s.maya_id === mayaId
           ? {
@@ -312,7 +330,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={pedirCerrar}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -343,7 +361,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                 type="text"
                 required
                 value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
+                onChange={(e) => { dirtyRef.current = true; setNombre(e.target.value); }}
                 className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
@@ -416,7 +434,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                           onChange={(e) => {
                             const newArr = [...secciones];
                             newArr[idx].nombre = e.target.value;
-                            setSecciones(newArr);
+                            setSeccionesD(newArr);
                           }}
                           className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
                           placeholder="Ej. Sección 1 - Mañana"
@@ -433,7 +451,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                               const newArr = [...secciones];
                               newArr[idx].turno_nombre = resuelto.turno_nombre;
                               newArr[idx].turno_saga_id = resuelto.turno_saga_id;
-                              setSecciones(applySectionNamingConvention(newArr));
+                              setSeccionesD(applySectionNamingConvention(newArr));
                             }}
                             className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
                           >
@@ -468,7 +486,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                             onChange={(e) => {
                               const newArr = [...secciones];
                               newArr[idx].estudiantes_estimados = Number(e.target.value);
-                              setSecciones(newArr);
+                              setSeccionesD(newArr);
                             }}
                             className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:ring-1 focus:ring-blue-500 focus:outline-none"
                           />
@@ -607,7 +625,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
             <button
               type="button"
-              onClick={onClose}
+              onClick={pedirCerrar}
               className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
             >
               Cancelar
@@ -632,6 +650,22 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
           </div>
         </form>
       </div>
+
+      {confirmCerrar && (
+        <ConfirmModal
+          titulo="Descartar cambios"
+          mensaje="Hay cambios sin guardar en esta proyección. Si cierra ahora, se perderán."
+          confirmLabel="Descartar y cerrar"
+          cancelLabel="Seguir editando"
+          danger
+          onConfirm={() => {
+            setConfirmCerrar(false);
+            dirtyRef.current = false;
+            onClose();
+          }}
+          onCancel={() => setConfirmCerrar(false)}
+        />
+      )}
     </div>
   );
 };

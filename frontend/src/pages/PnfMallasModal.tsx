@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   precargarCatalogoMaterias,
   invalidarCatalogoMaterias,
@@ -188,6 +189,8 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
       setErrorMsg(res.message || 'Error guardando el color.');
     }
   };
+
+  useModalUx({ enabled: isOpen, onEscape: guardandoColor !== null ? undefined : onClose });
 
   if (!isOpen) return null;
 

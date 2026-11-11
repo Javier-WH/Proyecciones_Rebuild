@@ -4,6 +4,7 @@ import { DisponibilidadGrid } from './DisponibilidadGrid.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { apiFetch } from '../api/client.js';
 import { X, CalendarCheck, RefreshCw } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 interface DisponibilidadProfesorModalProps {
   isOpen: boolean;
@@ -29,6 +30,8 @@ export const DisponibilidadProfesorModal: React.FC<DisponibilidadProfesorModalPr
   const [syncError, setSyncError] = useState<string | null>(null);
   const [recargaKey, setRecargaKey] = useState(0);
   const [aviso, setAviso] = useState<string | null>(null);
+
+  useModalUx({ enabled: isOpen, onEscape: sincronizando ? undefined : onClose });
 
   if (!isOpen || !profesor) return null;
 

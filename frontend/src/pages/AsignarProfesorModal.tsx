@@ -5,6 +5,7 @@ import { ProfesorAvatar } from './ProfesorAvatar.js';
 import { labelLapso, terminoLapso, pluralLapso, lapsoKey } from './AgregarMateriaModal.js';
 import { X, Loader2, AlertCircle, UserX } from 'lucide-react';
 import { InputBusqueda } from './InputBusqueda.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 export interface AsignacionRow {
   proyeccion_id: number;
@@ -55,6 +56,8 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
       setLoading(false);
     });
   }, [isOpen]);
+
+  useModalUx({ enabled: isOpen, onEscape: assigning ? undefined : onClose });
 
   if (!isOpen || !row) return null;
 

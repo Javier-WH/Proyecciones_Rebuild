@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { ProfesorPortalView } from './ProfesorPortalPage.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 export interface ProfesorPanelRef {
   id: number;
@@ -15,6 +16,8 @@ export const ProfesorPanelModal: React.FC<{
   profesor: ProfesorPanelRef | null;
   onClose: () => void;
 }> = ({ profesor, onClose }) => {
+  useModalUx({ enabled: !!profesor, onEscape: onClose });
+
   if (!profesor) return null;
 
   return (

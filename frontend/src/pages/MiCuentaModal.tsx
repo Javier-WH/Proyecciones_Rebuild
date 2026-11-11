@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { apiFetch } from '../api/client.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   X,
   UserRound,
@@ -47,6 +48,7 @@ export const MiCuentaModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [yaConfiguradas, setYaConfiguradas] = useState(false);
   const [loadingPreguntas, setLoadingPreguntas] = useState(true);
   const [savingPreguntas, setSavingPreguntas] = useState(false);
+  useModalUx({ onEscape: savingDatos || savingPreguntas ? undefined : onClose });
   const [msgPreguntas, setMsgPreguntas] = useState<{ ok: boolean; texto: string } | null>(null);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { X, Copy, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 interface Periodo {
   codigo: string;
@@ -32,6 +33,7 @@ export const CopiarPeriodoModal: React.FC<{
   const [copiando, setCopiando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+  useModalUx({ onEscape: copiando ? undefined : onClose });
 
   useEffect(() => {
     (async () => {

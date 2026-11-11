@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { apiFetch } from '../api/client.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   X,
   KeyRound,
@@ -27,6 +28,7 @@ export const RecuperarPasswordModal: React.FC<{ onClose: () => void }> = ({ onCl
   const [passNueva, setPassNueva] = useState('');
   const [passConfirma, setPassConfirma] = useState('');
   const [loading, setLoading] = useState(false);
+  useModalUx({ onEscape: loading ? undefined : onClose });
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const inputCls =

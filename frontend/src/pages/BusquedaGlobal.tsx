@@ -3,6 +3,7 @@ import { apiFetch } from '../api/client.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
 import { Search, X, User, DoorOpen, Users, BookOpen, CornerDownLeft, Loader2 } from 'lucide-react';
 import { irAHorarios } from './navBus.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 interface Resultados {
   profesores: { id: number; cedula: string; nombre: string; pnf_nombre: string | null }[];
@@ -38,6 +39,7 @@ export const BusquedaGlobal: React.FC<{
   const [data, setData] = useState<Resultados>({ profesores: [], aulas: [], secciones: [], materias: [] });
   const [cargando, setCargando] = useState(false);
   const [sel, setSel] = useState(0);
+  useModalUx({ enabled: open, onEscape: onClose });
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

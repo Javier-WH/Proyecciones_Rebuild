@@ -6,6 +6,7 @@ import { logoDataUri, logoBase64 } from '../utils/logo.js';
 import { getEncabezado, saveEncabezado } from '../utils/plantillas.js';
 import { MateriaAsignableRow, labelLapso } from './AgregarMateriaModal.js';
 import { X, FileSpreadsheet, Printer, Users, AlertTriangle } from 'lucide-react';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 // Filas de carga necesarias para el reporte (subconjunto de CargaRow)
 export type ReporteRow = MateriaAsignableRow & {
@@ -870,6 +871,8 @@ ${seccionesAnuales}</body></html>`;
 
     imprimirHtml(html);
   };
+
+  useModalUx({ enabled: isOpen, onEscape: generando ? undefined : onClose });
 
   if (!isOpen) return null;
 

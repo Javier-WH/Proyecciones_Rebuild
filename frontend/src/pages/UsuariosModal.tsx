@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { InputBusqueda } from './InputBusqueda.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import {
   X,
   Users,
@@ -235,6 +236,11 @@ export const UsuariosModal: React.FC<UsuariosModalProps> = ({ isOpen, onClose, c
     if (res.success) fetchUsuarios();
     else setErrorMsg(res.message || 'Error cambiando el estado.');
   };
+
+  useModalUx({
+    enabled: isOpen,
+    onEscape: saving ? undefined : () => (formOpen ? cerrarForm() : cerrarModal()),
+  });
 
   if (!isOpen) return null;
 

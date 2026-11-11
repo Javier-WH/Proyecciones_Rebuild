@@ -10,6 +10,7 @@ import {
 import { Building2, Plus, Edit2, Trash2, X, Loader2, FlaskConical, Search, RefreshCw } from 'lucide-react';
 import { ConfirmModal } from '../ConfirmModal.js';
 import { InputBusqueda } from '../InputBusqueda.js';
+import { useModalUx } from '../../hooks/useModalUx.js';
 
 const TIPOS = [
   { v: 'AULA_REGULAR', l: 'Aula regular' },
@@ -44,6 +45,11 @@ export const AulasPanel: React.FC<AulasPanelProps> = ({ aulas, pnfOptions, puede
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQ, setPickerQ] = useState('');
   const [materiasOpts, setMateriasOpts] = useState<MateriaOpcion[] | null>(null);
+  useModalUx({
+    enabled: modal,
+    onEscape: saving ? undefined : () => setModal(false),
+  });
+  useModalUx({ enabled: pickerOpen, onEscape: () => setPickerOpen(false) });
   const [pickerLoading, setPickerLoading] = useState(false);
   // Borrado con confirmación + aviso de resultado (banner inline)
   const [borrando, setBorrando] = useState<Aula | null>(null);

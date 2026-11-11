@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, WifiOff } from 'lucide-react';
 import { suscribirRed, estadoRed, descartarAvisoRed } from '../api/client.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 // Indicador global de red: se suscribe al estado que mantiene apiFetch y
 // muestra tres capas de feedback, con umbrales para no parpadear en
@@ -43,6 +44,13 @@ export const IndicadorRed: React.FC = () => {
   }, [pendientes > 0]); // los umbrales dependen solo de "hay algo pendiente"
 
   const mostrarSinRespuesta = sinRespuesta || !enLinea;
+
+  // El aviso "servidor no responde" se puede descartar con Escape, igual que
+  // con el botón Entendido (solo cuando hay red; sin conexión espera solo).
+  useModalUx({
+    enabled: mostrarSinRespuesta,
+    onEscape: enLinea ? descartarAvisoRed : undefined,
+  });
 
   return (
     <>

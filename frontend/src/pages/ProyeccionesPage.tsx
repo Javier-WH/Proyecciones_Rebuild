@@ -4,6 +4,7 @@ import { useSyncPoll } from '../hooks/useSyncPoll.js';
 import { useAuth } from '../context/AuthContext.js';
 import { usePnfColors } from '../context/PnfColorContext.js';
 import { usePeriodo } from '../context/PeriodoContext.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 import { CrearProyeccionModal } from './CrearProyeccionModal.js';
 import { EditarProyeccionModal } from './EditarProyeccionModal.js';
 import { CopiarPeriodoModal } from './CopiarPeriodoModal.js';
@@ -74,6 +75,14 @@ export const ProyeccionesPage: React.FC = () => {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiarOpen, setCopiarOpen] = useState(false);
+  useModalUx({
+    enabled: !!selectedProyeccionDetail,
+    onEscape: () => setSelectedProyeccionDetail(null),
+  });
+  useModalUx({
+    enabled: !!deletingProyeccion,
+    onEscape: deletingLoading ? undefined : () => setDeletingProyeccion(null),
+  });
 
   // `fondo` = refetch del poll de sincronización: sin skeleton ni
   // indicador global — solo actualiza la lista por debajo.

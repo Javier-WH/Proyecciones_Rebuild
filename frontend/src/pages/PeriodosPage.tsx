@@ -18,6 +18,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal.js';
+import { useModalUx } from '../hooks/useModalUx.js';
 
 export interface PeriodoAcademico {
   id: number;
@@ -55,6 +56,10 @@ export const PeriodosPage: React.FC = () => {
   const [borrando, setBorrando] = useState<PeriodoAcademico | null>(null);
   const [eliminando, setEliminando] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  useModalUx({
+    enabled: isModalOpen,
+    onEscape: saving ? undefined : () => setIsModalOpen(false),
+  });
 
   const fetchPeriodos = async () => {
     setLoading(true);
