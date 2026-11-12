@@ -29,7 +29,14 @@ interface AsignarProfesorModalProps {
   lapsos: number[];
   // Mapa profesor_id -> (lapsoKey 'tipo:n' -> horas asignadas) calculado por la página
   cargaPorProfesor: Map<number, Map<string, number>>;
+  // Lista ya cargada por la página (incluye inactivos): siembra el caché
+  // para que ni la primera apertura muestre el spinner
+  profesoresPrecargados?: Profesor[];
 }
+
+// Caché en memoria (stale-while-revalidate): sobrevive a la navegación y
+// hace que reabrir el modal sea instantáneo; se revalida en cada apertura.
+let cacheAsignables: Profesor[] | null = null;
 
 export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
   isOpen,
@@ -39,6 +46,7 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
   todosLapsos = false,
   lapsos,
   cargaPorProfesor,
+  profesoresPrecargados,
 }) => {
   const [profesores, setProfesores] = useState<Profesor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,9 +58,19 @@ export const AsignarProfesorModal: React.FC<AsignarProfesorModalProps> = ({
     if (!isOpen) return;
     setSearch('');
     setErrorMsg(null);
-    setLoading(true);
-    apiFetch<Profesor[]>('/profesores?para_asignacion=1').then((res) => {
-      if (res.success && res.data) setProfesores(res.data);
+    const semilla = cacheAsignables ?? profesoresPrecargados?.filter((p) => p.activo) ?? null;
+    if (semilla?.length) {
+      setProfesores(semilla);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    // Revalidación en segundo plano: silenciosa cuando ya hay datos visibles
+    apiFetch<Profesor[]>('/profesores?para_asignacion=1', { silencioso: !!semilla?.length }).then((res) => {
+      if (res.success && res.data) {
+        cacheAsignables = res.data;
+        setProfesores(res.data);
+      }
       setLoading(false);
     });
   }, [isOpen]);

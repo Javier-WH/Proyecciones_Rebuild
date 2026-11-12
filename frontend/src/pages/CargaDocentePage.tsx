@@ -1147,6 +1147,7 @@ export const CargaDocentePage: React.FC = () => {
         todosLapsos={modalAsignar.todosLapsos === true}
         lapsos={lapsoCols.filter((c) => c.tipo === modalAsignar.row?.tipo_proyeccion).map((c) => c.n)}
         cargaPorProfesor={cargaPorProfesor}
+        profesoresPrecargados={profesores}
         onClose={() => setModalAsignar({ open: false, row: null })}
         onAssigned={fetchCarga}
       />
