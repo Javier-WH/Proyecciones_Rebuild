@@ -13,7 +13,7 @@
   -webkit-backdrop-filter: blur(12px);
 }
 [data-theme='light'] .glass-card {
-  background: rgba(250, 247, 238, 0.9);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .auth-gradient {
@@ -37,28 +37,29 @@
   animation: luz-error 1.1s ease-in-out infinite;
 }
 
-/* ── Tema claro ("papel cálido": arena / crema / sepia) ────────────────────
+/* ── Tema claro ("oficina fría": gris azulado / blanco / slate) ────────────
    Tailwind v4 genera las utilidades con variables --color-*; aquí se
    redefinen bajo data-theme="light". La escala slate se invierte: los tonos
    que eran fondos oscuros pasan a superficies claras y los de texto claro a
-   texto oscuro. Los neutrales son cálidos (sin blanco puro): fondo arena,
-   tarjetas crema, bordes tostados, texto sepia — baja fatiga visual.
+   texto oscuro. Look profesional estilo Facebook/Google: fondo gris
+   azulado, tarjetas blancas, bordes definidos y texto en grises slate —
+   el contraste lo da el fondo frío contra las superficies blancas.
    Los acentos conservan su matiz pero los tonos muy claros
    (950/900/800 eran paneles; 200/300/400 eran texto) se intercambian para
    mantener contraste sobre fondo claro. */
 [data-theme='light'] {
-  /* Superficies y neutrales cálidos */
-  --color-slate-950: #e9e3d4; /* fondo de página: arena */
-  --color-slate-900: #faf7ee; /* tarjetas y paneles: crema (no blanco puro) */
-  --color-slate-800: #dfd8c5; /* sub-paneles y bordes suaves: arena clara */
-  --color-slate-700: #c8c0a9; /* bordes/chips: tostado claro */
-  --color-slate-600: #a39a83; /* texto muy tenue / disabled */
-  --color-slate-500: #7d7560; /* texto muted, placeholders */
-  --color-slate-400: #5e5744; /* texto secundario */
-  --color-slate-300: #49412e; /* texto base */
-  --color-slate-200: #38311f; /* texto con énfasis */
-  --color-slate-100: #2b2515; /* texto fuerte */
-  --color-slate-50: #201b0d;  /* texto máximo contraste */
+  /* Superficies y neutrales fríos */
+  --color-slate-950: #eef1f6; /* fondo de página: gris azulado claro */
+  --color-slate-900: #ffffff; /* tarjetas y paneles: blanco */
+  --color-slate-800: #dde3ec; /* sub-paneles y bordes suaves: gris claro */
+  --color-slate-700: #c3ccd9; /* bordes/chips: gris marcado */
+  --color-slate-600: #94a3b8; /* texto muy tenue / disabled */
+  --color-slate-500: #64748b; /* texto muted, placeholders */
+  --color-slate-400: #475569; /* texto secundario */
+  --color-slate-300: #334155; /* texto base */
+  --color-slate-200: #1e293b; /* texto con énfasis */
+  --color-slate-100: #0f172a; /* texto fuerte */
+  --color-slate-50: #020617;  /* texto máximo contraste */
 
   /* Acentos: los tonos oscuros usados como paneles/pills pasan a tintes
      pastel; los claros usados como texto pasan a tonos saturados legibles */
@@ -94,14 +95,14 @@
   --color-yellow-400: #ca8a04;  --color-yellow-300: #a16207;  --color-yellow-200: #854d0e;
 
   /* Fondo de las tarjetas fantasma del ⇧+peek en la grilla de horarios */
-  --color-fantasma-bg: rgb(250 247 238 / 0.94);
+  --color-fantasma-bg: rgb(255 255 255 / 0.94);
 }
 :root {
   --color-fantasma-bg: rgb(2 6 23 / 0.88);
 }
 
-/* text-white en claro pasa a sepia oscuro… */
-[data-theme='light'] .text-white { color: #2b2515; }
+/* text-white en claro pasa a slate oscuro… */
+[data-theme='light'] .text-white { color: #0f172a; }
 /* …salvo cuando el propio elemento tiene un fondo saturado (botones, badges,
    tabs activas): ahí el blanco sigue siendo el texto correcto. */
 [data-theme='light'] .text-white:is(
@@ -124,7 +125,7 @@
 
 /* hover:text-white sobre fondos slate (que en claro son claros) → oscuro,
    salvo cuando el hover tiñe de un color saturado. */
-[data-theme='light'] [class~='hover:text-white']:hover { color: #2b2515; }
+[data-theme='light'] [class~='hover:text-white']:hover { color: #0f172a; }
 [data-theme='light'] [class~='hover:text-white']:is(
   [class*='hover:bg-emerald-5'], [class*='hover:bg-emerald-6'],
   [class*='hover:bg-blue-5'],    [class*='hover:bg-blue-6'],
@@ -133,9 +134,9 @@
   [class*='hover:bg-cyan-6'],    [class*='hover:bg-violet-6']
 ):hover { color: #ffffff; }
 
-/* Orbes decorativos del login: azul suave que funde con la arena */
+/* Orbes decorativos del login: azul suave que funde con el gris de fondo */
 [data-theme='light'] .auth-gradient {
-  background: radial-gradient(circle at 10% 20%, rgba(158, 186, 214, 0.5) 0%, rgba(233, 227, 212, 0.5) 90%);
+  background: radial-gradient(circle at 10% 20%, rgba(148, 178, 212, 0.55) 0%, rgba(238, 241, 246, 0.55) 90%);
 }
 
 /* Barra superior en azul acero desaturado (tema claro): el nav redefine la
@@ -165,21 +166,21 @@
    claro: se restaura la paleta light dentro del popup (texto oscuro,
    iconos con sus colores saturados sobre blanco). */
 [data-theme='light'] .menu-popup {
-  --color-slate-950: #e9e3d4;
-  --color-slate-900: #faf7ee;
-  --color-slate-800: #dfd8c5;
-  --color-slate-700: #c8c0a9;
-  --color-slate-600: #a39a83;
-  --color-slate-500: #7d7560;
-  --color-slate-400: #5e5744;
-  --color-slate-300: #49412e;
-  --color-slate-200: #38311f;
-  --color-slate-100: #2b2515;
-  --color-slate-50: #201b0d;
+  --color-slate-950: #eef1f6;
+  --color-slate-900: #ffffff;
+  --color-slate-800: #dde3ec;
+  --color-slate-700: #c3ccd9;
+  --color-slate-600: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-400: #475569;
+  --color-slate-300: #334155;
+  --color-slate-200: #1e293b;
+  --color-slate-100: #0f172a;
+  --color-slate-50: #020617;
 }
 [data-theme='light'] .menu-popup .text-white,
 [data-theme='light'] .menu-popup [class~='hover:text-white']:hover {
-  color: #2b2515;
+  color: #0f172a;
 }
 
 /* Cabeceras de modales: mismo azul acero suavizado que la barra superior.
@@ -324,11 +325,11 @@
 ) .text-white { color: #ffffff; }
 
 /* Líneas de la tabla de Carga Docente más marcadas en modo claro:
-   slate-800 global es un beige muy tenue; dentro de la tabla se sube a un
-   gris-azul para que divisores y bordes de celda se aprecien. */
+   slate-800 global es un gris muy tenue; dentro de la tabla se sube un
+   punto para que divisores y bordes de celda se aprecien sobre blanco. */
 [data-theme='light'] .tabla-carga {
-  --color-slate-800: #b3aa93;
-  --color-slate-700: #a49a80;
+  --color-slate-800: #c3ccd9;
+  --color-slate-700: #aeb9c9;
 }
 
 /* Cards pastel del dashboard (tema claro): cada módulo tiñe su tarjeta con

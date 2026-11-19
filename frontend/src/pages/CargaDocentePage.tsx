@@ -388,6 +388,13 @@ export const CargaDocentePage: React.FC = () => {
     return 'text-emerald-400';
   };
 
+  // Tinte de las cabeceras de lapso según el régimen: sky = trimestral,
+  // violet = semestral. Ayuda a distinguir los bloques de columnas.
+  const lapsoBg = (tipo: string) =>
+    tipo === 'TRIMESTRAL' ? 'bg-sky-500/10' : tipo === 'SEMESTRAL' ? 'bg-violet-500/10' : '';
+  const lapsoTexto = (tipo: string) =>
+    tipo === 'TRIMESTRAL' ? 'text-sky-300' : tipo === 'SEMESTRAL' ? 'text-violet-300' : '';
+
   // Etiqueta del lapso original de una fila expandida: 'SEMESTRE 1'/'SEMESTRAL'
   // en la vista de trimestres; 'T1', 'T1+T2', ... en la de semestres
   const badgeLapso = (m: { base: CargaRow; sems: Set<number> }): string | null => {
@@ -1034,7 +1041,7 @@ export const CargaDocentePage: React.FC = () => {
                       <th
                         key={lapsoKey(l.tipo, l.n)}
                         colSpan={2}
-                        className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap text-[10px]"
+                        className={`py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap text-[10px] ${lapsoBg(l.tipo)} ${lapsoTexto(l.tipo)}`}
                       >
                         {labelLapso(l.n, l.tipo)}
                       </th>
@@ -1045,8 +1052,8 @@ export const CargaDocentePage: React.FC = () => {
                   <tr>
                     {lapsoColsVista.map((l) => (
                       <Fragment key={lapsoKey(l.tipo, l.n)}>
-                        <th className="py-2 px-1.5 text-center border-l border-slate-800/60" title="Horas por U/C">Hrs</th>
-                        <th className="py-2 px-1.5 text-center" title="Total de horas del profesor en el lapso">Tot</th>
+                        <th className={`py-2 px-1.5 text-center border-l border-slate-800/60 ${lapsoBg(l.tipo)}`} title="Horas por U/C">Hrs</th>
+                        <th className={`py-2 px-1.5 text-center ${lapsoBg(l.tipo)}`} title="Total de horas del profesor en el lapso">Tot</th>
                       </Fragment>
                     ))}
                   </tr>
@@ -1060,15 +1067,15 @@ export const CargaDocentePage: React.FC = () => {
                     <th rowSpan={2} className="py-3.5 px-3">Trayecto</th>
                     <th rowSpan={2} className="py-3.5 px-3">Sección</th>
                     <th rowSpan={2} className="py-3.5 px-3">Turno</th>
-                    <th colSpan={2} className="py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap text-[10px]">
+                    <th colSpan={2} className={`py-3 px-2 text-center border-l border-b border-slate-800/60 whitespace-nowrap text-[10px] ${lapsoBg(filterLapso.split(':')[0])} ${lapsoTexto(filterLapso.split(':')[0])}`}>
                       {lapsoColHeader}
                     </th>
                     <th rowSpan={2} className="py-3.5 px-3 border-l border-slate-800/60">Dedicación</th>
                     {puedeAsignar && <th rowSpan={2} className="py-3.5 px-3 text-center w-[90px]">Acciones</th>}
                   </tr>
                   <tr>
-                    <th className="py-2 px-1.5 text-center border-l border-slate-800/60" title="Horas por U/C">Hrs</th>
-                    <th className="py-2 px-1.5 text-center" title="Total de horas del profesor en el lapso">Tot</th>
+                    <th className={`py-2 px-1.5 text-center border-l border-slate-800/60 ${lapsoBg(filterLapso.split(':')[0])}`} title="Horas por U/C">Hrs</th>
+                    <th className={`py-2 px-1.5 text-center ${lapsoBg(filterLapso.split(':')[0])}`} title="Total de horas del profesor en el lapso">Tot</th>
                   </tr>
                 </>
               )}
