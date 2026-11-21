@@ -498,9 +498,20 @@ export async function updateProyeccionHandler(request: FastifyRequest, reply: Fa
           seccionDbId = secResult.insertId;
         }
 
-        // Si la sección trae materias (pensum propio), diff; si no, no se tocan
-        if (Array.isArray(sec.materias)) {
-          await upsertMaterias(seccionDbId!, sec.materias);
+        // Si la sección tiene maya propia y trae materias, diff; si volvió al
+        // pensum general (sin maya) hay que borrar sus materias exclusivas —
+        // si quedaran, la carga docente seguiría ofreciendo el pensum viejo
+        // (el JOIN general solo aplica cuando la sección no tiene materias
+        // propias). Sus asignaciones se limpian por cascada.
+        if (sec.maya_id) {
+          if (Array.isArray(sec.materias)) {
+            await upsertMaterias(seccionDbId!, sec.materias);
+          }
+        } else {
+          await conn.query(
+            'DELETE FROM proyeccion_materias WHERE proyeccion_id = ? AND seccion_id = ?',
+            [id, seccionDbId]
+          );
         }
       }
 
