@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../api/client.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { useModalUx } from '../hooks/useModalUx.js';
@@ -95,6 +95,19 @@ export function mapSubjectToMateriaPayload(m: SubjectUC): MateriaPayload {
     semestre2: m.semestre2Activo,
     eliminada: !!m.eliminada,
   };
+}
+
+// Reasigna los lapsos de una materia al cambiar el régimen académico:
+// T1 y T2 son la primera mitad del año → Semestre I; T3 → Semestre II.
+// Al volver a trimestral: S1 → T1+T2, S2 → T3.
+export function convertirLapsosMateria(
+  m: MateriaPayload,
+  tipo: 'TRIMESTRAL' | 'SEMESTRAL'
+): MateriaPayload {
+  if (tipo === 'SEMESTRAL') {
+    return { ...m, semestre1: m.q1 || m.q2, semestre2: m.q3 };
+  }
+  return { ...m, q1: m.semestre1, q2: m.semestre1, q3: m.semestre2 };
 }
 
 // ---------------------------------------------------------------------------
@@ -480,6 +493,29 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
 
   useModalUx({ enabled: isOpen, onEscape: pedirCerrar });
 
+  // Ediciones del usuario sobre secciones/materias: si cambia PNF, Trayecto o
+  // Pensum la configuración se regenera desde SAGA — hay que confirmar antes
+  // de descartar el trabajo hecho. Los efectos de carga usan los setters
+  // crudos; los handlers del usuario usan los con sufijo E.
+  const edicionesRef = useRef(false);
+  const [pendienteSeleccion, setPendienteSeleccion] = useState<{
+    campo: 'pnf' | 'trayecto' | 'maya';
+    valor: number;
+  } | null>(null);
+  const setSeccionesE: typeof setSecciones = (v) => { edicionesRef.current = true; setSecciones(v); };
+  const setMateriasE: typeof setMaterias = (v) => { edicionesRef.current = true; setMaterias(v); };
+
+  const aplicarSeleccion = (campo: 'pnf' | 'trayecto' | 'maya', valor: number) => {
+    if (campo === 'pnf') setSelectedPnf(valor);
+    else if (campo === 'trayecto') setSelectedTrayecto(valor);
+    else setSelectedMaya(valor);
+  };
+
+  const pedirCambioSeleccion = (campo: 'pnf' | 'trayecto' | 'maya', valor: number) => {
+    if (edicionesRef.current) setPendienteSeleccion({ campo, valor });
+    else aplicarSeleccion(campo, valor);
+  };
+
   // 1. Cargar catálogos base (PNF, Trayectos, Turnos y Periodos Académicos) al abrir el modal
   useEffect(() => {
     if (!isOpen) return;
@@ -640,19 +676,19 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
         estudiantes_estimados: 30,
       },
     ];
-    setSecciones(applySectionNamingConvention(updated));
+    setSeccionesE(applySectionNamingConvention(updated));
   };
 
   // Manejar eliminación de sección
   const handleRemoveSeccion = (index: number) => {
     const filtered = secciones.filter((_, i) => i !== index);
-    setSecciones(applySectionNamingConvention(filtered));
+    setSeccionesE(applySectionNamingConvention(filtered));
   };
 
   // Cambiar el pensum de una sección específica (usa materias de otra malla)
   const handleSeccionMayaChange = async (idx: number, mayaId: number | '') => {
     if (mayaId === '') {
-      setSecciones((prev) => {
+      setSeccionesE((prev) => {
         const arr = [...prev];
         arr[idx] = { ...arr[idx], maya_id: null, maya_descripcion: undefined, materias: undefined, loadingMaterias: false };
         return arr;
@@ -661,7 +697,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
     }
 
     const mayaObj = mayasList.find((m) => m.id === Number(mayaId));
-    setSecciones((prev) => {
+    setSeccionesE((prev) => {
       const arr = [...prev];
       arr[idx] = {
         ...arr[idx],
@@ -691,7 +727,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
 
   // Soft-delete: alternar 'eliminada' en todas las secciones que usan una maya dada
   const handleToggleMateriaMaya = (mayaId: number, subjectSagaId: number) => {
-    setSecciones((prev) =>
+    setSeccionesE((prev) =>
       prev.map((s) =>
         s.maya_id === mayaId
           ? {
@@ -707,14 +743,14 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
 
   // Soft-delete en el pensum general (estado SubjectUC)
   const handleToggleMateriaGeneral = (subjectId: number) => {
-    setMaterias((prev) =>
+    setMateriasE((prev) =>
       prev.map((m) => (m.id === subjectId ? { ...m, eliminada: !m.eliminada } : m))
     );
   };
 
   // Editar una materia del pensum general (estado SubjectUC)
   const handleUpdateMateriaGeneral = (subjectId: number, patch: Partial<MateriaPayload>) => {
-    setMaterias((prev) =>
+    setMateriasE((prev) =>
       prev.map((m) => {
         if (m.id !== subjectId) return m;
         return {
@@ -734,7 +770,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
 
   // Editar una materia en todas las secciones que usan una maya dada
   const handleUpdateMateriaMaya = (mayaId: number, subjectSagaId: number, patch: Partial<MateriaPayload>) => {
-    setSecciones((prev) =>
+    setSeccionesE((prev) =>
       prev.map((s) =>
         s.maya_id === mayaId
           ? {
@@ -743,6 +779,31 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                 m.subject_saga_id === subjectSagaId ? { ...m, ...patch } : m
               ),
             }
+          : s
+      )
+    );
+  };
+
+  // Cambiar el régimen: reasigna los lapsos de todas las materias para que
+  // ninguna quede sin lapso en el régimen nuevo (T1/T2→S1, T3→S2 e inverso).
+  const handleTipoChange = (tipo: 'TRIMESTRAL' | 'SEMESTRAL') => {
+    if (tipo === tipoProyeccion) return;
+    setTipoProyeccion(tipo);
+    setMateriasE((prev) =>
+      prev.map((m) => {
+        const conv = convertirLapsosMateria(mapSubjectToMateriaPayload(m), tipo);
+        return {
+          ...m,
+          quarters: { q1: conv.q1 ? 1 : 0, q2: conv.q2 ? 1 : 0, q3: conv.q3 ? 1 : 0 },
+          semestre1Activo: conv.semestre1,
+          semestre2Activo: conv.semestre2,
+        };
+      })
+    );
+    setSeccionesE((prev) =>
+      prev.map((s) =>
+        s.materias
+          ? { ...s, materias: s.materias.map((m) => convertirLapsosMateria(m, tipo)) }
           : s
       )
     );
@@ -766,6 +827,16 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       return;
     }
 
+    if (secciones.some((s) => s.loadingMaterias)) {
+      setErrorMsg('Espere a que termine de cargar el pensum de las secciones.');
+      return;
+    }
+
+    if (secciones.some((s) => !s.turno_saga_id)) {
+      setErrorMsg('Hay secciones con un turno no válido. Seleccione el turno nuevamente.');
+      return;
+    }
+
     const pnfObj = pnfList.find((p) => Number(p.id) === Number(selectedPnf));
     const trayObj = trayectosList.find((t) => Number(t.id) === Number(selectedTrayecto));
     const mayaObj = mayasList.find((m) => Number(m.id) === Number(selectedMaya));
@@ -784,8 +855,18 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
       maya_descripcion: mayaObj?.descripcion || '',
       periodo_academico: periodoAcademico,
       tipo_proyeccion: tipoProyeccion,
-      secciones: secciones,
-      materias: materias.map(mapSubjectToMateriaPayload),
+      secciones: secciones.map((s) => ({
+        ...s,
+        estudiantes_estimados: Math.max(1, Math.round(Number(s.estudiantes_estimados)) || 30),
+        materias: s.materias?.map((m) => ({
+          ...m,
+          horas_semanales: Math.max(0, Number(m.horas_semanales) || 0),
+        })),
+      })),
+      materias: materias.map((m) => {
+        const p = mapSubjectToMateriaPayload(m);
+        return { ...p, horas_semanales: Math.max(0, Number(p.horas_semanales) || 0) };
+      }),
     };
 
     const res = await apiFetch('/proyecciones', {
@@ -920,7 +1001,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                   <select
                     required
                     value={selectedPnf}
-                    onChange={(e) => setSelectedPnf(Number(e.target.value))}
+                    onChange={(e) => pedirCambioSeleccion('pnf', Number(e.target.value))}
                     disabled={pnfFijo != null}
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                   >
@@ -948,7 +1029,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                   <select
                     required
                     value={selectedTrayecto}
-                    onChange={(e) => setSelectedTrayecto(Number(e.target.value))}
+                    onChange={(e) => pedirCambioSeleccion('trayecto', Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     <option value="">-- Seleccione Trayecto --</option>
@@ -970,7 +1051,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                     required
                     disabled={!selectedPnf || loadingMayas}
                     value={selectedMaya}
-                    onChange={(e) => setSelectedMaya(Number(e.target.value))}
+                    onChange={(e) => pedirCambioSeleccion('maya', Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2.5 text-white text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50"
                   >
                     <option value="">-- Seleccione Pensum --</option>
@@ -1000,7 +1081,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                 <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl p-2">
                   <button
                     type="button"
-                    onClick={() => setTipoProyeccion('TRIMESTRAL')}
+                    onClick={() => handleTipoChange('TRIMESTRAL')}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
                       tipoProyeccion === 'TRIMESTRAL'
                         ? 'bg-blue-600 text-white shadow-md'
@@ -1011,7 +1092,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTipoProyeccion('SEMESTRAL')}
+                    onClick={() => handleTipoChange('SEMESTRAL')}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
                       tipoProyeccion === 'SEMESTRAL'
                         ? 'bg-indigo-600 text-white shadow-md'
@@ -1086,7 +1167,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                               onChange={(e) => {
                                 const newArr = [...secciones];
                                 newArr[idx].nombre = e.target.value;
-                                setSecciones(newArr);
+                                setSeccionesE(newArr);
                               }}
                               className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-none"
                               placeholder="Ej. Sección 1 - Mañana"
@@ -1103,7 +1184,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                                   const newArr = [...secciones];
                                   newArr[idx].turno_nombre = resuelto.turno_nombre;
                                   newArr[idx].turno_saga_id = resuelto.turno_saga_id;
-                                  setSecciones(applySectionNamingConvention(newArr));
+                                  setSeccionesE(applySectionNamingConvention(newArr));
                                 }}
                                 className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
                               >
@@ -1137,7 +1218,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
                                 onChange={(e) => {
                                   const newArr = [...secciones];
                                   newArr[idx].estudiantes_estimados = Number(e.target.value);
-                                  setSecciones(newArr);
+                                  setSeccionesE(newArr);
                                 }}
                                 className="w-full bg-slate-900 border border-slate-700/60 rounded-lg px-2 py-1.5 text-white text-xs text-center focus:ring-1 focus:ring-blue-500 focus:outline-none"
                               />
@@ -1299,7 +1380,7 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={saving || selectedPnf === '' || selectedTrayecto === '' || selectedMaya === ''}
+              disabled={saving || selectedPnf === '' || selectedTrayecto === '' || selectedMaya === '' || secciones.some((s) => s.loadingMaterias)}
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/30 flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
               {saving ? (
@@ -1330,6 +1411,23 @@ export const CrearProyeccionModal: React.FC<CrearProyeccionModalProps> = ({
             onClose();
           }}
           onCancel={() => setConfirmCerrar(false)}
+        />
+      )}
+
+      {pendienteSeleccion && (
+        <ConfirmModal
+          titulo="Regenerar configuración"
+          mensaje="Cambiar esta selección regenerará las secciones y el pensum desde SAGA, descartando los cambios realizados en secciones y materias."
+          confirmLabel="Descartar y regenerar"
+          cancelLabel="Mantener selección"
+          danger
+          onConfirm={() => {
+            const { campo, valor } = pendienteSeleccion;
+            setPendienteSeleccion(null);
+            edicionesRef.current = false;
+            aplicarSeleccion(campo, valor);
+          }}
+          onCancel={() => setPendienteSeleccion(null)}
         />
       )}
     </div>

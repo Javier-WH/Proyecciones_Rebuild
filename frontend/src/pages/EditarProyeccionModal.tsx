@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch, esVistaObsoleta } from '../api/client.js';
 import { ConfirmModal } from './ConfirmModal.js';
 import { useModalUx } from '../hooks/useModalUx.js';
-import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning, resolverTurnoSeccion } from './CrearProyeccionModal.js';
+import { applySectionNamingConvention, SeccionForm, MateriaPayload, MateriasReadonlyTable, TurnoJornada, jornadaDeSeccion, excesosDeSeccion, JornadaSeccionWarning, resolverTurnoSeccion, convertirLapsosMateria } from './CrearProyeccionModal.js';
 import {
   X,
   BookOpen,
@@ -241,6 +241,22 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
     );
   };
 
+  // Cambiar el régimen: reasigna los lapsos de todas las materias para que
+  // ninguna quede sin lapso en el régimen nuevo (T1/T2→S1, T3→S2 e inverso).
+  const handleTipoChange = (tipo: 'TRIMESTRAL' | 'SEMESTRAL') => {
+    if (tipo === tipoProyeccion) return;
+    dirtyRef.current = true;
+    setTipoProyeccion(tipo);
+    setMaterias((prev) => prev.map((m) => convertirLapsosMateria(m, tipo)));
+    setSecciones((prev) =>
+      prev.map((s) =>
+        s.materias
+          ? { ...s, materias: s.materias.map((m) => convertirLapsosMateria(m, tipo)) }
+          : s
+      )
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -253,6 +269,14 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
       setErrorMsg('Debe definir al menos una sección para la proyección.');
       return;
     }
+    if (secciones.some((s) => s.loadingMaterias)) {
+      setErrorMsg('Espere a que termine de cargar el pensum de las secciones.');
+      return;
+    }
+    if (secciones.some((s) => !s.turno_saga_id)) {
+      setErrorMsg('Hay secciones con un turno no válido. Seleccione el turno nuevamente.');
+      return;
+    }
 
     setSaving(true);
     const res = await apiFetch(`/proyecciones/${proyeccion.id}`, {
@@ -261,8 +285,18 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
         nombre: nombre.trim(),
         periodo_academico: periodoAcademico,
         tipo_proyeccion: tipoProyeccion,
-        secciones,
-        materias,
+        secciones: secciones.map((s) => ({
+          ...s,
+          estudiantes_estimados: Math.max(1, Math.round(Number(s.estudiantes_estimados)) || 30),
+          materias: s.materias?.map((m) => ({
+            ...m,
+            horas_semanales: Math.max(0, Number(m.horas_semanales) || 0),
+          })),
+        })),
+        materias: materias.map((m) => ({
+          ...m,
+          horas_semanales: Math.max(0, Number(m.horas_semanales) || 0),
+        })),
       }),
     });
     setSaving(false);
@@ -373,7 +407,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
               <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl p-2">
                 <button
                   type="button"
-                  onClick={() => setTipoProyeccion('TRIMESTRAL')}
+                  onClick={() => handleTipoChange('TRIMESTRAL')}
                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
                     tipoProyeccion === 'TRIMESTRAL'
                       ? 'bg-blue-600 text-white shadow-md'
@@ -384,7 +418,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTipoProyeccion('SEMESTRAL')}
+                  onClick={() => handleTipoChange('SEMESTRAL')}
                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
                     tipoProyeccion === 'SEMESTRAL'
                       ? 'bg-indigo-600 text-white shadow-md'
@@ -632,7 +666,7 @@ export const EditarProyeccionModal: React.FC<EditarProyeccionModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || secciones.some((s) => s.loadingMaterias)}
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-semibold shadow-lg shadow-amber-600/30 flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
             >
               {saving ? (
