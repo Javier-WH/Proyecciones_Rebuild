@@ -266,11 +266,14 @@ export const ReporteHorarioModal: React.FC<ReporteHorarioModalProps> = ({
     setLeyendaProf(false);
 
     setCargando(true);
+    // En periodo de planificación hay que pedir las entradas de ESE periodo;
+    // sin ?periodo el backend devuelve las del activo y el reporte sale vacío.
+    const qsPeriodo = periodo ? `&periodo=${encodeURIComponent(periodo)}` : '';
     Promise.all(
       lapsos.map(async (lk) => {
         const [t, nn] = lk.split(':');
         const res = await apiFetch<{ entries: HorarioEntry[] }>(
-          `/horarios/entries?tipo=${t}&trimestre=${nn}`
+          `/horarios/entries?tipo=${t}&trimestre=${nn}${qsPeriodo}`
         );
         return [lk, res.success && res.data ? res.data.entries || [] : []] as const;
       })

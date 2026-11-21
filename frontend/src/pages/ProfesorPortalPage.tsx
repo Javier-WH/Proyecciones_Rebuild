@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { usePeriodo } from '../context/PeriodoContext.js';
 import { HorarioEntry, HorarioConfig, Turno, Aula, pnfLabel } from './horarios/types.js';
 import { HorarioReadonlyGrid } from './horarios/HorarioReadonlyGrid.js';
 import { DisponibilidadGrid } from './DisponibilidadGrid.js';
@@ -52,6 +53,9 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [usa12, setUsa12] = useState(false);
   const [reporteOpen, setReporteOpen] = useState(false);
+  // Para el docente es null (siempre el activo); para gestores que ven este
+  // panel es el periodo de trabajo elegido (puede ser uno en planificación).
+  const { periodo: periodoSel, loading: cargandoPeriodo } = usePeriodo();
 
   // Lapsos en los que el docente tiene materias asignadas
   const lapsos = useMemo(() => {
@@ -67,9 +71,10 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
   useEffect(() => {
     const cargar = async () => {
       setLoading(true);
+      const qsPeriodo = periodoSel ? `?periodo=${encodeURIComponent(periodoSel)}` : '';
       const [res, rTurnos, rConfig, rAulas] = await Promise.all([
         apiFetch<{ periodo: string | null; periodo_nombre: string | null; rows: MateriaAsignableRow[] }>(
-          '/proyecciones/carga-docente'
+          `/proyecciones/carga-docente${qsPeriodo}`
         ),
         apiFetch<Turno[]>('/horarios/turnos'),
         apiFetch<HorarioConfig>('/horarios/config'),
@@ -88,8 +93,8 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
       if (rAulas.success && rAulas.data) setAulas(rAulas.data);
       setLoading(false);
     };
-    cargar();
-  }, []);
+    if (!cargandoPeriodo) cargar();
+  }, [periodoSel, cargandoPeriodo, profesorId]);
 
   // Seleccionar el primer lapso con materias una vez cargadas
   useEffect(() => {
@@ -103,7 +108,7 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
     const cargar = async () => {
       setLoadingEntries(true);
       const res = await apiFetch<{ entries: HorarioEntry[] }>(
-        `/horarios/entries?tipo=${tipo}&trimestre=${n}`
+        `/horarios/entries?tipo=${tipo}&trimestre=${n}${periodoSel ? `&periodo=${encodeURIComponent(periodoSel)}` : ''}`
       );
       if (res.success && res.data) {
         setEntries((res.data.entries ?? []).filter((e) => e.profesor_id === profesorId));
@@ -113,7 +118,7 @@ export const ProfesorPortalView: React.FC<ProfesorPortalViewProps> = ({
       setLoadingEntries(false);
     };
     cargar();
-  }, [lapsoSel]);
+  }, [lapsoSel, periodoSel, profesorId]);
 
   // Una grilla por cada turno donde el docente tiene clases agendadas
   const grids = useMemo(() => {
