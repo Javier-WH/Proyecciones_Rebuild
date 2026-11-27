@@ -188,13 +188,14 @@ export const imprimirPensum = async (data: DatosReportePensum): Promise<void> =>
   const filas = grupos
     .filter((grupo) => grupo.materias.length > 0)
     .map((grupo) => {
-      const materias = grupo.materias
-        .map(
-          (materia) =>
-            `<tr><td>${escapeHtml(materia.description)}</td><td class="num">${materia.horasSemanales}</td><td class="obs">${escapeHtml(observacion)}</td></tr>`
-        )
-        .join('');
-      return `<tr><td colspan="3" class="trayecto">${escapeHtml(grupo.trayecto.toUpperCase())}</td></tr>${materias}`;
+      const materias = grupo.materias.map(
+        (materia) =>
+          `<tr><td>${escapeHtml(materia.description)}</td><td class="num">${materia.horasSemanales}</td><td class="obs">${escapeHtml(observacion)}</td></tr>`
+      );
+      const inicio = materias.slice(0, 3).join('');
+      const resto = materias.slice(3).join('');
+      const encabezadoTrayecto = `<tr class="trayecto-row"><td colspan="3" class="trayecto">${escapeHtml(grupo.trayecto.toUpperCase())}</td></tr>`;
+      return `<tbody class="inicio-grupo">${encabezadoTrayecto}${inicio}</tbody>${resto ? `<tbody>${resto}</tbody>` : ''}`;
     })
     .join('\n');
 
@@ -208,7 +209,9 @@ img.logo { position: absolute; left: 0; top: 0; height: 1.45cm; }
 .fecha { text-align: center; font-size: 8.5pt; font-style: italic; color: #333; margin-top: 5px; }
 table { width: 100%; border-collapse: collapse; margin-top: 14px; table-layout: fixed; }
 thead { display: table-header-group; }
+tbody.inicio-grupo { break-inside: avoid; page-break-inside: avoid; }
 tr { break-inside: avoid; page-break-inside: avoid; }
+tr.trayecto-row { break-after: avoid; page-break-after: avoid; }
 th, td { border: 1px solid #000; padding: 4px 6px; font-size: 9.5pt; overflow-wrap: anywhere; }
 th { text-align: center; vertical-align: middle; font-weight: bold; background: #e2e8f0; }
 col.uc { width: 60%; }
@@ -223,7 +226,7 @@ td.trayecto { background: #334155; color: #fff; text-align: center; font-weight:
 <table>
 <colgroup><col class="uc"><col class="horas"><col class="obs"></colgroup>
 <thead><tr><th>Unidad Curricular</th><th>Horas</th><th>Observación</th></tr></thead>
-<tbody>${filas}</tbody>
+${filas}
 </table>
 </body></html>`;
 

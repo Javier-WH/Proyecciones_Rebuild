@@ -95,6 +95,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
   const [guardandoColor, setGuardandoColor] = useState<number | null>(null);
   const [refrescando, setRefrescando] = useState(false);
   const [reporteMenuKey, setReporteMenuKey] = useState<string | null>(null);
+  const [reporteMenuUp, setReporteMenuUp] = useState(false);
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null);
 
   useEffect(() => {
@@ -195,6 +196,24 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     return () => document.removeEventListener('mousedown', cerrarMenu);
   }, [reporteMenuKey]);
 
+  const toggleReporteMenu = (key: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (reporteMenuKey === key) {
+      setReporteMenuKey(null);
+      return;
+    }
+    const trigger = e.currentTarget;
+    const scroll = trigger.closest('[data-mallas-scroll]');
+    const triggerRect = trigger.getBoundingClientRect();
+    const scrollRect = scroll?.getBoundingClientRect();
+    const limiteInferior = scrollRect?.bottom ?? window.innerHeight;
+    const limiteSuperior = scrollRect?.top ?? 0;
+    const alturaMenu = 92;
+    const espacioAbajo = limiteInferior - triggerRect.bottom;
+    const espacioArriba = triggerRect.top - limiteSuperior;
+    setReporteMenuUp(espacioAbajo < alturaMenu && espacioArriba > espacioAbajo);
+    setReporteMenuKey(key);
+  };
+
   const generarReporteMalla = async (pnf: PnfItem, maya: Maya, formato: 'excel' | 'pdf') => {
     const key = `${pnf.id}:${maya.id}`;
     setReporteMenuKey(null);
@@ -274,7 +293,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-2.5">
+        <div data-mallas-scroll className="flex-1 overflow-y-auto p-5 space-y-2.5">
           {errorMsg && (
             <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3.5 py-2.5">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -375,7 +394,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
                                 <div className="relative shrink-0" data-reporte-menu>
                                   <button
                                     type="button"
-                                    onClick={() => setReporteMenuKey(reporteMenuKey === key ? null : key)}
+                                    onClick={(e) => toggleReporteMenu(key, e)}
                                     disabled={catalogo === null || generandoReporte !== null}
                                     title="Generar reporte del pensum"
                                     className="px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer transition-colors"
@@ -389,7 +408,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
                                   </button>
 
                                   {reporteMenuKey === key && (
-                                    <div className="absolute right-0 top-full mt-1 z-30 w-44 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50">
+                                    <div className={`absolute right-0 ${reporteMenuUp ? 'bottom-full mb-1' : 'top-full mt-1'} z-30 w-44 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50`}>
                                       <button
                                         type="button"
                                         onClick={() => void generarReporteMalla(pnf, maya, 'excel')}
