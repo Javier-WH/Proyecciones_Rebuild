@@ -8,6 +8,7 @@ import {
   invalidarCatalogoMaterias,
   MateriaOpcion,
 } from './horarios/catalogoMaterias.js';
+import { generarExcelPensum, imprimirPensum } from '../utils/reportePensum.js';
 import {
   X,
   Loader2,
@@ -18,6 +19,9 @@ import {
   BookOpen,
   Layers,
   RefreshCw,
+  FileDown,
+  FileSpreadsheet,
+  Printer,
 } from 'lucide-react';
 
 interface Maya {
@@ -90,12 +94,15 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
 
   const [guardandoColor, setGuardandoColor] = useState<number | null>(null);
   const [refrescando, setRefrescando] = useState(false);
+  const [reporteMenuKey, setReporteMenuKey] = useState<string | null>(null);
+  const [generandoReporte, setGenerandoReporte] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setErrorMsg(null);
     setExpandidos(new Set());
     setMayasExpandidas(new Set());
+    setReporteMenuKey(null);
     setCatalogo(null);
     precargarCatalogoMaterias().then(setCatalogo);
 
@@ -165,6 +172,7 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     if (next.has(pnfId)) next.delete(pnfId);
     else next.add(pnfId);
     setExpandidos(next);
+    setReporteMenuKey(null);
   };
 
   const toggleMaya = (pnfId: number, mayaId: number) => {
@@ -173,6 +181,52 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     if (next.has(key)) next.delete(key);
     else next.add(key);
     setMayasExpandidas(next);
+    setReporteMenuKey(null);
+  };
+
+  useEffect(() => {
+    if (!reporteMenuKey) return;
+    const cerrarMenu = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement | null)?.closest('[data-reporte-menu]')) {
+        setReporteMenuKey(null);
+      }
+    };
+    document.addEventListener('mousedown', cerrarMenu);
+    return () => document.removeEventListener('mousedown', cerrarMenu);
+  }, [reporteMenuKey]);
+
+  const generarReporteMalla = async (pnf: PnfItem, maya: Maya, formato: 'excel' | 'pdf') => {
+    const key = `${pnf.id}:${maya.id}`;
+    setReporteMenuKey(null);
+    setErrorMsg(null);
+    if (!catalogo) {
+      setErrorMsg('Espere a que termine de cargar el catálogo de materias.');
+      return;
+    }
+
+    const grupos = arbol.gruposDe(pnf.id, maya.id).map((g) => ({
+      trayecto: g.trayecto,
+      materias: g.materias.map((m) => ({
+        description: m.description,
+        horasSemanales: m.horasSemanales,
+      })),
+    }));
+    if (!grupos.some((g) => g.materias.length > 0)) {
+      setErrorMsg('Esta malla no tiene materias para reportar.');
+      return;
+    }
+
+    const tag = `${key}:${formato}`;
+    setGenerandoReporte(tag);
+    try {
+      const data = { pnfNombre: pnf.nombre, mayaDescripcion: maya.descripcion, grupos };
+      if (formato === 'excel') await generarExcelPensum(data);
+      else await imprimirPensum(data);
+    } catch (error: any) {
+      setErrorMsg(error?.message || 'Error generando el reporte del pensum.');
+    } finally {
+      setGenerandoReporte(null);
+    }
   };
 
   const guardarColor = async (pnf: PnfItem, color: string | null) => {
@@ -190,7 +244,10 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
     }
   };
 
-  useModalUx({ enabled: isOpen, onEscape: guardandoColor !== null ? undefined : onClose });
+  useModalUx({
+    enabled: isOpen,
+    onEscape: guardandoColor !== null || generandoReporte !== null ? undefined : onClose,
+  });
 
   if (!isOpen) return null;
 
@@ -303,16 +360,56 @@ export const PnfMallasModal: React.FC<PnfMallasModalProps> = ({ isOpen, onClose 
                                 : null;
                           return (
                             <div key={maya.id}>
-                              <button
-                                onClick={() => toggleMaya(pnf.id, maya.id)}
-                                className="w-full flex items-center gap-2 px-6 py-2.5 text-left hover:bg-slate-800/40 transition-colors cursor-pointer"
-                              >
-                                <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                                <span className="text-[11px] text-slate-300 truncate">{maya.descripcion}</span>
-                                <span className="ml-auto shrink-0 text-slate-600">
-                                  {mayaAbierta ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                </span>
-                              </button>
+                              <div className="relative flex items-center gap-1 pl-6 pr-2 py-1.5 hover:bg-slate-800/40 transition-colors">
+                                <button
+                                  onClick={() => toggleMaya(pnf.id, maya.id)}
+                                  className="flex-1 flex items-center gap-2 py-1 text-left min-w-0 cursor-pointer"
+                                >
+                                  <Layers className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                  <span className="text-[11px] text-slate-300 truncate">{maya.descripcion}</span>
+                                  <span className="ml-auto shrink-0 text-slate-600">
+                                    {mayaAbierta ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                                  </span>
+                                </button>
+
+                                <div className="relative shrink-0" data-reporte-menu>
+                                  <button
+                                    type="button"
+                                    onClick={() => setReporteMenuKey(reporteMenuKey === key ? null : key)}
+                                    disabled={catalogo === null || generandoReporte !== null}
+                                    title="Generar reporte del pensum"
+                                    className="px-2 py-1 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    {generandoReporte?.startsWith(`${key}:`) ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <FileDown className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>Reporte</span>
+                                  </button>
+
+                                  {reporteMenuKey === key && (
+                                    <div className="absolute right-0 top-full mt-1 z-30 w-44 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/50">
+                                      <button
+                                        type="button"
+                                        onClick={() => void generarReporteMalla(pnf, maya, 'excel')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                                      >
+                                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                                        Excel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => void generarReporteMalla(pnf, maya, 'pdf')}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-[11px] text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+                                      >
+                                        <Printer className="w-3.5 h-3.5 text-indigo-400" />
+                                        Imprimir / PDF
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
 
                               {/* Materias agrupadas por trayecto */}
                               {mayaAbierta && (
